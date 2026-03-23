@@ -184,8 +184,9 @@ OpenSeesPy / DOLFINx / OpenFOAM 向けの出力はすべて生成物であり、
 - [x] **Phase 1** - IR定義、UI骨格、3Dビューワー、プロジェクト保存/読込
 - [x] **Phase 1** - パラメトリック形状 (9種)、名前付き選択システム
 - [x] **Phase 1** - ダーク/ライトモード、多言語対応 (日本語/英語)、ヘルプ
-- [ ] **Phase 2** - 材料/断面/境界条件/荷重フォーム、検証エンジン
-- [ ] **Phase 3** - メッシュ方針設定、OpenSeesPy / DOLFINx / OpenFOAM エクスポータ
+- [x] **Phase 2** - 材料/断面/境界条件/荷重フォーム、検証エンジン
+- [x] **Phase 3** - OpenSeesPy / DOLFINx / OpenFOAM エクスポータ
+- [ ] **Phase 3** - メッシュ方針設定フォーム
 - [ ] **Phase 4** - テンプレート、一括I/O、性能改善、UX研磨
 
 ---
