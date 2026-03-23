@@ -1,14 +1,14 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, GizmoHelper, GizmoViewport, Grid } from '@react-three/drei';
 import { useAppStore } from '@/state/store';
-import { getAppContext } from '@/App';
+import { useAppContext } from '@/hooks/useAppContext';
 import { GeometryRenderer } from './GeometryRenderer';
 
 export function ViewerCanvas() {
   const showGrid = useAppStore((s) => s.showGrid);
   const showAxes = useAppStore((s) => s.showAxes);
-  const ctx = getAppContext();
-  const isDark = ctx?.theme !== 'light';
+  const { theme } = useAppContext();
+  const isDark = theme !== 'light';
 
   const bgColor = isDark ? '#1a1a2e' : '#e8ecf0';
   const gridCellColor = isDark ? '#2a2a4a' : '#c0c8d0';

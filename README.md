@@ -1,11 +1,13 @@
 # FEM Modeler
 
+[![CI / Deploy](https://github.com/Takayuki-Minagawa/FEM-Modeler/actions/workflows/deploy.yml/badge.svg)](https://github.com/Takayuki-Minagawa/FEM-Modeler/actions/workflows/deploy.yml)
+
 **FEM/CAE Pre-processing Web Application**
 
 ブラウザ上で動作する有限要素法 (FEM) / CAE 解析モデルの前処理支援アプリケーションです。
 形状作成から境界条件設定、メッシュ方針の定義、各種ソルバ向けファイル出力までをWebブラウザだけで完結できます。
 
-**Live Demo:** [https://mina25.github.io/FEM-Modeler/](https://mina25.github.io/FEM-Modeler/)
+**Live Demo:** [https://takayuki-minagawa.github.io/FEM-Modeler/](https://takayuki-minagawa.github.io/FEM-Modeler/)
 
 ---
 
@@ -18,6 +20,8 @@
 - **名前付き選択** - 面・辺・体積に意味のある名前を付け、条件設定の基盤とする
 - **複数ソルバ対応** - 1つのモデルから複数ソルバへ出力可能
 - **Undo / Redo** - 全操作の取り消し・やり直し対応
+- **ダーク/ライトモード** - テーマ切替対応
+- **多言語対応** - 日本語 (デフォルト) / 英語
 
 ## 対応ソルバ
 
@@ -27,9 +31,9 @@
 | **DOLFINx** | 連続体解析 (弾性・熱伝導) | Gmsh MSH + Python テンプレート |
 | **OpenFOAM** | 流体解析 (非圧縮流) | ケースディレクトリ一式 (ZIP) |
 
-## 対応形状 (初期版)
+## 対応形状
 
-直方体 / 円柱 / パイプ / 平板 / 穴あき平板 / L字ブラケット / 梁・柱・フレーム / トラス / 2D領域 / 単純流路
+直方体 / 円柱 / パイプ / 平板 / 穴あき平板 / L字ブラケット / 2Dフレーム / 2Dトラス / 流路
 
 ---
 
@@ -41,10 +45,11 @@
 | ビルドツール | Vite 6 |
 | 状態管理 | Zustand + Immer |
 | 3Dビューワー | Three.js (@react-three/fiber + drei) |
-| UIコンポーネント | shadcn/ui + Radix UI |
-| CSS | Tailwind CSS 4 |
+| UI | Tailwind CSS 4 |
 | フォーム | react-hook-form + zod |
-| テスト | Vitest + Playwright |
+| 多言語 | i18next + react-i18next |
+| テスト | Vitest |
+| CI/CD | GitHub Actions → GitHub Pages |
 
 ---
 
@@ -58,7 +63,7 @@
 ### ローカルで実行
 
 ```bash
-git clone https://github.com/mina25/FEM-Modeler.git
+git clone https://github.com/Takayuki-Minagawa/FEM-Modeler.git
 cd FEM-Modeler
 npm install
 npm run dev
@@ -73,10 +78,13 @@ npm run build     # dist/ に出力
 npm run preview   # ビルド結果をプレビュー
 ```
 
-### テスト
+### コードチェック
 
 ```bash
-npm run test
+npm run typecheck  # TypeScript 型チェック
+npm run lint       # ESLint
+npm run test       # テスト実行
+npm run check      # 上記すべてを実行
 ```
 
 ---
@@ -133,6 +141,16 @@ ProjectIR
 | 右 | プロパティフォーム / 条件設定 |
 | 下部 | 検証結果 / ログ / エクスポート結果 |
 
+### キーボードショートカット
+
+| キー | 操作 |
+|------|------|
+| `Ctrl+Z` | 元に戻す |
+| `Ctrl+Shift+Z` | やり直し |
+| `Ctrl+S` | プロジェクト保存 |
+| `Delete` | 選択ボディ削除 |
+| `Escape` | 選択解除 |
+
 ---
 
 ## 設計方針
@@ -163,17 +181,28 @@ OpenSeesPy / DOLFINx / OpenFOAM 向けの出力はすべて生成物であり、
 
 ## ロードマップ
 
-- [x] **Phase 1** - IR定義、UI骨格、3Dビューワー基本、プロジェクト保存/読込
-- [ ] **Phase 1** - パラメトリック形状、名前付き選択システム
+- [x] **Phase 1** - IR定義、UI骨格、3Dビューワー、プロジェクト保存/読込
+- [x] **Phase 1** - パラメトリック形状 (9種)、名前付き選択システム
+- [x] **Phase 1** - ダーク/ライトモード、多言語対応 (日本語/英語)、ヘルプ
 - [ ] **Phase 2** - 材料/断面/境界条件/荷重フォーム、検証エンジン
 - [ ] **Phase 3** - メッシュ方針設定、OpenSeesPy / DOLFINx / OpenFOAM エクスポータ
 - [ ] **Phase 4** - テンプレート、一括I/O、性能改善、UX研磨
 
 ---
 
+## コントリビュート
+
+1. このリポジトリをフォーク
+2. フィーチャーブランチを作成 (`git checkout -b feature/your-feature`)
+3. コードチェックを通す (`npm run check`)
+4. コミットしてプッシュ
+5. Pull Request を作成
+
+---
+
 ## ライセンス
 
-MIT License
+[MIT License](LICENSE)
 
 ---
 

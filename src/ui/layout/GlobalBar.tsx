@@ -2,10 +2,11 @@ import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { downloadProjectFile } from '@/export/project/save';
 import { readFileAsText, parseProjectFile } from '@/export/project/load';
-import { getAppContext } from '@/App';
+import { useAppContext } from '@/hooks/useAppContext';
 
 export function GlobalBar() {
   const { t, i18n } = useTranslation();
+  const { theme, toggleTheme, openHelp } = useAppContext();
   const projectName = useAppStore((s) => s.ir.meta.project_name);
   const unitSystem = useAppStore((s) => s.ir.units.system_name);
   const canUndo = useAppStore((s) => s.canUndo);
@@ -15,8 +16,6 @@ export function GlobalBar() {
   const ir = useAppStore((s) => s.ir);
   const loadProject = useAppStore((s) => s.loadProject);
   const setStartScreenOpen = useAppStore((s) => s.setStartScreenOpen);
-
-  const ctx = getAppContext();
 
   const handleSave = () => {
     downloadProjectFile(ir);
@@ -93,27 +92,25 @@ export function GlobalBar() {
           {t('globalBar.new')}
         </BarButton>
         <BarDivider />
-        <BarButton onClick={() => ctx?.openHelp()}>
+        <BarButton onClick={openHelp}>
           {t('globalBar.help')}
         </BarButton>
       </div>
 
       {/* Right: theme, lang, version */}
       <div className="flex items-center gap-2">
-        {/* Theme toggle */}
         <button
-          onClick={() => ctx?.toggleTheme()}
+          onClick={toggleTheme}
           className="px-2 py-1 text-sm rounded cursor-pointer transition-colors"
           style={{
             backgroundColor: 'var(--color-bg-input)',
             color: 'var(--color-text-secondary)',
           }}
-          title={ctx?.theme === 'dark' ? t('theme.light') : t('theme.dark')}
+          title={theme === 'dark' ? t('theme.light') : t('theme.dark')}
         >
-          {ctx?.theme === 'dark' ? '☀' : '☾'}
+          {theme === 'dark' ? '\u2600' : '\u263E'}
         </button>
 
-        {/* Language toggle */}
         <button
           onClick={toggleLang}
           className="px-2 py-1 text-sm rounded cursor-pointer transition-colors font-bold"
@@ -121,7 +118,7 @@ export function GlobalBar() {
             backgroundColor: 'var(--color-bg-input)',
             color: 'var(--color-text-secondary)',
           }}
-          title={i18n.language === 'ja' ? 'English' : '日本語'}
+          title={i18n.language === 'ja' ? 'English' : '\u65E5\u672C\u8A9E'}
         >
           {i18n.language === 'ja' ? 'EN' : 'JA'}
         </button>
