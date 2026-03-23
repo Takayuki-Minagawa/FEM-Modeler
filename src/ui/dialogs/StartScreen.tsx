@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { readFileAsText, parseProjectFile } from '@/export/project/load';
+import { applyTemplate } from '@/lib/project-templates';
 import type { DomainType } from '@/core/ir/types';
 
 const TEMPLATES: { i18nKey: string; domain: DomainType }[] = [
@@ -13,7 +14,7 @@ const TEMPLATES: { i18nKey: string; domain: DomainType }[] = [
 ];
 
 export function StartScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isOpen = useAppStore((s) => s.isStartScreenOpen);
   const createProject = useAppStore((s) => s.createProject);
   const loadProject = useAppStore((s) => s.loadProject);
@@ -42,6 +43,9 @@ export function StartScreen() {
   const handleCreate = (tmpl: typeof TEMPLATES[number]) => {
     const name = t(`startScreen.templates.${tmpl.i18nKey}.name`);
     createProject(name, tmpl.domain);
+    if (tmpl.i18nKey !== 'empty') {
+      applyTemplate(tmpl.domain, i18n.language);
+    }
   };
 
   return (

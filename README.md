@@ -186,8 +186,9 @@ OpenSeesPy / DOLFINx / OpenFOAM 向けの出力はすべて生成物であり、
 - [x] **Phase 1** - ダーク/ライトモード、多言語対応 (日本語/英語)、ヘルプ
 - [x] **Phase 2** - 材料/断面/境界条件/荷重フォーム、検証エンジン
 - [x] **Phase 3** - OpenSeesPy / DOLFINx / OpenFOAM エクスポータ
-- [ ] **Phase 3** - メッシュ方針設定フォーム
-- [ ] **Phase 4** - テンプレート、一括I/O、性能改善、UX研磨
+- [x] **Phase 3** - メッシュ方針設定、解析ケース設定
+- [x] **Phase 4** - テンプレート自動セットアップ (5種)
+- [ ] **Phase 4** - 一括I/O、STL/OBJ/MSHインポート、性能改善
 
 ---
 

@@ -4,11 +4,16 @@ import { GeometryForm } from '@/ui/forms/GeometryForm';
 import { NamedSelectionsForm } from '@/ui/forms/NamedSelectionsForm';
 import { MaterialForm } from '@/ui/forms/MaterialForm';
 import { SectionForm } from '@/ui/forms/SectionForm';
+import { MeshControlForm } from '@/ui/forms/MeshControlForm';
 import { BoundaryConditionForm } from '@/ui/forms/BoundaryConditionForm';
 import { LoadForm } from '@/ui/forms/LoadForm';
+import { AnalysisCaseForm } from '@/ui/forms/AnalysisCaseForm';
 import { ExportForm } from '@/ui/forms/ExportForm';
 
-const PANELS_WITH_FORMS = ['geometry', 'selections', 'materials', 'sections', 'bc', 'loads', 'export'] as const;
+const PANELS_WITH_FORMS = [
+  'geometry', 'selections', 'materials', 'sections', 'mesh',
+  'bc', 'loads', 'analysis', 'export',
+] as const;
 
 const PANEL_I18N_KEYS = [
   'geometry', 'selections', 'materials', 'sections', 'mesh',
@@ -20,8 +25,10 @@ const FORM_TITLES: Record<string, string> = {
   selections: 'properties.title',
   materials: 'materials.formTitle',
   sections: 'sections.formTitle',
+  mesh: 'properties.title',
   bc: 'bc.formTitle',
   loads: 'loads.formTitle',
+  analysis: 'properties.title',
   export: 'properties.title',
 };
 
@@ -49,8 +56,10 @@ export function RightSidebar() {
         {activePanel === 'selections' && <NamedSelectionsForm />}
         {activePanel === 'materials' && <MaterialForm />}
         {activePanel === 'sections' && <SectionForm />}
+        {activePanel === 'mesh' && <MeshControlForm />}
         {activePanel === 'bc' && <BoundaryConditionForm />}
         {activePanel === 'loads' && <LoadForm />}
+        {activePanel === 'analysis' && <AnalysisCaseForm />}
         {activePanel === 'export' && <ExportForm />}
 
         {!hasForm && (PANEL_I18N_KEYS as readonly string[]).includes(activePanel) && (
