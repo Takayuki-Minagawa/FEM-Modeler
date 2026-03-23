@@ -1,9 +1,11 @@
+import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { downloadProjectFile } from '@/export/project/save';
-import { readFileAsText } from '@/export/project/load';
-import { parseProjectFile } from '@/export/project/load';
+import { readFileAsText, parseProjectFile } from '@/export/project/load';
+import { getAppContext } from '@/App';
 
 export function GlobalBar() {
+  const { t, i18n } = useTranslation();
   const projectName = useAppStore((s) => s.ir.meta.project_name);
   const unitSystem = useAppStore((s) => s.ir.units.system_name);
   const canUndo = useAppStore((s) => s.canUndo);
@@ -13,6 +15,8 @@ export function GlobalBar() {
   const ir = useAppStore((s) => s.ir);
   const loadProject = useAppStore((s) => s.loadProject);
   const setStartScreenOpen = useAppStore((s) => s.setStartScreenOpen);
+
+  const ctx = getAppContext();
 
   const handleSave = () => {
     downloadProjectFile(ir);
@@ -36,6 +40,12 @@ export function GlobalBar() {
     input.click();
   };
 
+  const toggleLang = () => {
+    const next = i18n.language === 'ja' ? 'en' : 'ja';
+    i18n.changeLanguage(next);
+    localStorage.setItem('fem-modeler-lang', next);
+  };
+
   return (
     <div
       className="flex items-center justify-between px-4 border-b select-none shrink-0"
@@ -48,7 +58,7 @@ export function GlobalBar() {
       {/* Left: project info */}
       <div className="flex items-center gap-4">
         <span className="font-bold text-base" style={{ color: 'var(--color-accent)' }}>
-          FEM Modeler
+          {t('app.title')}
         </span>
         <span className="text-base" style={{ color: 'var(--color-text-secondary)' }}>
           {projectName}
@@ -66,28 +76,58 @@ export function GlobalBar() {
 
       {/* Center: actions */}
       <div className="flex items-center gap-1.5">
-        <BarButton onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
-          Undo
+        <BarButton onClick={undo} disabled={!canUndo} title="Ctrl+Z">
+          {t('globalBar.undo')}
         </BarButton>
-        <BarButton onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)">
-          Redo
+        <BarButton onClick={redo} disabled={!canRedo} title="Ctrl+Shift+Z">
+          {t('globalBar.redo')}
         </BarButton>
-        <div className="w-px h-6 mx-1.5" style={{ backgroundColor: 'var(--color-border)' }} />
-        <BarButton onClick={handleSave} title="Save project">
-          Save
+        <BarDivider />
+        <BarButton onClick={handleSave} title="Ctrl+S">
+          {t('globalBar.save')}
         </BarButton>
-        <BarButton onClick={handleLoad} title="Load project">
-          Load
+        <BarButton onClick={handleLoad}>
+          {t('globalBar.load')}
         </BarButton>
-        <BarButton onClick={() => setStartScreenOpen(true)} title="New project">
-          New
+        <BarButton onClick={() => setStartScreenOpen(true)}>
+          {t('globalBar.new')}
+        </BarButton>
+        <BarDivider />
+        <BarButton onClick={() => ctx?.openHelp()}>
+          {t('globalBar.help')}
         </BarButton>
       </div>
 
-      {/* Right: placeholder */}
+      {/* Right: theme, lang, version */}
       <div className="flex items-center gap-2">
+        {/* Theme toggle */}
+        <button
+          onClick={() => ctx?.toggleTheme()}
+          className="px-2 py-1 text-sm rounded cursor-pointer transition-colors"
+          style={{
+            backgroundColor: 'var(--color-bg-input)',
+            color: 'var(--color-text-secondary)',
+          }}
+          title={ctx?.theme === 'dark' ? t('theme.light') : t('theme.dark')}
+        >
+          {ctx?.theme === 'dark' ? '☀' : '☾'}
+        </button>
+
+        {/* Language toggle */}
+        <button
+          onClick={toggleLang}
+          className="px-2 py-1 text-sm rounded cursor-pointer transition-colors font-bold"
+          style={{
+            backgroundColor: 'var(--color-bg-input)',
+            color: 'var(--color-text-secondary)',
+          }}
+          title={i18n.language === 'ja' ? 'English' : '日本語'}
+        >
+          {i18n.language === 'ja' ? 'EN' : 'JA'}
+        </button>
+
         <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-          v0.1.0
+          {t('app.version')}
         </span>
       </div>
     </div>
@@ -128,5 +168,14 @@ function BarButton({
     >
       {children}
     </button>
+  );
+}
+
+function BarDivider() {
+  return (
+    <div
+      className="w-px h-6 mx-1.5"
+      style={{ backgroundColor: 'var(--color-border)' }}
+    />
   );
 }

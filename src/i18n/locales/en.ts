@@ -1,0 +1,126 @@
+export const en = {
+  app: {
+    title: 'FEM Modeler',
+    version: 'v0.1.0',
+  },
+  globalBar: {
+    undo: 'Undo',
+    redo: 'Redo',
+    save: 'Save',
+    load: 'Load',
+    new: 'New',
+    help: 'Help',
+  },
+  tree: {
+    title: 'Project Tree',
+    geometry: 'Geometry',
+    selections: 'Named Selections',
+    materials: 'Materials',
+    sections: 'Sections',
+    mesh: 'Mesh Controls',
+    bc: 'Boundary Conditions',
+    loads: 'Loads',
+    ic: 'Initial Conditions',
+    analysis: 'Analysis Cases',
+    export: 'Solver Targets',
+    validation: 'Validation',
+  },
+  properties: {
+    title: 'Properties',
+    geometry: 'Select or create a geometry body to edit its properties.',
+    selections: 'Select entities in 3D to create a named selection.',
+    materials: 'Add materials and assign them to named selections.',
+    sections: 'Define cross-sections for frame/truss elements.',
+    mesh: 'Configure mesh generation settings.',
+    bc: 'Define boundary conditions on named selections.',
+    loads: 'Define loads on named selections.',
+    ic: 'Define initial conditions for transient analyses.',
+    analysis: 'Configure analysis cases and solver settings.',
+    export: 'Select solver targets and export your model.',
+    validation: 'Review validation results before export.',
+  },
+  bottomPanel: {
+    validation: 'Validation',
+    log: 'Log',
+    export: 'Export',
+    noIssues: 'No validation issues found.',
+    logPlaceholder: 'Operation log will appear here.',
+    exportPlaceholder: 'Export results will appear here.',
+  },
+  startScreen: {
+    subtitle: 'FEM/CAE Pre-processing Environment',
+    openExisting: 'Open Existing Project (.fem.json)',
+    newFromTemplate: 'New from Template',
+    skip: 'Use current project',
+    templates: {
+      empty: { name: 'Empty Project', desc: 'Start from scratch' },
+      frame2d: { name: '2D Frame', desc: 'Portal frame structure (OpenSeesPy)' },
+      truss3d: { name: '3D Truss', desc: 'Space truss structure (OpenSeesPy)' },
+      solidPlate: { name: 'Solid Plate', desc: 'Plate with hole (DOLFINx)' },
+      heat: { name: 'Heat Transfer', desc: 'Steady-state thermal (DOLFINx)' },
+      channel: { name: 'Channel Flow', desc: '2D channel flow (OpenFOAM)' },
+    },
+  },
+  theme: {
+    light: 'Light',
+    dark: 'Dark',
+  },
+  help: {
+    title: 'Operation Manual',
+    close: 'Close',
+    sections: {
+      overview: {
+        title: 'Overview',
+        content:
+          'FEM Modeler is a browser-based FEM/CAE pre-processing application. You can create geometry, set boundary conditions, define mesh policies, and export files for OpenSeesPy / DOLFINx / OpenFOAM.',
+      },
+      workflow: {
+        title: 'Basic Workflow',
+        steps: [
+          '1. Select a template or create an empty project',
+          '2. Create or import geometry',
+          '3. Name faces, edges, and volumes (Named Selections)',
+          '4. Set materials and sections',
+          '5. Define boundary conditions and loads',
+          '6. Check validation results',
+          '7. Export for target solver',
+        ],
+      },
+      viewer: {
+        title: '3D Viewer Controls',
+        items: [
+          'Left drag: Rotate',
+          'Right drag / Middle drag: Pan',
+          'Scroll: Zoom',
+          'Click: Select object',
+          'Shift+Click: Add/remove from selection',
+        ],
+      },
+      shortcuts: {
+        title: 'Keyboard Shortcuts',
+        items: [
+          'Ctrl+Z: Undo',
+          'Ctrl+Shift+Z: Redo',
+          'Ctrl+S: Save project',
+        ],
+      },
+      panels: {
+        title: 'Screen Layout',
+        items: [
+          'Left panel: Project Tree - select settings items',
+          'Center: 3D Viewer - display and select geometry',
+          'Right panel: Properties - detailed settings for selected item',
+          'Bottom: Validation results, logs, export results',
+        ],
+      },
+      solvers: {
+        title: 'Supported Solvers',
+        items: [
+          'OpenSeesPy: Structural analysis (frame, truss)',
+          'DOLFINx: Continuum analysis (elasticity, heat conduction)',
+          'OpenFOAM: Fluid analysis (incompressible flow)',
+        ],
+      },
+    },
+  },
+};

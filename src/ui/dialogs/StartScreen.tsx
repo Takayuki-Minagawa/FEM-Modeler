@@ -1,17 +1,19 @@
+import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { readFileAsText, parseProjectFile } from '@/export/project/load';
 import type { DomainType } from '@/core/ir/types';
 
-const TEMPLATES: { name: string; domain: DomainType; description: string }[] = [
-  { name: 'Empty Project', domain: 'frame', description: 'Start from scratch' },
-  { name: '2D Frame', domain: 'frame', description: 'Portal frame structure (OpenSeesPy)' },
-  { name: '3D Truss', domain: 'truss', description: 'Space truss structure (OpenSeesPy)' },
-  { name: 'Solid Plate', domain: 'solid', description: 'Plate with hole (DOLFINx)' },
-  { name: 'Heat Transfer', domain: 'thermal', description: 'Steady-state thermal (DOLFINx)' },
-  { name: 'Channel Flow', domain: 'fluid', description: '2D channel flow (OpenFOAM)' },
+const TEMPLATES: { i18nKey: string; domain: DomainType }[] = [
+  { i18nKey: 'empty', domain: 'frame' },
+  { i18nKey: 'frame2d', domain: 'frame' },
+  { i18nKey: 'truss3d', domain: 'truss' },
+  { i18nKey: 'solidPlate', domain: 'solid' },
+  { i18nKey: 'heat', domain: 'thermal' },
+  { i18nKey: 'channel', domain: 'fluid' },
 ];
 
 export function StartScreen() {
+  const { t } = useTranslation();
   const isOpen = useAppStore((s) => s.isStartScreenOpen);
   const createProject = useAppStore((s) => s.createProject);
   const loadProject = useAppStore((s) => s.loadProject);
@@ -37,8 +39,9 @@ export function StartScreen() {
     input.click();
   };
 
-  const handleCreate = (template: typeof TEMPLATES[number]) => {
-    createProject(template.name, template.domain);
+  const handleCreate = (tmpl: typeof TEMPLATES[number]) => {
+    const name = t(`startScreen.templates.${tmpl.i18nKey}.name`);
+    createProject(name, tmpl.domain);
   };
 
   return (
@@ -53,10 +56,10 @@ export function StartScreen() {
         {/* Header */}
         <div className="p-6 text-center border-b" style={{ borderColor: 'var(--color-border)' }}>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--color-accent)' }}>
-            FEM Modeler
+            {t('app.title')}
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-            FEM/CAE Pre-processing Environment
+            {t('startScreen.subtitle')}
           </p>
         </div>
 
@@ -79,7 +82,7 @@ export function StartScreen() {
                 e.currentTarget.style.borderColor = 'var(--color-border)';
               }}
             >
-              Open Existing Project (.fem.json)
+              {t('startScreen.openExisting')}
             </button>
           </div>
 
@@ -88,13 +91,13 @@ export function StartScreen() {
             className="text-sm font-bold uppercase tracking-wider mb-3"
             style={{ color: 'var(--color-text-muted)' }}
           >
-            New from Template
+            {t('startScreen.newFromTemplate')}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {TEMPLATES.map((t) => (
+            {TEMPLATES.map((tmpl) => (
               <button
-                key={t.name}
-                onClick={() => handleCreate(t)}
+                key={tmpl.i18nKey}
+                onClick={() => handleCreate(tmpl)}
                 className="p-4 rounded border text-left transition-colors cursor-pointer"
                 style={{
                   borderColor: 'var(--color-border)',
@@ -110,10 +113,10 @@ export function StartScreen() {
                 }}
               >
                 <div className="text-base font-medium" style={{ color: 'var(--color-text)' }}>
-                  {t.name}
+                  {t(`startScreen.templates.${tmpl.i18nKey}.name`)}
                 </div>
                 <div className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                  {t.description}
+                  {t(`startScreen.templates.${tmpl.i18nKey}.desc`)}
                 </div>
               </button>
             ))}
@@ -130,7 +133,7 @@ export function StartScreen() {
             className="text-sm cursor-pointer"
             style={{ color: 'var(--color-text-muted)' }}
           >
-            Skip and use current project
+            {t('startScreen.skip')}
           </button>
         </div>
       </div>

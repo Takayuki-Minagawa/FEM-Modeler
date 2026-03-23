@@ -1,0 +1,126 @@
+export const ja = {
+  app: {
+    title: 'FEM Modeler',
+    version: 'v0.1.0',
+  },
+  globalBar: {
+    undo: '元に戻す',
+    redo: 'やり直し',
+    save: '保存',
+    load: '読込',
+    new: '新規',
+    help: 'ヘルプ',
+  },
+  tree: {
+    title: 'プロジェクトツリー',
+    geometry: 'ジオメトリ',
+    selections: '名前付き選択',
+    materials: '材料',
+    sections: '断面',
+    mesh: 'メッシュ設定',
+    bc: '境界条件',
+    loads: '荷重',
+    ic: '初期条件',
+    analysis: '解析ケース',
+    export: 'ソルバ出力先',
+    validation: '検証',
+  },
+  properties: {
+    title: 'プロパティ',
+    geometry: 'ジオメトリボディを選択または作成して、プロパティを編集します。',
+    selections: '3D上でエンティティを選択し、名前付き選択を作成します。',
+    materials: '材料を追加し、名前付き選択に割り当てます。',
+    sections: 'フレーム・トラス要素の断面を定義します。',
+    mesh: 'メッシュ生成の設定を行います。',
+    bc: '名前付き選択に境界条件を定義します。',
+    loads: '名前付き選択に荷重を定義します。',
+    ic: '非定常解析の初期条件を定義します。',
+    analysis: '解析ケースとソルバ設定を行います。',
+    export: 'ソルバ出力先を選択し、モデルをエクスポートします。',
+    validation: 'エクスポート前に検証結果を確認します。',
+  },
+  bottomPanel: {
+    validation: '検証',
+    log: 'ログ',
+    export: 'エクスポート',
+    noIssues: '検証に問題はありません。',
+    logPlaceholder: '操作ログがここに表示されます。',
+    exportPlaceholder: 'エクスポート結果がここに表示されます。',
+  },
+  startScreen: {
+    subtitle: 'FEM/CAE 前処理環境',
+    openExisting: '既存プロジェクトを開く (.fem.json)',
+    newFromTemplate: 'テンプレートから新規作成',
+    skip: '現在のプロジェクトを使用',
+    templates: {
+      empty: { name: '空のプロジェクト', desc: 'ゼロから開始' },
+      frame2d: { name: '2Dフレーム', desc: 'ラーメン構造 (OpenSeesPy)' },
+      truss3d: { name: '3Dトラス', desc: '立体トラス構造 (OpenSeesPy)' },
+      solidPlate: { name: 'ソリッド平板', desc: '穴あき平板 (DOLFINx)' },
+      heat: { name: '熱伝導', desc: '定常熱伝導 (DOLFINx)' },
+      channel: { name: 'チャネル流れ', desc: '2Dチャネル流 (OpenFOAM)' },
+    },
+  },
+  theme: {
+    light: 'ライト',
+    dark: 'ダーク',
+  },
+  help: {
+    title: '操作マニュアル',
+    close: '閉じる',
+    sections: {
+      overview: {
+        title: '概要',
+        content:
+          'FEM Modelerは、ブラウザ上で動作するFEM/CAE前処理アプリケーションです。形状の作成、境界条件の設定、メッシュ方針の定義、そしてOpenSeesPy / DOLFINx / OpenFOAM向けのファイル出力を行えます。',
+      },
+      workflow: {
+        title: '基本ワークフロー',
+        steps: [
+          '1. テンプレートを選択するか、空のプロジェクトを作成',
+          '2. ジオメトリ（形状）を作成または読み込み',
+          '3. 面・辺・体積に名前を付ける（名前付き選択）',
+          '4. 材料や断面を設定',
+          '5. 境界条件・荷重を設定',
+          '6. 検証結果を確認',
+          '7. ソルバ向けにエクスポート',
+        ],
+      },
+      viewer: {
+        title: '3Dビューワー操作',
+        items: [
+          '左ドラッグ: 回転',
+          '右ドラッグ / 中ボタンドラッグ: パン',
+          'スクロール: ズーム',
+          'クリック: オブジェクト選択',
+          'Shift+クリック: 選択追加/解除',
+        ],
+      },
+      shortcuts: {
+        title: 'キーボードショートカット',
+        items: [
+          'Ctrl+Z: 元に戻す',
+          'Ctrl+Shift+Z: やり直し',
+          'Ctrl+S: プロジェクト保存',
+        ],
+      },
+      panels: {
+        title: '画面構成',
+        items: [
+          '左パネル: プロジェクトツリー - 設定項目を選択',
+          '中央: 3Dビューワー - 形状の表示と選択',
+          '右パネル: プロパティ - 選択項目の詳細設定',
+          '下部: 検証結果・ログ・エクスポート結果',
+        ],
+      },
+      solvers: {
+        title: '対応ソルバ',
+        items: [
+          'OpenSeesPy: 構造解析（フレーム・トラス）',
+          'DOLFINx: 連続体解析（弾性・熱伝導）',
+          'OpenFOAM: 流体解析（非圧縮流）',
+        ],
+      },
+    },
+  },
+};

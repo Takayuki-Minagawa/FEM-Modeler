@@ -1,7 +1,18 @@
+import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 
+const PANEL_KEYS = [
+  'geometry', 'selections', 'materials', 'sections', 'mesh',
+  'bc', 'loads', 'ic', 'analysis', 'export', 'validation',
+] as const;
+
 export function RightSidebar() {
+  const { t } = useTranslation();
   const activePanel = useAppStore((s) => s.activePanel);
+
+  const message = PANEL_KEYS.includes(activePanel as typeof PANEL_KEYS[number])
+    ? t(`properties.${activePanel}`)
+    : '';
 
   return (
     <div
@@ -13,7 +24,7 @@ export function RightSidebar() {
           className="text-sm font-bold uppercase tracking-wider mb-4"
           style={{ color: 'var(--color-text-muted)' }}
         >
-          Properties
+          {t('properties.title')}
         </div>
         <div
           className="text-base p-5 rounded text-center leading-relaxed"
@@ -22,17 +33,7 @@ export function RightSidebar() {
             color: 'var(--color-text-muted)',
           }}
         >
-          {activePanel === 'geometry' && 'Select or create a geometry body to edit its properties.'}
-          {activePanel === 'selections' && 'Select entities in 3D to create a named selection.'}
-          {activePanel === 'materials' && 'Add materials and assign them to named selections.'}
-          {activePanel === 'sections' && 'Define cross-sections for frame/truss elements.'}
-          {activePanel === 'mesh' && 'Configure mesh generation settings.'}
-          {activePanel === 'bc' && 'Define boundary conditions on named selections.'}
-          {activePanel === 'loads' && 'Define loads on named selections.'}
-          {activePanel === 'ic' && 'Define initial conditions for transient analyses.'}
-          {activePanel === 'analysis' && 'Configure analysis cases and solver settings.'}
-          {activePanel === 'export' && 'Select solver targets and export your model.'}
-          {activePanel === 'validation' && 'Review validation results before export.'}
+          {message}
         </div>
       </div>
     </div>

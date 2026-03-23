@@ -1,20 +1,22 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 
 type TabKey = 'validation' | 'log' | 'export';
 
 export function BottomPanel() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabKey>('validation');
   const validation = useAppStore((s) => s.ir.validation);
 
-  const tabs: { key: TabKey; label: string; badge?: number }[] = [
+  const tabs: { key: TabKey; labelKey: string; badge?: number }[] = [
     {
       key: 'validation',
-      label: 'Validation',
+      labelKey: 'bottomPanel.validation',
       badge: validation.summary.error_count + validation.summary.warning_count,
     },
-    { key: 'log', label: 'Log' },
-    { key: 'export', label: 'Export' },
+    { key: 'log', labelKey: 'bottomPanel.log' },
+    { key: 'export', labelKey: 'bottomPanel.export' },
   ];
 
   return (
@@ -43,10 +45,10 @@ export function BottomPanel() {
                   : '2px solid transparent',
             }}
           >
-            {tab.label}
+            {t(tab.labelKey)}
             {tab.badge != null && tab.badge > 0 && (
               <span
-                className="ml-1.5 px-1 py-0.5 rounded-full text-xs"
+                className="ml-1.5 px-1.5 py-0.5 rounded-full"
                 style={{
                   backgroundColor: 'var(--color-error)',
                   color: '#fff',
@@ -69,7 +71,7 @@ export function BottomPanel() {
                 className="text-sm p-4 text-center"
                 style={{ color: 'var(--color-text-muted)' }}
               >
-                No validation issues found.
+                {t('bottomPanel.noIssues')}
               </div>
             ) : (
               validation.items.map((item) => (
@@ -102,7 +104,7 @@ export function BottomPanel() {
             className="text-sm p-4 text-center"
             style={{ color: 'var(--color-text-muted)' }}
           >
-            Operation log will appear here.
+            {t('bottomPanel.logPlaceholder')}
           </div>
         )}
         {activeTab === 'export' && (
@@ -110,7 +112,7 @@ export function BottomPanel() {
             className="text-sm p-4 text-center"
             style={{ color: 'var(--color-text-muted)' }}
           >
-            Export results will appear here.
+            {t('bottomPanel.exportPlaceholder')}
           </div>
         )}
       </div>
