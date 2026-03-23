@@ -66,6 +66,13 @@ export function BottomPanel() {
       <div className="flex-1 overflow-y-auto p-3">
         {activeTab === 'validation' && (
           <div>
+            <button
+              onClick={() => useAppStore.getState().runValidation()}
+              className="mb-2 px-3 py-1.5 rounded text-sm cursor-pointer"
+              style={{ backgroundColor: 'var(--color-accent)', color: '#fff' }}
+            >
+              {t('validation.runValidation')}
+            </button>
             {validation.items.length === 0 ? (
               <div
                 className="text-sm p-4 text-center"

@@ -19,6 +19,7 @@ import { createDefaultProject } from '@/core/ir/defaults';
 import { getUnitPreset } from '@/core/units/presets';
 import { generateId } from '@/core/ir/id-generator';
 import { createUndoRedoManager } from './middleware/undo-redo';
+import { runValidation } from '@/validation/engine';
 
 // ---------------------------------------------------------------------------
 // Transient UI state (not persisted in project JSON)
@@ -96,6 +97,9 @@ export interface AppState extends TransientState {
   addAnalysisCase: (ac: AnalysisCase) => void;
   updateAnalysisCase: (id: string, updates: Partial<AnalysisCase>) => void;
   removeAnalysisCase: (id: string) => void;
+
+  // Validation
+  runValidation: () => void;
 
   // Undo/Redo
   undo: () => void;
@@ -442,6 +446,12 @@ export const useAppStore = create<AppState>()(
         saveBefore(state);
         state.ir.analysis_cases = state.ir.analysis_cases.filter((c) => c.id !== id);
         saveAfter(state);
+      }),
+
+    // --- Validation ---
+    runValidation: () =>
+      set((state) => {
+        state.ir.validation = runValidation(state.ir);
       }),
 
     // --- Undo/Redo ---

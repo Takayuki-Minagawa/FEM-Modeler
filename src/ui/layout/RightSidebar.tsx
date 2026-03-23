@@ -6,8 +6,9 @@ import { MaterialForm } from '@/ui/forms/MaterialForm';
 import { SectionForm } from '@/ui/forms/SectionForm';
 import { BoundaryConditionForm } from '@/ui/forms/BoundaryConditionForm';
 import { LoadForm } from '@/ui/forms/LoadForm';
+import { ExportForm } from '@/ui/forms/ExportForm';
 
-const PANELS_WITH_FORMS = ['geometry', 'selections', 'materials', 'sections', 'bc', 'loads'] as const;
+const PANELS_WITH_FORMS = ['geometry', 'selections', 'materials', 'sections', 'bc', 'loads', 'export'] as const;
 
 const PANEL_I18N_KEYS = [
   'geometry', 'selections', 'materials', 'sections', 'mesh',
@@ -21,6 +22,7 @@ const FORM_TITLES: Record<string, string> = {
   sections: 'sections.formTitle',
   bc: 'bc.formTitle',
   loads: 'loads.formTitle',
+  export: 'properties.title',
 };
 
 export function RightSidebar() {
@@ -49,6 +51,7 @@ export function RightSidebar() {
         {activePanel === 'sections' && <SectionForm />}
         {activePanel === 'bc' && <BoundaryConditionForm />}
         {activePanel === 'loads' && <LoadForm />}
+        {activePanel === 'export' && <ExportForm />}
 
         {!hasForm && (PANEL_I18N_KEYS as readonly string[]).includes(activePanel) && (
           <div
