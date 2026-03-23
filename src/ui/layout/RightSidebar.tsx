@@ -1,7 +1,11 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
+import { GeometryForm } from '@/ui/forms/GeometryForm';
+import { NamedSelectionsForm } from '@/ui/forms/NamedSelectionsForm';
 
-const PANEL_KEYS = [
+const PANELS_WITH_FORMS = ['geometry', 'selections'] as const;
+
+const PANEL_I18N_KEYS = [
   'geometry', 'selections', 'materials', 'sections', 'mesh',
   'bc', 'loads', 'ic', 'analysis', 'export', 'validation',
 ] as const;
@@ -10,9 +14,7 @@ export function RightSidebar() {
   const { t } = useTranslation();
   const activePanel = useAppStore((s) => s.activePanel);
 
-  const message = PANEL_KEYS.includes(activePanel as typeof PANEL_KEYS[number])
-    ? t(`properties.${activePanel}`)
-    : '';
+  const hasForm = (PANELS_WITH_FORMS as readonly string[]).includes(activePanel);
 
   return (
     <div
@@ -26,15 +28,21 @@ export function RightSidebar() {
         >
           {t('properties.title')}
         </div>
-        <div
-          className="text-base p-5 rounded text-center leading-relaxed"
-          style={{
-            backgroundColor: 'var(--color-bg-input)',
-            color: 'var(--color-text-muted)',
-          }}
-        >
-          {message}
-        </div>
+
+        {activePanel === 'geometry' && <GeometryForm />}
+        {activePanel === 'selections' && <NamedSelectionsForm />}
+
+        {!hasForm && (PANEL_I18N_KEYS as readonly string[]).includes(activePanel) && (
+          <div
+            className="text-base p-5 rounded text-center leading-relaxed"
+            style={{
+              backgroundColor: 'var(--color-bg-input)',
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            {t(`properties.${activePanel}`)}
+          </div>
+        )}
       </div>
     </div>
   );

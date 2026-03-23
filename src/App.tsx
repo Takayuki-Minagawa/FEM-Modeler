@@ -3,6 +3,7 @@ import { AppLayout } from '@/ui/layout/AppLayout';
 import { StartScreen } from '@/ui/dialogs/StartScreen';
 import { HelpDialog } from '@/ui/dialogs/HelpDialog';
 import { useTheme } from '@/hooks/useTheme';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 export interface AppContext {
   theme: 'dark' | 'light';
@@ -10,7 +11,6 @@ export interface AppContext {
   openHelp: () => void;
 }
 
-// Simple context via module-level state (avoids React context boilerplate for now)
 let _appContext: AppContext | null = null;
 export function getAppContext(): AppContext | null {
   return _appContext;
@@ -19,6 +19,8 @@ export function getAppContext(): AppContext | null {
 export default function App() {
   const { theme, toggleTheme } = useTheme();
   const [helpOpen, setHelpOpen] = useState(false);
+
+  useKeyboardShortcuts();
 
   _appContext = { theme, toggleTheme, openHelp: () => setHelpOpen(true) };
 
