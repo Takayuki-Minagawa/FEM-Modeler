@@ -188,7 +188,7 @@ OpenSeesPy / DOLFINx / OpenFOAM 向けの出力はすべて生成物であり、
 - [x] **Phase 3** - OpenSeesPy / DOLFINx / OpenFOAM エクスポータ
 - [x] **Phase 3** - メッシュ方針設定、解析ケース設定
 - [x] **Phase 4** - テンプレート自動セットアップ (5種)
-- [ ] **Phase 4** - 一括I/O、STL/OBJ/MSHインポート、性能改善
+- [x] **Phase 4** - CSV/Markdown出力、STLインポート、インポートダイアログ
 
 ---
 

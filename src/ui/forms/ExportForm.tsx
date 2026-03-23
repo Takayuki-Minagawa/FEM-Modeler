@@ -5,6 +5,8 @@ import { downloadOpenSeesPyZip } from '@/export/openseespy/exporter';
 import { downloadDOLFINxZip } from '@/export/dolfinx/exporter';
 import { downloadOpenFOAMZip } from '@/export/openfoam/exporter';
 import { downloadProjectFile } from '@/export/project/save';
+import { downloadConditionsCsv } from '@/export/project/csv-export';
+import { downloadMarkdownSummary } from '@/export/project/markdown-summary';
 
 export function ExportForm() {
   const { i18n } = useTranslation();
@@ -37,6 +39,14 @@ export function ExportForm() {
           downloadProjectFile(ir);
           result = { errors: [], warnings: [] };
           break;
+        case 'CSV':
+          downloadConditionsCsv(ir);
+          result = { errors: [], warnings: [] };
+          break;
+        case 'Markdown':
+          downloadMarkdownSummary(ir);
+          result = { errors: [], warnings: [] };
+          break;
         default:
           result = { errors: ['Unknown target'], warnings: [] };
       }
@@ -52,6 +62,8 @@ export function ExportForm() {
     { name: 'DOLFINx', desc: isJa ? '連続体解析 (Gmsh + Python)' : 'Continuum (Gmsh + Python)', enabled: ir.solver_targets.find((t) => t.target_name === 'DOLFINx')?.enabled ?? false },
     { name: 'OpenFOAM', desc: isJa ? '流体解析 (ケースディレクトリ)' : 'CFD (Case directory)', enabled: ir.solver_targets.find((t) => t.target_name === 'OpenFOAM')?.enabled ?? false },
     { name: 'JSON', desc: isJa ? 'プロジェクトファイル (.fem.json)' : 'Project file (.fem.json)', enabled: true },
+    { name: 'CSV', desc: isJa ? '条件一覧CSV' : 'Conditions summary CSV', enabled: true },
+    { name: 'Markdown', desc: isJa ? '入力サマリーMarkdown' : 'Input summary Markdown', enabled: true },
   ];
 
   return (

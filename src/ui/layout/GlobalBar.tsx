@@ -6,7 +6,8 @@ import { useAppContext } from '@/hooks/useAppContext';
 
 export function GlobalBar() {
   const { t, i18n } = useTranslation();
-  const { theme, toggleTheme, openHelp } = useAppContext();
+  const { theme, toggleTheme, openHelp, openImport } = useAppContext();
+  const isJa = i18n.language === 'ja';
   const projectName = useAppStore((s) => s.ir.meta.project_name);
   const unitSystem = useAppStore((s) => s.ir.units.system_name);
   const canUndo = useAppStore((s) => s.canUndo);
@@ -87,6 +88,9 @@ export function GlobalBar() {
         </BarButton>
         <BarButton onClick={handleLoad}>
           {t('globalBar.load')}
+        </BarButton>
+        <BarButton onClick={openImport}>
+          {isJa ? 'インポート' : 'Import'}
         </BarButton>
         <BarButton onClick={() => setStartScreenOpen(true)}>
           {t('globalBar.new')}

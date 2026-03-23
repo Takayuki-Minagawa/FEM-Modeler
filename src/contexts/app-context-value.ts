@@ -7,6 +7,9 @@ export interface AppContextValue {
   helpOpen: boolean;
   openHelp: () => void;
   closeHelp: () => void;
+  importOpen: boolean;
+  openImport: () => void;
+  closeImport: () => void;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);
