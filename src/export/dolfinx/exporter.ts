@@ -1,4 +1,4 @@
-import type { ProjectIR } from '@/core/ir/types';
+import type { ProjectIR, BoundaryCondition } from '@/core/ir/types';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
@@ -42,7 +42,8 @@ export function exportDOLFINx(ir: ProjectIR): DOLFINxExportResult {
     '',
   ];
 
-  // Shape definition
+  // Shape definition — determine the main volume tag
+  let mainVolumeTag = 1;
   if (shapeType === 'box' || shapeType === 'channel') {
     const w = meta.width as number ?? 2;
     const h = meta.height as number ?? 2;
@@ -61,6 +62,7 @@ export function exportDOLFINx(ir: ProjectIR): DOLFINxExportResult {
     geoLines.push(`Box(1) = {${-w / 2}, ${-t / 2}, ${-d / 2}, ${w}, ${t}, ${d}};`);
     geoLines.push(`Cylinder(2) = {0, ${-t / 2 - 0.01}, 0, 0, ${t + 0.02}, 0, ${r}};`);
     geoLines.push('BooleanDifference(3) = { Volume{1}; Delete; }{ Volume{2}; Delete; };');
+    mainVolumeTag = 3;
   } else if (shapeType === 'cylinder') {
     const r = meta.radius as number ?? 1;
     const h = meta.height as number ?? 3;
@@ -77,15 +79,51 @@ export function exportDOLFINx(ir: ProjectIR): DOLFINxExportResult {
   geoLines.push('', `Mesh.CharacteristicLengthMax = ${meshSize};`);
   geoLines.push('Mesh.Algorithm3D = 1;');
 
-  // Physical groups from named selections
-  let pgId = 1;
+  // Physical Volume for the main body
+  geoLines.push('', `// Physical Volume for FEA domain`);
+  geoLines.push(`Physical Volume("domain") = {${mainVolumeTag}};`);
+
+  // Physical Surfaces from geometry faces referencing named selections
+  geoLines.push('', '// Physical Surfaces for boundary conditions');
   const tagMap: Record<string, number> = {};
-  for (const ns of ir.named_selections) {
-    geoLines.push(`Physical Surface("${ns.name}") = {${pgId}};  // placeholder`);
-    tagMap[ns.name] = pgId++;
+  const bodyFaces = ir.geometry.faces.filter((f) => f.body_id === body.id);
+
+  if (bodyFaces.length > 0) {
+    // Map named selections that reference faces to physical surfaces
+    let pgId = 1;
+    for (const ns of ir.named_selections) {
+      const faceRefs = bodyFaces.filter((f) => ns.member_refs.includes(f.id));
+      if (faceRefs.length > 0) {
+        const faceIndices = faceRefs.map((_, i) => i + 1); // Gmsh surface IDs
+        geoLines.push(`Physical Surface("${ns.name}") = {${faceIndices.join(', ')}};`);
+        tagMap[ns.name] = pgId++;
+      }
+    }
+    // Also create physical surfaces for unmapped faces (using face names)
+    for (let i = 0; i < bodyFaces.length; i++) {
+      const face = bodyFaces[i];
+      if (!Object.keys(tagMap).includes(face.name)) {
+        geoLines.push(`Physical Surface("${face.name}") = {${i + 1}};`);
+        tagMap[face.name] = pgId++;
+      }
+    }
+  } else {
+    // No explicit faces — create numbered surface groups
+    let pgId = 1;
+    for (const ns of ir.named_selections) {
+      geoLines.push(`Physical Surface("${ns.name}") = {${pgId}};`);
+      tagMap[ns.name] = pgId++;
+    }
+    if (Object.keys(tagMap).length === 0) {
+      warnings.push('No named selections for boundary tagging. BCs may not apply correctly.');
+    }
   }
 
   const geoFile = geoLines.join('\n');
+
+  // --- Collect BC info for Python code generation ---
+  const structuralBCs = ir.boundary_conditions.filter((bc) => bc.physics_domain === 'structural');
+  const thermalBCs = ir.boundary_conditions.filter((bc) => bc.physics_domain === 'thermal');
 
   // Python template
   const pyLines: string[] = [
@@ -95,14 +133,15 @@ export function exportDOLFINx(ir: ProjectIR): DOLFINxExportResult {
     '',
     'import numpy as np',
     'from mpi4py import MPI',
-    'from dolfinx import mesh, fem, io',
+    'from dolfinx import mesh, fem, io, default_scalar_type',
     'from dolfinx.fem.petsc import LinearProblem',
     'import ufl',
     '',
     '# --- Load mesh ---',
     '# Run: gmsh -3 model.geo -o model.msh',
-    '# Then convert to XDMF if needed',
     'domain, cell_tags, facet_tags = io.gmshio.read_from_msh("model.msh", MPI.COMM_WORLD, gdim=3)',
+    '',
+    `# Tag mapping: ${JSON.stringify(tagMap)}`,
     '',
   ];
 
@@ -111,19 +150,19 @@ export function exportDOLFINx(ir: ProjectIR): DOLFINxExportResult {
       '# --- Steady-state heat conduction ---',
       'V = fem.functionspace(domain, ("Lagrange", 1))',
       '',
-      `k = fem.Constant(domain, ${k})  # Thermal conductivity`,
+      `k = fem.Constant(domain, default_scalar_type(${k}))  # Thermal conductivity`,
       '',
       'u = ufl.TrialFunction(V)',
       'v = ufl.TestFunction(V)',
       'a = k * ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx',
-      'L = fem.Constant(domain, 0.0) * v * ufl.dx',
+      'L = fem.Constant(domain, default_scalar_type(0.0)) * v * ufl.dx',
       '',
-      '# --- Boundary conditions ---',
-      '# TODO: Apply Dirichlet BCs based on facet tags',
-      '# Example:',
-      '# bc = fem.dirichletbc(value, dofs, V)',
+    );
+    // Generate thermal BCs
+    pyLines.push(...generateDOLFINxBCs(thermalBCs, ir, tagMap, 'thermal'));
+    pyLines.push(
       '',
-      'problem = LinearProblem(a, L, bcs=[])',
+      'problem = LinearProblem(a, L, bcs=bcs)',
       'uh = problem.solve()',
       '',
       'with io.XDMFFile(MPI.COMM_WORLD, "result.xdmf", "w") as f:',
@@ -152,10 +191,12 @@ export function exportDOLFINx(ir: ProjectIR): DOLFINxExportResult {
       'a = ufl.inner(sigma(u), epsilon(v)) * ufl.dx',
       'L = ufl.inner(fem.Constant(domain, (0.0,) * domain.geometry.dim), v) * ufl.dx',
       '',
-      '# --- Boundary conditions ---',
-      '# TODO: Apply Dirichlet BCs based on facet tags',
+    );
+    // Generate structural BCs
+    pyLines.push(...generateDOLFINxBCs(structuralBCs, ir, tagMap, 'structural'));
+    pyLines.push(
       '',
-      'problem = LinearProblem(a, L, bcs=[])',
+      'problem = LinearProblem(a, L, bcs=bcs)',
       'uh = problem.solve()',
       '',
       'with io.XDMFFile(MPI.COMM_WORLD, "result.xdmf", "w") as f:',
@@ -178,6 +219,92 @@ export function exportDOLFINx(ir: ProjectIR): DOLFINxExportResult {
   }, null, 2);
 
   return { success: errors.length === 0, script, geoFile, manifest, errors, warnings };
+}
+
+/**
+ * Generate DOLFINx Dirichlet BC application code from IR boundary conditions.
+ */
+function generateDOLFINxBCs(
+  bcs: BoundaryCondition[],
+  ir: ProjectIR,
+  tagMap: Record<string, number>,
+  domain: 'structural' | 'thermal',
+): string[] {
+  const lines: string[] = [];
+  lines.push('# --- Boundary conditions ---');
+  lines.push('bcs = []');
+  lines.push('fdim = domain.topology.dim - 1');
+  lines.push('');
+
+  if (bcs.length === 0) {
+    lines.push('# No boundary conditions defined for this domain.');
+    lines.push('# Add boundary conditions in the FEM Modeler UI and re-export.');
+    return lines;
+  }
+
+  for (let i = 0; i < bcs.length; i++) {
+    const bc = bcs[i];
+    const ns = ir.named_selections.find((n) => n.id === bc.target_named_selection_id);
+    const nsName = ns?.name ?? `bc_${i}`;
+    const tag = tagMap[nsName];
+
+    lines.push(`# BC ${i + 1}: "${bc.name}" (type: ${bc.bc_type}) on "${nsName}"`);
+
+    if (tag !== undefined) {
+      lines.push(`facets_${i} = facet_tags.find(${tag})`);
+      lines.push(`dofs_${i} = fem.locate_dofs_topological(V, fdim, facets_${i})`);
+    } else {
+      // No matching tag — generate a geometric locator as fallback
+      lines.push(`# Warning: No facet tag found for "${nsName}". Using geometric locator.`);
+      lines.push(`# Modify the locator function to match your boundary region.`);
+      lines.push(`def _bc_locator_${i}(x):`);
+      if (bc.bc_type === 'fixed') {
+        lines.push(`    return np.isclose(x[0], ${getFixedCoordGuess(bc)})`);
+      } else {
+        lines.push(`    return np.full(x.shape[1], True, dtype=bool)  # Adjust this condition`);
+      }
+      lines.push(`facets_${i} = mesh.locate_entities_boundary(domain, fdim, _bc_locator_${i})`);
+      lines.push(`dofs_${i} = fem.locate_dofs_topological(V, fdim, facets_${i})`);
+    }
+
+    if (domain === 'structural') {
+      if (bc.bc_type === 'fixed') {
+        lines.push(`bc_${i} = fem.dirichletbc(np.array([0.0] * domain.geometry.dim, dtype=default_scalar_type), dofs_${i}, V)`);
+      } else if (bc.bc_type === 'prescribed_displacement' && bc.values.vector) {
+        const v = bc.values.vector;
+        lines.push(`bc_${i} = fem.dirichletbc(np.array([${v[0]}, ${v[1]}, ${v[2]}], dtype=default_scalar_type), dofs_${i}, V)`);
+      } else {
+        lines.push(`bc_${i} = fem.dirichletbc(np.array([0.0] * domain.geometry.dim, dtype=default_scalar_type), dofs_${i}, V)`);
+      }
+    } else {
+      // Thermal
+      if (bc.bc_type === 'temperature' && bc.values.scalar != null) {
+        lines.push(`bc_${i} = fem.dirichletbc(default_scalar_type(${bc.values.scalar}), dofs_${i}, V)`);
+      } else if (bc.bc_type === 'insulation') {
+        lines.push(`# Insulation (zero flux) is a natural BC — no Dirichlet BC needed.`);
+        lines.push(`bc_${i} = None`);
+      } else {
+        lines.push(`bc_${i} = fem.dirichletbc(default_scalar_type(0.0), dofs_${i}, V)`);
+      }
+    }
+    lines.push(`if bc_${i} is not None:`);
+    lines.push(`    bcs.append(bc_${i})`);
+    lines.push('');
+  }
+
+  return lines;
+}
+
+/**
+ * Guess a coordinate value for fixed BC based on common patterns.
+ */
+function getFixedCoordGuess(bc: BoundaryCondition): string {
+  // For fixed supports, usually at x_min or y_min — default to a common value
+  const name = bc.name.toLowerCase();
+  if (name.includes('left') || name.includes('左')) return '-1.0  # adjust to left boundary x-coordinate';
+  if (name.includes('right') || name.includes('右')) return '1.0  # adjust to right boundary x-coordinate';
+  if (name.includes('bottom') || name.includes('下')) return '-1.0  # adjust to bottom boundary y-coordinate';
+  return '0.0  # adjust to your boundary coordinate';
 }
 
 export async function downloadDOLFINxZip(ir: ProjectIR): Promise<DOLFINxExportResult> {

@@ -231,6 +231,8 @@ export const useAppStore = create<AppState>()(
         state.ir.section_assignments = state.ir.section_assignments.filter((a) => validNsIds.has(a.target_named_selection_id));
         state.ir.boundary_conditions = state.ir.boundary_conditions.filter((bc) => !bc.target_named_selection_id || validNsIds.has(bc.target_named_selection_id));
         state.ir.loads = state.ir.loads.filter((l) => !l.target_named_selection_id || validNsIds.has(l.target_named_selection_id));
+        state.ir.initial_conditions = state.ir.initial_conditions.filter((ic) => !ic.target_named_selection_id || validNsIds.has(ic.target_named_selection_id));
+        state.ir.mesh_controls.local = state.ir.mesh_controls.local.filter((m) => !m.target_named_selection_id || validNsIds.has(m.target_named_selection_id));
 
         saveAfter(state);
       }),
@@ -263,6 +265,7 @@ export const useAppStore = create<AppState>()(
         state.ir.boundary_conditions = state.ir.boundary_conditions.filter((bc) => bc.target_named_selection_id !== id);
         state.ir.loads = state.ir.loads.filter((l) => l.target_named_selection_id !== id);
         state.ir.initial_conditions = state.ir.initial_conditions.filter((ic) => ic.target_named_selection_id !== id);
+        state.ir.mesh_controls.local = state.ir.mesh_controls.local.filter((m) => m.target_named_selection_id !== id);
         saveAfter(state);
       }),
 

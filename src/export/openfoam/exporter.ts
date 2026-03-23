@@ -1,4 +1,4 @@
-import type { ProjectIR } from '@/core/ir/types';
+import type { ProjectIR, BoundaryCondition } from '@/core/ir/types';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
@@ -20,6 +20,54 @@ function foamHeader(className: string, object: string, location: string = ''): s
 }`;
 }
 
+/** Resolve patch names from named selections and BCs */
+interface PatchInfo {
+  name: string;
+  type: 'patch' | 'wall' | 'empty';
+  bc?: BoundaryCondition;
+}
+
+function resolvePatchInfo(ir: ProjectIR): {
+  inlet: PatchInfo;
+  outlet: PatchInfo;
+  wallTop: PatchInfo;
+  wallBottom: PatchInfo;
+  frontAndBack: PatchInfo;
+} {
+  // Map BCs to named selections
+  const inletBC = ir.boundary_conditions.find((bc) => bc.bc_type === 'velocity_inlet');
+  const outletBC = ir.boundary_conditions.find((bc) => bc.bc_type === 'pressure_outlet');
+  const wallBCs = ir.boundary_conditions.filter((bc) => bc.bc_type === 'wall' || bc.bc_type === 'no_slip');
+
+  // Resolve patch names from named selections
+  const inletNS = inletBC ? ir.named_selections.find((ns) => ns.id === inletBC.target_named_selection_id) : null;
+  const outletNS = outletBC ? ir.named_selections.find((ns) => ns.id === outletBC.target_named_selection_id) : null;
+
+  const inletName = inletNS?.name ?? 'inlet';
+  const outletName = outletNS?.name ?? 'outlet';
+
+  // Resolve wall patch names
+  let wallTopName = 'wall_top';
+  let wallBottomName = 'wall_bottom';
+  if (wallBCs.length >= 2) {
+    const ns0 = ir.named_selections.find((ns) => ns.id === wallBCs[0].target_named_selection_id);
+    const ns1 = ir.named_selections.find((ns) => ns.id === wallBCs[1].target_named_selection_id);
+    if (ns0) wallTopName = ns0.name;
+    if (ns1) wallBottomName = ns1.name;
+  } else if (wallBCs.length === 1) {
+    const ns0 = ir.named_selections.find((ns) => ns.id === wallBCs[0].target_named_selection_id);
+    if (ns0) wallTopName = ns0.name;
+  }
+
+  return {
+    inlet: { name: inletName, type: 'patch', bc: inletBC },
+    outlet: { name: outletName, type: 'patch', bc: outletBC },
+    wallTop: { name: wallTopName, type: 'wall' },
+    wallBottom: { name: wallBottomName, type: 'wall' },
+    frontAndBack: { name: 'frontAndBack', type: 'empty' },
+  };
+}
+
 export function exportOpenFOAM(ir: ProjectIR): OpenFOAMExportResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -39,9 +87,17 @@ export function exportOpenFOAM(ir: ProjectIR): OpenFOAMExportResult {
   const fluidMat = ir.materials.find((m) => m.class === 'fluid_newtonian');
   const nu_val = fluidMat?.parameter_set.kinematic_viscosity.value ?? 1e-6;
 
-  // Find inlet/outlet BCs
-  const inletBC = ir.boundary_conditions.find((bc) => bc.bc_type === 'velocity_inlet');
-  const inletVel = inletBC?.values.vector ?? [1, 0, 0];
+  if (!fluidMat) {
+    warnings.push('No fluid material found. Using default kinematic viscosity (1e-6 m²/s).');
+  }
+
+  // Resolve patches and BCs from IR
+  const patches = resolvePatchInfo(ir);
+
+  // Read inlet velocity from IR BC values
+  const inletVel = patches.inlet.bc?.values.vector ?? [1, 0, 0];
+  // Read outlet pressure from IR BC values
+  const outletPressure = patches.outlet.bc?.values.scalar ?? 0;
 
   const files: Record<string, string> = {};
 
@@ -78,7 +134,7 @@ edges
 
 boundary
 (
-    inlet
+    ${patches.inlet.name}
     {
         type patch;
         faces
@@ -86,7 +142,7 @@ boundary
             (0 4 7 3)
         );
     }
-    outlet
+    ${patches.outlet.name}
     {
         type patch;
         faces
@@ -94,7 +150,7 @@ boundary
             (2 6 5 1)
         );
     }
-    wall_top
+    ${patches.wallTop.name}
     {
         type wall;
         faces
@@ -102,7 +158,7 @@ boundary
             (3 7 6 2)
         );
     }
-    wall_bottom
+    ${patches.wallBottom.name}
     {
         type wall;
         faces
@@ -110,7 +166,7 @@ boundary
             (1 5 4 0)
         );
     }
-    frontAndBack
+    ${patches.frontAndBack.name}
     {
         type empty;
         faces
@@ -131,24 +187,24 @@ internalField   uniform (0 0 0);
 
 boundaryField
 {
-    inlet
+    ${patches.inlet.name}
     {
         type            fixedValue;
         value           uniform (${inletVel[0]} ${inletVel[1]} ${inletVel[2]});
     }
-    outlet
+    ${patches.outlet.name}
     {
         type            zeroGradient;
     }
-    wall_top
+    ${patches.wallTop.name}
     {
         type            noSlip;
     }
-    wall_bottom
+    ${patches.wallBottom.name}
     {
         type            noSlip;
     }
-    frontAndBack
+    ${patches.frontAndBack.name}
     {
         type            empty;
     }
@@ -164,24 +220,24 @@ internalField   uniform 0;
 
 boundaryField
 {
-    inlet
+    ${patches.inlet.name}
     {
         type            zeroGradient;
     }
-    outlet
+    ${patches.outlet.name}
     {
         type            fixedValue;
-        value           uniform 0;
+        value           uniform ${outletPressure};
     }
-    wall_top
+    ${patches.wallTop.name}
     {
         type            zeroGradient;
     }
-    wall_bottom
+    ${patches.wallBottom.name}
     {
         type            zeroGradient;
     }
-    frontAndBack
+    ${patches.frontAndBack.name}
     {
         type            empty;
     }
@@ -311,6 +367,12 @@ relaxationFactors
     mesh: 'blockMesh',
     domain: { length: L, height: H, depth: D },
     cells: { nx, ny, nz },
+    patches: {
+      inlet: patches.inlet.name,
+      outlet: patches.outlet.name,
+      wallTop: patches.wallTop.name,
+      wallBottom: patches.wallBottom.name,
+    },
     warnings, errors,
   }, null, 2);
 

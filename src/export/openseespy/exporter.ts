@@ -118,41 +118,72 @@ export function exportOpenSeesPy(ir: ProjectIR): OpenSeesPyExportResult {
   const A = sec?.area ?? 0.01;
   const Iz = sec?.inertia_y ?? 1e-4;
 
-  // Support conditions
+  // --- Support conditions: resolve from IR boundary conditions ---
   const fixes: FixCondition[] = [];
+  const fixedNodeIds = new Set<number>();
+
   for (const bc of ir.boundary_conditions) {
-    if (bc.physics_domain === 'structural' && bc.bc_type === 'fixed') {
-      // Apply to bottom nodes (y=0) as default
-      const bottomNodes = nodes.filter((n) => n.y === 0);
-      for (const n of bottomNodes) {
-        fixes.push({ nodeId: n.id, dofs: ndf === 3 ? [1, 1, 1] : [1, 1] });
+    if (bc.physics_domain !== 'structural') continue;
+    if (bc.bc_type !== 'fixed' && bc.bc_type !== 'prescribed_displacement' && bc.bc_type !== 'symmetry') continue;
+
+    // Resolve target nodes via named selection
+    const targetNodes = resolveTargetNodes(bc.target_named_selection_id, ir, nodes, body.id, 'support');
+
+    // Build DOF fixity from dof_map or default to fully fixed
+    let dofs: number[];
+    if (bc.values.dof_map) {
+      const dm = bc.values.dof_map;
+      if (ndf === 3) {
+        dofs = [dm.ux === 'free' ? 0 : 1, dm.uy === 'free' ? 0 : 1, dm.rz === 'free' ? 0 : 1];
+      } else {
+        dofs = [dm.ux === 'free' ? 0 : 1, dm.uy === 'free' ? 0 : 1];
       }
-      break;
+    } else {
+      dofs = ndf === 3 ? [1, 1, 1] : [1, 1];
+    }
+
+    for (const n of targetNodes) {
+      if (!fixedNodeIds.has(n.id)) {
+        fixedNodeIds.add(n.id);
+        fixes.push({ nodeId: n.id, dofs });
+      }
     }
   }
+
+  // Fallback: if no structural BCs resolved, warn and apply fixed at base
   if (fixes.length === 0) {
-    warnings.push('No support conditions found. Applying fixed support at bottom nodes.');
-    const bottomNodes = nodes.filter((n) => n.y === 0);
+    warnings.push('No structural boundary conditions could be resolved. Applying fixed support at base nodes.');
+    const minY = Math.min(...nodes.map((n) => n.y));
+    const bottomNodes = nodes.filter((n) => n.y === minY);
     for (const n of bottomNodes) {
       fixes.push({ nodeId: n.id, dofs: ndf === 3 ? [1, 1, 1] : [1, 1] });
     }
   }
 
-  // Loads
+  // --- Loads: resolve from IR loads ---
   const nodalLoads: NodalLoad[] = [];
+
   for (const load of ir.loads) {
-    if (load.load_type === 'nodal_force' || load.load_type === 'gravity') {
-      const topNodes = nodes.filter((n) => n.y === Math.max(...nodes.map((nn) => nn.y)));
-      const mag = load.magnitude;
-      for (const n of topNodes) {
-        nodalLoads.push({
-          nodeId: n.id,
-          pattern: 1,
-          fx: mag * load.direction[0],
-          fy: mag * load.direction[1],
-          fz: mag * load.direction[2],
-        });
-      }
+    if (load.physics_domain !== 'structural') continue;
+
+    const targetNodes = resolveTargetNodes(load.target_named_selection_id, ir, nodes, body.id, 'load');
+    if (targetNodes.length === 0) {
+      warnings.push(`Load "${load.name}" has no resolvable target nodes.`);
+      continue;
+    }
+
+    const mag = load.magnitude;
+    // For 'total' mode, distribute among target nodes; otherwise per-node
+    const perNode = load.application_mode === 'total' ? mag / targetNodes.length : mag;
+
+    for (const n of targetNodes) {
+      nodalLoads.push({
+        nodeId: n.id,
+        pattern: 1,
+        fx: perNode * load.direction[0],
+        fy: perNode * load.direction[1],
+        fz: perNode * load.direction[2],
+      });
     }
   }
 
@@ -244,6 +275,60 @@ export function exportOpenSeesPy(ir: ProjectIR): OpenSeesPyExportResult {
   }, null, 2);
 
   return { success: errors.length === 0, script, nodesCsv, elementsCsv, manifest, errors, warnings };
+}
+
+/**
+ * Resolve which nodes a BC/load targets via named selection.
+ * Falls back to heuristic based on role ('support' → base nodes, 'load' → top nodes).
+ */
+function resolveTargetNodes(
+  nsId: string,
+  ir: ProjectIR,
+  nodes: Node[],
+  bodyId: string,
+  role: 'support' | 'load',
+): Node[] {
+  const ns = ir.named_selections.find((n) => n.id === nsId);
+
+  if (ns) {
+    // Check if named selection directly references vertices
+    const nsRefs = new Set(ns.member_refs);
+    const matchedVertices = ir.geometry.vertices.filter((v) => nsRefs.has(v.id) && v.body_id === bodyId);
+
+    if (matchedVertices.length > 0) {
+      // Vertex-level named selection — resolve to matching nodes
+      return nodes.filter((n) =>
+        matchedVertices.some((v) =>
+          Math.abs(v.position[0] - n.x) < 1e-6 &&
+          Math.abs(v.position[1] - n.y) < 1e-6 &&
+          Math.abs(v.position[2] - n.z) < 1e-6
+        ),
+      );
+    }
+
+    // Body-level named selection — use name/type hints for node filtering
+    const nsName = (ns.display_name || ns.name).toLowerCase();
+    const isBase = /support|base|fixed|底|基礎|支点/.test(nsName);
+    const isTop = /top|load|荷重|頂|上/.test(nsName);
+
+    if (isBase) {
+      const minY = Math.min(...nodes.map((n) => n.y));
+      return nodes.filter((n) => n.y === minY);
+    }
+    if (isTop) {
+      const maxY = Math.max(...nodes.map((n) => n.y));
+      return nodes.filter((n) => n.y === maxY);
+    }
+  }
+
+  // Fallback heuristic based on role
+  if (role === 'support') {
+    const minY = Math.min(...nodes.map((n) => n.y));
+    return nodes.filter((n) => n.y === minY);
+  } else {
+    const maxY = Math.max(...nodes.map((n) => n.y));
+    return nodes.filter((n) => n.y === maxY);
+  }
 }
 
 export async function downloadOpenSeesPyZip(ir: ProjectIR): Promise<OpenSeesPyExportResult> {

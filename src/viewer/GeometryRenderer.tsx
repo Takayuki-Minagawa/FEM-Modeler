@@ -84,10 +84,15 @@ interface SolidMeshProps {
 
 function SolidMesh({ metadata, position, scale, color, isSelected, isHovered, onClick, onHover }: SolidMeshProps) {
   const geometry = useMemo(() => {
-    const params = metadata as AnyShapeParams;
-    if (!params.shapeType) return new THREE.BoxGeometry(1, 1, 1);
-    const result = generateShape(params);
-    return result.threeGeometry;
+    try {
+      const params = metadata as AnyShapeParams;
+      if (!params.shapeType) return new THREE.BoxGeometry(1, 1, 1);
+      const result = generateShape(params);
+      return result.threeGeometry;
+    } catch (e) {
+      console.error('Failed to generate solid geometry:', e);
+      return new THREE.BoxGeometry(1, 1, 1);
+    }
   }, [metadata]);
 
   const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(geometry), [geometry]);
@@ -135,10 +140,15 @@ interface LineMeshProps {
 
 function LineMesh({ metadata, color, isSelected, isHovered, onClick, onHover }: LineMeshProps) {
   const geometry = useMemo(() => {
-    const params = metadata as AnyShapeParams;
-    if (!params.shapeType) return new THREE.BufferGeometry();
-    const result = generateShape(params);
-    return result.threeGeometry;
+    try {
+      const params = metadata as AnyShapeParams;
+      if (!params.shapeType) return new THREE.BufferGeometry();
+      const result = generateShape(params);
+      return result.threeGeometry;
+    } catch (e) {
+      console.error('Failed to generate line geometry:', e);
+      return new THREE.BufferGeometry();
+    }
   }, [metadata]);
 
   // Create a tube-like mesh around lines for clickability
