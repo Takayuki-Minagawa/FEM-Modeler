@@ -120,14 +120,17 @@ export interface AppState extends TransientState {
 
 const undoRedoManager = createUndoRedoManager();
 
-function snapshot(state: AppState) {
-  undoRedoManager.pushState(state.ir);
-  state.canUndo = undoRedoManager.canUndo();
-  state.canRedo = undoRedoManager.canRedo();
+/** Call BEFORE mutating state.ir */
+function saveBefore(state: AppState) {
+  undoRedoManager.saveBefore(state.ir);
 }
 
-function touch(state: AppState) {
+/** Call AFTER mutating state.ir — completes the undo entry */
+function saveAfter(state: AppState) {
   state.ir.meta.updated_at = new Date().toISOString();
+  undoRedoManager.saveAfter(state.ir);
+  state.canUndo = undoRedoManager.canUndo();
+  state.canRedo = undoRedoManager.canRedo();
 }
 
 // ---------------------------------------------------------------------------
@@ -161,7 +164,8 @@ export const useAppStore = create<AppState>()(
         state.ir = ir;
         state.isStartScreenOpen = false;
         undoRedoManager.clear();
-        snapshot(state);
+        state.canUndo = false;
+        state.canRedo = false;
       }),
 
     loadProject: (data) =>
@@ -169,246 +173,275 @@ export const useAppStore = create<AppState>()(
         state.ir = data;
         state.isStartScreenOpen = false;
         undoRedoManager.clear();
-        snapshot(state);
+        state.canUndo = false;
+        state.canRedo = false;
       }),
 
     setProjectName: (name) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.meta.project_name = name;
-        touch(state);
+        saveAfter(state);
       }),
 
     setUnitSystem: (name) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.units = getUnitPreset(name);
-        touch(state);
+        saveAfter(state);
       }),
 
     // --- Geometry actions ---
     addBody: (body) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.geometry.bodies.push(body);
-        touch(state);
+        saveAfter(state);
       }),
 
     removeBody: (id) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
+        // Collect all entity IDs being removed (body + its faces/edges/vertices)
+        const removedFaceIds = new Set(state.ir.geometry.faces.filter((f) => f.body_id === id).map((f) => f.id));
+        const removedEdgeIds = new Set(state.ir.geometry.edges.filter((e) => e.body_id === id).map((e) => e.id));
+        const removedVertexIds = new Set(state.ir.geometry.vertices.filter((v) => v.body_id === id).map((v) => v.id));
+        const allRemovedIds = new Set([id, ...removedFaceIds, ...removedEdgeIds, ...removedVertexIds]);
+
+        // Remove geometry entities
         state.ir.geometry.bodies = state.ir.geometry.bodies.filter((b) => b.id !== id);
         state.ir.geometry.faces = state.ir.geometry.faces.filter((f) => f.body_id !== id);
         state.ir.geometry.edges = state.ir.geometry.edges.filter((e) => e.body_id !== id);
         state.ir.geometry.vertices = state.ir.geometry.vertices.filter((v) => v.body_id !== id);
-        touch(state);
+
+        // Cascade: clean up named selection member_refs
+        for (const ns of state.ir.named_selections) {
+          ns.member_refs = ns.member_refs.filter((ref) => !allRemovedIds.has(ref));
+        }
+        // Remove empty named selections
+        state.ir.named_selections = state.ir.named_selections.filter((ns) => ns.member_refs.length > 0);
+
+        // Cascade: remove orphaned assignments/conditions referencing deleted named selections
+        const validNsIds = new Set(state.ir.named_selections.map((ns) => ns.id));
+        state.ir.material_assignments = state.ir.material_assignments.filter((a) => validNsIds.has(a.target_named_selection_id));
+        state.ir.section_assignments = state.ir.section_assignments.filter((a) => validNsIds.has(a.target_named_selection_id));
+        state.ir.boundary_conditions = state.ir.boundary_conditions.filter((bc) => !bc.target_named_selection_id || validNsIds.has(bc.target_named_selection_id));
+        state.ir.loads = state.ir.loads.filter((l) => !l.target_named_selection_id || validNsIds.has(l.target_named_selection_id));
+
+        saveAfter(state);
       }),
 
     // --- Named selection actions ---
     addNamedSelection: (ns) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.named_selections.push(ns);
-        touch(state);
+        saveAfter(state);
       }),
 
     updateNamedSelection: (id, updates) =>
       set((state) => {
         const idx = state.ir.named_selections.findIndex((n) => n.id === id);
         if (idx >= 0) {
-          snapshot(state);
+          saveBefore(state);
           Object.assign(state.ir.named_selections[idx], updates);
-          touch(state);
+          saveAfter(state);
         }
       }),
 
     removeNamedSelection: (id) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.named_selections = state.ir.named_selections.filter((n) => n.id !== id);
-        touch(state);
+        // Cascade: remove assignments/conditions referencing this named selection
+        state.ir.material_assignments = state.ir.material_assignments.filter((a) => a.target_named_selection_id !== id);
+        state.ir.section_assignments = state.ir.section_assignments.filter((a) => a.target_named_selection_id !== id);
+        state.ir.boundary_conditions = state.ir.boundary_conditions.filter((bc) => bc.target_named_selection_id !== id);
+        state.ir.loads = state.ir.loads.filter((l) => l.target_named_selection_id !== id);
+        state.ir.initial_conditions = state.ir.initial_conditions.filter((ic) => ic.target_named_selection_id !== id);
+        saveAfter(state);
       }),
 
     // --- Material actions ---
     addMaterial: (mat) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.materials.push(mat);
-        touch(state);
+        saveAfter(state);
       }),
 
     updateMaterial: (id, updates) =>
       set((state) => {
         const idx = state.ir.materials.findIndex((m) => m.id === id);
         if (idx >= 0) {
-          snapshot(state);
+          saveBefore(state);
           Object.assign(state.ir.materials[idx], updates);
-          touch(state);
+          saveAfter(state);
         }
       }),
 
     removeMaterial: (id) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.materials = state.ir.materials.filter((m) => m.id !== id);
         state.ir.material_assignments = state.ir.material_assignments.filter(
           (a) => a.material_id !== id,
         );
-        touch(state);
+        saveAfter(state);
       }),
 
     addMaterialAssignment: (a) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.material_assignments.push(a);
-        touch(state);
+        saveAfter(state);
       }),
 
     removeMaterialAssignment: (id) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.material_assignments = state.ir.material_assignments.filter(
           (a) => a.id !== id,
         );
-        touch(state);
+        saveAfter(state);
       }),
 
     // --- Section actions ---
     addSection: (sec) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.sections.push(sec);
-        touch(state);
+        saveAfter(state);
       }),
 
     updateSection: (id, updates) =>
       set((state) => {
         const idx = state.ir.sections.findIndex((s) => s.id === id);
         if (idx >= 0) {
-          snapshot(state);
+          saveBefore(state);
           Object.assign(state.ir.sections[idx], updates);
-          touch(state);
+          saveAfter(state);
         }
       }),
 
     removeSection: (id) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.sections = state.ir.sections.filter((s) => s.id !== id);
         state.ir.section_assignments = state.ir.section_assignments.filter(
           (a) => a.section_id !== id,
         );
-        touch(state);
+        saveAfter(state);
       }),
 
     addSectionAssignment: (a) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.section_assignments.push(a);
-        touch(state);
+        saveAfter(state);
       }),
 
     removeSectionAssignment: (id) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.section_assignments = state.ir.section_assignments.filter(
           (a) => a.id !== id,
         );
-        touch(state);
+        saveAfter(state);
       }),
 
     // --- Boundary condition actions ---
     addBoundaryCondition: (bc) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.boundary_conditions.push(bc);
-        touch(state);
+        saveAfter(state);
       }),
 
     updateBoundaryCondition: (id, updates) =>
       set((state) => {
         const idx = state.ir.boundary_conditions.findIndex((b) => b.id === id);
         if (idx >= 0) {
-          snapshot(state);
+          saveBefore(state);
           Object.assign(state.ir.boundary_conditions[idx], updates);
-          touch(state);
+          saveAfter(state);
         }
       }),
 
     removeBoundaryCondition: (id) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.boundary_conditions = state.ir.boundary_conditions.filter(
           (b) => b.id !== id,
         );
-        touch(state);
+        saveAfter(state);
       }),
 
     // --- Load actions ---
     addLoad: (load) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.loads.push(load);
-        touch(state);
+        saveAfter(state);
       }),
 
     updateLoad: (id, updates) =>
       set((state) => {
         const idx = state.ir.loads.findIndex((l) => l.id === id);
         if (idx >= 0) {
-          snapshot(state);
+          saveBefore(state);
           Object.assign(state.ir.loads[idx], updates);
-          touch(state);
+          saveAfter(state);
         }
       }),
 
     removeLoad: (id) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.loads = state.ir.loads.filter((l) => l.id !== id);
-        touch(state);
+        saveAfter(state);
       }),
 
     // --- Initial condition actions ---
     addInitialCondition: (ic) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.initial_conditions.push(ic);
-        touch(state);
+        saveAfter(state);
       }),
 
     removeInitialCondition: (id) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.initial_conditions = state.ir.initial_conditions.filter(
           (ic) => ic.id !== id,
         );
-        touch(state);
+        saveAfter(state);
       }),
 
     // --- Analysis case actions ---
     addAnalysisCase: (ac) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.analysis_cases.push(ac);
-        touch(state);
+        saveAfter(state);
       }),
 
     updateAnalysisCase: (id, updates) =>
       set((state) => {
         const idx = state.ir.analysis_cases.findIndex((c) => c.id === id);
         if (idx >= 0) {
-          snapshot(state);
+          saveBefore(state);
           Object.assign(state.ir.analysis_cases[idx], updates);
-          touch(state);
+          saveAfter(state);
         }
       }),
 
     removeAnalysisCase: (id) =>
       set((state) => {
-        snapshot(state);
+        saveBefore(state);
         state.ir.analysis_cases = state.ir.analysis_cases.filter((c) => c.id !== id);
-        touch(state);
+        saveAfter(state);
       }),
 
     // --- Undo/Redo ---

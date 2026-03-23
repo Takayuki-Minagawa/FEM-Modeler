@@ -100,20 +100,25 @@ export function NamedSelectionsForm() {
         </label>
 
         <div className="flex gap-2 mb-2">
-          {(['body', 'face', 'edge', 'vertex'] as EntityType[]).map((et) => (
-            <button
-              key={et}
-              onClick={() => setEntityType(et)}
-              className="px-2 py-1 rounded text-xs cursor-pointer"
-              style={{
-                backgroundColor: entityType === et ? 'var(--color-accent)' : 'var(--color-bg-input)',
-                color: entityType === et ? '#fff' : 'var(--color-text-secondary)',
-                border: `1px solid ${entityType === et ? 'var(--color-accent)' : 'var(--color-border)'}`,
-              }}
-            >
-              {et}
-            </button>
-          ))}
+          {(['body', 'face', 'edge', 'vertex'] as EntityType[]).map((et) => {
+            const isAvailable = et === 'body'; // Only body selection is implemented
+            return (
+              <button
+                key={et}
+                onClick={() => isAvailable && setEntityType(et)}
+                disabled={!isAvailable}
+                className="px-2 py-1 rounded text-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{
+                  backgroundColor: entityType === et ? 'var(--color-accent)' : 'var(--color-bg-input)',
+                  color: entityType === et ? '#fff' : 'var(--color-text-secondary)',
+                  border: `1px solid ${entityType === et ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                }}
+                title={!isAvailable ? (isJa ? '将来実装予定' : 'Coming soon') : undefined}
+              >
+                {et}
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex gap-2">
