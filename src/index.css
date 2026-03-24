@@ -80,21 +80,51 @@ body,
   background: var(--color-text-muted);
 }
 
-[data-panel-group-direction="horizontal"] > [data-resize-handle] {
-  width: 4px;
+[data-panel-group-direction="horizontal"] > [data-separator] {
+  position: relative;
+  width: 12px;
+  background: transparent;
+  z-index: 2;
+}
+[data-panel-group-direction="horizontal"] > [data-separator]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 9999px;
   background: var(--color-border);
-  transition: background 0.15s;
+  transition: background-color 0.15s, box-shadow 0.15s;
 }
-[data-panel-group-direction="horizontal"] > [data-resize-handle]:hover,
-[data-panel-group-direction="horizontal"] > [data-resize-handle][data-resize-handle-active] {
+[data-panel-group-direction="horizontal"] > [data-separator]:hover::after,
+[data-panel-group-direction="horizontal"] > [data-separator]:focus-visible::after,
+[data-panel-group-direction="horizontal"] > [data-separator][data-separator="active"]::after {
   background: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
-[data-panel-group-direction="vertical"] > [data-resize-handle] {
-  height: 4px;
+[data-panel-group-direction="vertical"] > [data-separator] {
+  position: relative;
+  height: 12px;
+  background: transparent;
+  z-index: 2;
+}
+[data-panel-group-direction="vertical"] > [data-separator]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  border-radius: 9999px;
   background: var(--color-border);
-  transition: background 0.15s;
+  transition: background-color 0.15s, box-shadow 0.15s;
 }
-[data-panel-group-direction="vertical"] > [data-resize-handle]:hover,
-[data-panel-group-direction="vertical"] > [data-resize-handle][data-resize-handle-active] {
+[data-panel-group-direction="vertical"] > [data-separator]:hover::after,
+[data-panel-group-direction="vertical"] > [data-separator]:focus-visible::after,
+[data-panel-group-direction="vertical"] > [data-separator][data-separator="active"]::after {
   background: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
