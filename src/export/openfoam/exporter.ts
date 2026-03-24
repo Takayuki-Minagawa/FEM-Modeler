@@ -1,6 +1,7 @@
 import type { ProjectIR, BoundaryCondition } from '@/core/ir/types';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { applyTransformToPoint } from '@/geometry/transforms';
 
 export interface OpenFOAMExportResult {
   success: boolean;
@@ -100,6 +101,19 @@ export function exportOpenFOAM(ir: ProjectIR): OpenFOAMExportResult {
   const outletPressure = patches.outlet.bc?.values.scalar ?? 0;
 
   const files: Record<string, string> = {};
+  const localVertices: [number, number, number][] = [
+    [-L / 2, -H / 2, -D / 2],
+    [L / 2, -H / 2, -D / 2],
+    [L / 2, H / 2, -D / 2],
+    [-L / 2, H / 2, -D / 2],
+    [-L / 2, -H / 2, D / 2],
+    [L / 2, -H / 2, D / 2],
+    [L / 2, H / 2, D / 2],
+    [-L / 2, H / 2, D / 2],
+  ];
+  const transformedVertices = localVertices.map((vertex) =>
+    applyTransformToPoint(vertex, body.transform),
+  );
 
   // --- blockMeshDict ---
   const meshSize = ir.mesh_controls.global.global_size ?? 0.1;
@@ -113,14 +127,7 @@ convertToMeters 1;
 
 vertices
 (
-    (0 0 0)
-    (${L} 0 0)
-    (${L} ${H} 0)
-    (0 ${H} 0)
-    (0 0 ${D})
-    (${L} 0 ${D})
-    (${L} ${H} ${D})
-    (0 ${H} ${D})
+${transformedVertices.map((vertex) => `    (${vertex[0]} ${vertex[1]} ${vertex[2]})`).join('\n')}
 );
 
 blocks
@@ -366,6 +373,7 @@ relaxationFactors
     solver: 'simpleFoam',
     mesh: 'blockMesh',
     domain: { length: L, height: H, depth: D },
+    transform: body.transform,
     cells: { nx, ny, nz },
     patches: {
       inlet: patches.inlet.name,
