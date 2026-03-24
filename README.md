@@ -74,7 +74,7 @@
 | 分類 | 採用技術 |
 |------|----------|
 | フレームワーク | React 19 + TypeScript |
-| ビルドツール | Vite 6 |
+| ビルドツール | Vite 8 |
 | 状態管理 | Zustand + Immer |
 | 3Dビューワー | Three.js (@react-three/fiber + drei) |
 | UI | Tailwind CSS 4 |
