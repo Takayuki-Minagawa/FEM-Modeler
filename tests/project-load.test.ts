@@ -30,6 +30,35 @@ describe('parseProjectFile', () => {
     expect(result.warning).toContain('0.0.5');
   });
 
+  it('fills missing fields inside array elements during migration', () => {
+    const project = createDefaultProject();
+    project.meta.schema_version = '0.0.5';
+
+    // Add a body with a missing field (remove 'locked')
+    const raw = JSON.parse(JSON.stringify(project)) as Record<string, unknown>;
+    const geometry = raw.geometry as Record<string, unknown>;
+    geometry.bodies = [
+      {
+        id: 'body_test1',
+        name: 'TestBody',
+        category: 'solid',
+        visible: true,
+        // 'locked' is missing — should be filled from defaults
+        color: '#cccccc',
+        transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+        topology_ref: '',
+        metadata: {},
+      },
+    ];
+
+    const result = parseProjectFile(JSON.stringify(raw));
+
+    expect(result.success).toBe(true);
+    expect(result.data?.geometry.bodies).toHaveLength(1);
+    expect(result.data?.geometry.bodies[0].locked).toBe(false);
+    expect(result.data?.geometry.bodies[0].name).toBe('TestBody');
+  });
+
   it('rejects malformed structures with a readable error', () => {
     const malformedProject = createDefaultProject();
     const rawMalformed = {

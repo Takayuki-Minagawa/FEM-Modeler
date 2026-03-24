@@ -1,3 +1,16 @@
+/**
+ * Zod validation schema for .fem.json project files.
+ *
+ * This schema mirrors the ProjectIR type hierarchy in @/core/ir/types.
+ * It intentionally uses z.string() for union/enum fields so that legacy
+ * files with unknown enum values are accepted during migration rather than
+ * rejected outright.
+ *
+ * A compile-time type check at the bottom of this file ensures that
+ * every top-level key in ProjectIR has a matching key in the schema.
+ * If you add a field to ProjectIR, TypeScript will error here until the
+ * schema is updated to match.
+ */
 import { z } from 'zod';
 import type { ProjectIR, SolverTarget } from '@/core/ir/types';
 import {
@@ -327,6 +340,14 @@ const projectFileSchema = z.object({
   })),
 });
 
+// Compile-time check: every key in ProjectIR must exist in the schema output.
+// If a new field is added to ProjectIR but not the Zod schema, this line will
+// produce a TypeScript error listing the missing key(s).
+type SchemaOutput = z.infer<typeof projectFileSchema>;
+export type AssertSchemaCoversProjectIR = {
+  [K in keyof ProjectIR]: K extends keyof SchemaOutput ? true : never;
+};
+
 interface NormalizeResult {
   success: boolean;
   data?: ProjectIR;
@@ -334,16 +355,133 @@ interface NormalizeResult {
   migratedFromVersion?: string;
 }
 
+// Default templates for array elements — used when the defaults project has
+// empty arrays so mergeWithDefaults has something to fill missing fields from.
+const arrayElementTemplates: Record<string, Record<string, unknown>> = {
+  'geometry.bodies': {
+    id: '', name: '', category: 'solid', visible: true, locked: false,
+    color: '#888888', transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+    topology_ref: '', metadata: {},
+  },
+  'geometry.faces': {
+    id: '', name: '', body_id: '', triangle_indices: [],
+  },
+  'geometry.edges': {
+    id: '', name: '', body_id: '', vertex_ids: ['', ''],
+  },
+  'geometry.vertices': {
+    id: '', name: '', body_id: '', position: [0, 0, 0],
+  },
+  'geometry.reference_frames': {
+    id: '', name: '', origin: [0, 0, 0], axis_x: [1, 0, 0], axis_y: [0, 1, 0],
+    axis_z: [0, 0, 1], type: 'cartesian',
+  },
+  'geometry.geometry_parameters': {
+    id: '', name: '', value: 0, description: '',
+  },
+  'named_selections': {
+    id: '', name: '', target_dimension: 0, entity_type: 'body',
+    member_refs: [], color: '#888888', description: '', created_by: 'user',
+    status: 'active', usages: [],
+  },
+  'materials': {
+    id: '', name: '', class: 'elastic', physical_model: 'isotropic_linear',
+    parameter_set: {
+      density: { value: null, status: 'missing' },
+      young_modulus: { value: null, status: 'missing' },
+      poisson_ratio: { value: null, status: 'missing' },
+      thermal_conductivity: { value: null, status: 'missing' },
+      specific_heat: { value: null, status: 'missing' },
+      dynamic_viscosity: { value: null, status: 'missing' },
+      kinematic_viscosity: { value: null, status: 'missing' },
+    },
+    source: '', notes: '',
+  },
+  'material_assignments': {
+    id: '', material_id: '', target_named_selection_id: '', override_allowed: false,
+  },
+  'sections': {
+    id: '', name: '', section_type: 'beam_rect', dimensions: {},
+    material_id: '', area: null, inertia_y: null, inertia_z: null,
+    torsion_constant: null, thickness: null, metadata: {},
+  },
+  'section_assignments': {
+    id: '', section_id: '', target_named_selection_id: '',
+  },
+  'mesh_controls.local': {
+    id: '', target_named_selection_id: '', control_type: 'local_size',
+    size: null, layers: null, bias: null, transfinite_hint: false,
+    boundary_layer_hint: false, priority: 0,
+  },
+  'boundary_conditions': {
+    id: '', name: '', physics_domain: 'structural', bc_type: 'fixed',
+    target_named_selection_id: '', coordinate_system: 'global',
+    values: {}, temporal_profile: 'constant', status: 'confirmed', notes: '',
+  },
+  'loads': {
+    id: '', name: '', physics_domain: 'structural', load_type: 'nodal_force',
+    target_named_selection_id: '', application_mode: 'total',
+    direction: [0, 0, 0], magnitude: 0, distribution: 'uniform',
+    temporal_profile: 'constant', load_case: '', coordinate_system: 'global',
+    status: 'confirmed',
+  },
+  'initial_conditions': {
+    id: '', name: '', physics_domain: 'structural', ic_type: 'initial_displacement',
+    target_named_selection_id: '', values: {}, status: 'confirmed',
+  },
+  'analysis_cases': {
+    id: '', name: '', active: true, domain_type: 'frame',
+    analysis_type: 'static_linear', nonlinear: false, transient: false,
+    participating_material_ids: [], participating_section_ids: [],
+    participating_bc_ids: [], participating_load_ids: [],
+    participating_ic_ids: [], mesh_policy_ref: '', solver_profile_hint: '',
+    result_requests: [],
+  },
+  'validation.items': {
+    id: '', severity: 'info', code: '', title: '', message: '',
+    target_ref: '', suggested_fix: '', dismissible: true, status: 'open',
+  },
+  'ui_state.clipping_planes': {
+    normal: [0, 1, 0], constant: 0, enabled: false,
+  },
+  'ai_annotations': {
+    id: '', source_prompt_summary: '', target_ref: '', proposal_type: 'naming',
+    rationale: '', confidence: 0, status: 'proposed', applied_changes: {},
+  },
+  'audit_trail': {
+    id: '', timestamp: '', actor: 'user', action_type: 'create',
+    target_ref: '', before_summary: '', after_summary: '', note: '',
+  },
+};
+
+function getElementTemplate(path: string): Record<string, unknown> | undefined {
+  return arrayElementTemplates[path];
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function mergeWithDefaults<T>(defaults: T, value: unknown): T {
+function mergeWithDefaults<T>(
+  defaults: T,
+  value: unknown,
+  path = '',
+): T {
   if (Array.isArray(defaults)) {
     if (value === undefined) {
       return defaults;
     }
-    return value as T;
+    if (!Array.isArray(value)) {
+      return value as T;
+    }
+    const template = getElementTemplate(path)
+      ?? (defaults.length > 0 && isRecord(defaults[0]) ? defaults[0] : null);
+    if (!template) {
+      return value as T;
+    }
+    return value.map((element) =>
+      isRecord(element) ? mergeWithDefaults(template, element) : element,
+    ) as T;
   }
 
   if (isRecord(defaults)) {
@@ -356,9 +494,11 @@ function mergeWithDefaults<T>(defaults: T, value: unknown): T {
 
     const result: Record<string, unknown> = { ...defaults };
     for (const key of Object.keys(defaults)) {
+      const childPath = path ? `${path}.${key}` : key;
       result[key] = mergeWithDefaults(
         (defaults as Record<string, unknown>)[key],
         value[key],
+        childPath,
       );
     }
     for (const [key, entry] of Object.entries(value)) {

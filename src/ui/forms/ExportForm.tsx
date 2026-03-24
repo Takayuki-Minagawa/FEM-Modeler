@@ -145,7 +145,7 @@ export function ExportForm() {
             className="w-full p-3 rounded text-left transition-colors cursor-pointer disabled:opacity-50"
             style={{
               backgroundColor: 'var(--color-bg-input)',
-              border: `1px solid ${t.enabled ? 'var(--color-border)' : 'var(--color-border)'}`,
+              border: '1px solid var(--color-border)',
             }}
           >
             <div className="flex items-center justify-between">

@@ -16,8 +16,24 @@ import type {
   DraftPersistenceState,
 } from '@/contexts/app-context-value';
 
-const AUTOSAVE_DELAY_MS = 1200;
+const AUTOSAVE_DELAY_MIN_MS = 1200;
+const AUTOSAVE_DELAY_MAX_MS = 5000;
+const AUTOSAVE_SIZE_THRESHOLD = 200_000; // bytes — above this, scale delay toward max
 const MAX_ACTIVITY_LOG = 60;
+
+function computeAutosaveDelay(ir: unknown): number {
+  // Estimate serialized size without allocating a full string for small models.
+  // JSON.stringify is the most reliable size proxy we have.
+  let size: number;
+  try {
+    size = JSON.stringify(ir).length;
+  } catch {
+    return AUTOSAVE_DELAY_MAX_MS;
+  }
+  if (size <= AUTOSAVE_SIZE_THRESHOLD) return AUTOSAVE_DELAY_MIN_MS;
+  const ratio = Math.min((size - AUTOSAVE_SIZE_THRESHOLD) / AUTOSAVE_SIZE_THRESHOLD, 1);
+  return Math.round(AUTOSAVE_DELAY_MIN_MS + ratio * (AUTOSAVE_DELAY_MAX_MS - AUTOSAVE_DELAY_MIN_MS));
+}
 
 function createActivityEntry(level: ActivityLogLevel, message: string): ActivityLogEntry {
   return {
@@ -105,6 +121,7 @@ export function useProjectDraftPersistence() {
     }
 
     let cancelled = false;
+    const delay = computeAutosaveDelay(ir);
     const timer = window.setTimeout(() => {
       setAutosaveState((current) => ({
         ...current,
@@ -137,7 +154,7 @@ export function useProjectDraftPersistence() {
               : `Failed to auto-save project draft: ${message}`,
           );
         });
-    }, AUTOSAVE_DELAY_MS);
+    }, delay);
 
     return () => {
       cancelled = true;

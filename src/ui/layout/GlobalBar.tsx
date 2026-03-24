@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
-import { readFileAsText, parseProjectFile } from '@/export/project/load';
 import { useAppContext } from '@/hooks/useAppContext';
+import { useProjectFileLoader } from '@/hooks/useProjectFileLoader';
 
 function formatDraftTime(savedAt: string, language: string): string {
   const locale = language === 'ja' ? 'ja-JP' : 'en-US';
@@ -19,51 +19,26 @@ export function GlobalBar() {
     openHelp,
     openImport,
     saveProjectFile,
-    addActivity,
     draftSummary,
     autosaveState,
     restoreDraft,
   } = useAppContext();
   const isJa = i18n.language === 'ja';
+  const { openFilePicker } = useProjectFileLoader();
   const projectName = useAppStore((s) => s.ir.meta.project_name);
   const unitSystem = useAppStore((s) => s.ir.units.system_name);
   const canUndo = useAppStore((s) => s.canUndo);
   const canRedo = useAppStore((s) => s.canRedo);
   const undo = useAppStore((s) => s.undo);
   const redo = useAppStore((s) => s.redo);
-  const loadProject = useAppStore((s) => s.loadProject);
   const setStartScreenOpen = useAppStore((s) => s.setStartScreenOpen);
 
   const handleSave = () => {
     saveProjectFile();
   };
 
-  const handleLoad = async () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json,.fem.json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const text = await readFileAsText(file);
-      const result = parseProjectFile(text);
-      if (result.success && result.data) {
-        loadProject(result.data);
-        addActivity(
-          'success',
-          isJa
-            ? `プロジェクト "${result.data.meta.project_name}" を読み込みました。`
-            : `Loaded project "${result.data.meta.project_name}".`,
-        );
-        if (result.warning) {
-          addActivity('warning', result.warning);
-        }
-      } else {
-        addActivity('error', result.error ?? 'Failed to load project');
-        alert(result.error ?? 'Failed to load project');
-      }
-    };
-    input.click();
+  const handleLoad = () => {
+    openFilePicker('.json,.fem.json');
   };
 
   const handleRestoreDraft = async () => {

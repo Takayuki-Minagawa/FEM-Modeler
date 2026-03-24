@@ -2,14 +2,23 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { ProjectIR } from '@/core/ir/types';
 
 const DB_NAME = 'fem-modeler';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const DRAFT_STORE = 'project-drafts';
 const CURRENT_DRAFT_KEY = 'current';
+
+interface StoredDraftRow {
+  key: string;
+  savedAt: string;
+  projectId: string;
+  projectName: string;
+  schemaVersion: string;
+  irJson: string;
+}
 
 interface FEMModelerDraftDB extends DBSchema {
   [DRAFT_STORE]: {
     key: string;
-    value: StoredProjectDraft;
+    value: StoredDraftRow;
   };
 }
 
@@ -74,19 +83,44 @@ export function summarizeProjectDraft(record: StoredProjectDraft): DraftSummary 
   };
 }
 
+function toRow(record: StoredProjectDraft): StoredDraftRow {
+  return {
+    key: record.key,
+    savedAt: record.savedAt,
+    projectId: record.projectId,
+    projectName: record.projectName,
+    schemaVersion: record.schemaVersion,
+    irJson: JSON.stringify(record.ir),
+  };
+}
+
+function fromRow(row: StoredDraftRow): StoredProjectDraft {
+  return {
+    key: CURRENT_DRAFT_KEY,
+    savedAt: row.savedAt,
+    projectId: row.projectId,
+    projectName: row.projectName,
+    schemaVersion: row.schemaVersion,
+    ir: JSON.parse(row.irJson) as ProjectIR,
+  };
+}
+
 export async function saveProjectDraft(
   ir: ProjectIR,
   savedAt = new Date().toISOString(),
 ): Promise<DraftSummary> {
-  const db = await getDraftDb();
   const record = createProjectDraftRecord(ir, savedAt);
-  await db.put(DRAFT_STORE, record, CURRENT_DRAFT_KEY);
+  const row = toRow(record);
+  const db = await getDraftDb();
+  await db.put(DRAFT_STORE, row, CURRENT_DRAFT_KEY);
   return summarizeProjectDraft(record);
 }
 
 export async function readProjectDraftRecord(): Promise<StoredProjectDraft | null> {
   const db = await getDraftDb();
-  return (await db.get(DRAFT_STORE, CURRENT_DRAFT_KEY)) ?? null;
+  const row = await db.get(DRAFT_STORE, CURRENT_DRAFT_KEY);
+  if (!row) return null;
+  return fromRow(row);
 }
 
 export async function loadProjectDraft(): Promise<ProjectIR | null> {
@@ -95,8 +129,15 @@ export async function loadProjectDraft(): Promise<ProjectIR | null> {
 }
 
 export async function getProjectDraftSummary(): Promise<DraftSummary | null> {
-  const record = await readProjectDraftRecord();
-  return record ? summarizeProjectDraft(record) : null;
+  const db = await getDraftDb();
+  const row = await db.get(DRAFT_STORE, CURRENT_DRAFT_KEY);
+  if (!row) return null;
+  return {
+    projectId: row.projectId,
+    projectName: row.projectName,
+    savedAt: row.savedAt,
+    schemaVersion: row.schemaVersion,
+  };
 }
 
 export async function clearProjectDraft(): Promise<void> {
