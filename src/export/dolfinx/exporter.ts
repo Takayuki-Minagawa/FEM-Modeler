@@ -243,14 +243,16 @@ function appendGmshTransform(
   if (Math.abs(sx - 1) > 1e-9 || Math.abs(sy - 1) > 1e-9 || Math.abs(sz - 1) > 1e-9) {
     lines.push(`Dilate {{0, 0, 0}, {${sx}, ${sy}, ${sz}}} { Volume{${volumeTag}}; }`);
   }
-  if (Math.abs(rx) > 1e-9) {
-    lines.push(`Rotate {{1, 0, 0}, {0, 0, 0}, ${rx}} { Volume{${volumeTag}}; }`);
+  // Apply in reverse order (Z, Y, X) so that sequential extrinsic Gmsh
+  // rotations match the THREE.js Euler 'XYZ' intrinsic convention.
+  if (Math.abs(rz) > 1e-9) {
+    lines.push(`Rotate {{0, 0, 1}, {0, 0, 0}, ${rz}} { Volume{${volumeTag}}; }`);
   }
   if (Math.abs(ry) > 1e-9) {
     lines.push(`Rotate {{0, 1, 0}, {0, 0, 0}, ${ry}} { Volume{${volumeTag}}; }`);
   }
-  if (Math.abs(rz) > 1e-9) {
-    lines.push(`Rotate {{0, 0, 1}, {0, 0, 0}, ${rz}} { Volume{${volumeTag}}; }`);
+  if (Math.abs(rx) > 1e-9) {
+    lines.push(`Rotate {{1, 0, 0}, {0, 0, 0}, ${rx}} { Volume{${volumeTag}}; }`);
   }
   if (Math.abs(tx) > 1e-9 || Math.abs(ty) > 1e-9 || Math.abs(tz) > 1e-9) {
     lines.push(`Translate {${tx}, ${ty}, ${tz}} { Volume{${volumeTag}}; }`);

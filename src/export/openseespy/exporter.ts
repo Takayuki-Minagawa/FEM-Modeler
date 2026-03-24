@@ -313,16 +313,14 @@ function resolveTargetNodes(
     if (matchedVertices.length > 0) {
       // Vertex-level named selection — resolve to matching nodes
       return nodes.filter((n) =>
-        matchedVertices.some((v) =>
-          (() => {
-            const [x, y, z] = body
-              ? applyTransformToPoint(v.position, body.transform)
-              : v.position;
-            return Math.abs(x - n.x) < 1e-6
-              && Math.abs(y - n.y) < 1e-6
-              && Math.abs(z - n.z) < 1e-6;
-          })()
-        ),
+        matchedVertices.some((v) => {
+          const [x, y, z] = body
+            ? applyTransformToPoint(v.position, body.transform)
+            : v.position;
+          return Math.abs(x - n.x) < 1e-6
+            && Math.abs(y - n.y) < 1e-6
+            && Math.abs(z - n.z) < 1e-6;
+        }),
       );
     }
 

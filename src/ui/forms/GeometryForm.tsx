@@ -80,6 +80,11 @@ function estimatePatternOffset(body: GeometryBody | null): TupleInput {
   return [`${Number((stepX + 0.5).toFixed(4))}`, '0', '0'];
 }
 
+function bodyEditorKey(body: GeometryBody): string {
+  const { position, rotation, scale } = body.transform;
+  return `${body.id}:${body.name}:${body.visible}:${position}:${rotation}:${scale}`;
+}
+
 export function GeometryForm() {
   const { i18n } = useTranslation();
   const ir = useAppStore((s) => s.ir);
@@ -285,7 +290,7 @@ export function GeometryForm() {
 
       {selectedBody && (
         <BodyEditor
-          key={selectedBody.id}
+          key={bodyEditorKey(selectedBody)}
           body={selectedBody}
           isJa={isJa}
           onApply={(updates) => updateBody(selectedBody.id, updates)}
