@@ -24,8 +24,7 @@ export function applyTemplate(domain: DomainType, lang: string) {
 function applyFrameTemplate(store: ReturnType<typeof useAppStore.getState>, lang: string) {
   // Geometry
   const shape = generateShape({ shapeType: 'frame2d', spanX: 6, spanY: 9, columns: 3, floors: 3 }, lang === 'ja' ? '2Dフレーム' : '2D Frame');
-  store.addBody(shape.body);
-  useAppStore.setState((s) => { s.ir.geometry.vertices.push(...shape.vertices); });
+  store.addBodyWithTopology(shape.body, { vertices: shape.vertices });
 
   // Material
   const mat = createMaterialFromLibrary(MATERIAL_LIBRARY[0], lang); // Steel
@@ -89,8 +88,7 @@ function applyTrussTemplate(store: ReturnType<typeof useAppStore.getState>, lang
 
 function applySolidTemplate(store: ReturnType<typeof useAppStore.getState>, lang: string) {
   const shape = generateShape({ shapeType: 'plateWithHole', width: 4, depth: 2, thickness: 0.2, holeRadius: 0.3 }, lang === 'ja' ? '穴あき平板' : 'Plate with Hole');
-  store.addBody(shape.body);
-  useAppStore.setState((s) => { s.ir.geometry.faces.push(...shape.faces); });
+  store.addBodyWithTopology(shape.body, { faces: shape.faces });
   const mat = createMaterialFromLibrary(MATERIAL_LIBRARY[0], lang);
   store.addMaterial(mat);
   addAnalysisCase(store, 'solid', 'static_linear', 'dolfinx_linear_elasticity', lang);
@@ -99,8 +97,7 @@ function applySolidTemplate(store: ReturnType<typeof useAppStore.getState>, lang
 
 function applyThermalTemplate(store: ReturnType<typeof useAppStore.getState>, lang: string) {
   const shape = generateShape({ shapeType: 'plate', width: 2, depth: 2, thickness: 0.1 }, lang === 'ja' ? '平板' : 'Plate');
-  store.addBody(shape.body);
-  useAppStore.setState((s) => { s.ir.geometry.faces.push(...shape.faces); });
+  store.addBodyWithTopology(shape.body, { faces: shape.faces });
   const mat = createMaterialFromLibrary(MATERIAL_LIBRARY[0], lang);
   store.addMaterial(mat);
   addAnalysisCase(store, 'thermal', 'steady_thermal', 'dolfinx_steady_heat', lang);
@@ -109,11 +106,7 @@ function applyThermalTemplate(store: ReturnType<typeof useAppStore.getState>, la
 
 function applyFluidTemplate(store: ReturnType<typeof useAppStore.getState>, lang: string) {
   const shape = generateShape({ shapeType: 'channel', length: 6, height: 1, depth: 1 }, lang === 'ja' ? 'チャネル流路' : 'Channel');
-  store.addBody(shape.body);
-  useAppStore.setState((s) => {
-    s.ir.geometry.faces.push(...shape.faces);
-    s.ir.geometry.vertices.push(...shape.vertices);
-  });
+  store.addBodyWithTopology(shape.body, { faces: shape.faces, vertices: shape.vertices });
 
   const mat = createMaterialFromLibrary(MATERIAL_LIBRARY[3], lang); // Water
   store.addMaterial(mat);

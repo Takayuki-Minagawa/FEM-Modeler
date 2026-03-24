@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { readFileAsText, parseProjectFile } from '@/export/project/load';
 import { importSTL } from '@/geometry/import/stl-loader';
+import { cacheSTLGeometry } from '@/geometry/import/stl-geometry-cache';
 
 interface ImportDialogProps {
   isOpen: boolean;
@@ -13,7 +14,7 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
   const { i18n } = useTranslation();
   const isJa = i18n.language === 'ja';
   const loadProject = useAppStore((s) => s.loadProject);
-  const addBody = useAppStore((s) => s.addBody);
+  const addBodyWithTopology = useAppStore((s) => s.addBodyWithTopology);
 
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -38,11 +39,9 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
       const buffer = await file.arrayBuffer();
       const result = importSTL(buffer, file.name);
       if (result.success && result.body) {
-        addBody(result.body);
-        if (result.faces) {
-          useAppStore.setState((state) => {
-            state.ir.geometry.faces.push(...result.faces!);
-          });
+        addBodyWithTopology(result.body, { faces: result.faces });
+        if (result.geometry) {
+          cacheSTLGeometry(result.body.id, result.geometry);
         }
         setStatus({ type: 'success', message: isJa ? `STL "${file.name}" (${result.triangleCount} 三角形) を読み込みました。` : `Imported STL "${file.name}" (${result.triangleCount} triangles).` });
       } else {

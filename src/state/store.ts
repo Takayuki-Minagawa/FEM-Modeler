@@ -12,6 +12,9 @@ import type {
   InitialCondition,
   AnalysisCase,
   GeometryBody,
+  GeometryFace,
+  GeometryEdge,
+  GeometryVertex,
   DomainType,
   UnitSystemName,
 } from '@/core/ir/types';
@@ -58,6 +61,7 @@ export interface AppState extends TransientState {
 
   // Geometry actions
   addBody: (body: GeometryBody) => void;
+  addBodyWithTopology: (body: GeometryBody, topology: { faces?: GeometryFace[]; edges?: GeometryEdge[]; vertices?: GeometryVertex[] }) => void;
   removeBody: (id: string) => void;
 
   // Named selection actions
@@ -200,6 +204,16 @@ export const useAppStore = create<AppState>()(
       set((state) => {
         saveBefore(state);
         state.ir.geometry.bodies.push(body);
+        saveAfter(state);
+      }),
+
+    addBodyWithTopology: (body, topology) =>
+      set((state) => {
+        saveBefore(state);
+        state.ir.geometry.bodies.push(body);
+        if (topology.faces) state.ir.geometry.faces.push(...topology.faces);
+        if (topology.edges) state.ir.geometry.edges.push(...topology.edges);
+        if (topology.vertices) state.ir.geometry.vertices.push(...topology.vertices);
         saveAfter(state);
       }),
 

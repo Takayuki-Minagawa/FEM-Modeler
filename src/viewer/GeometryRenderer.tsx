@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import type { ThreeEvent } from '@react-three/fiber';
 import { generateShape } from '@/geometry/primitives/generators';
 import type { AnyShapeParams } from '@/geometry/primitives/types';
+import { getSTLGeometry } from '@/geometry/import/stl-geometry-cache';
 
 export function GeometryRenderer() {
   const bodies = useAppStore((s) => s.ir.geometry.bodies);
@@ -47,6 +48,7 @@ export function GeometryRenderer() {
         return (
           <SolidMesh
             key={body.id}
+            bodyId={body.id}
             metadata={body.metadata}
             position={body.transform.position}
             scale={body.transform.scale}
@@ -72,6 +74,7 @@ export function GeometryRenderer() {
 }
 
 interface SolidMeshProps {
+  bodyId: string;
   metadata: Record<string, unknown>;
   position: [number, number, number];
   scale: [number, number, number];
@@ -82,18 +85,24 @@ interface SolidMeshProps {
   onHover: (hovered: boolean) => void;
 }
 
-function SolidMesh({ metadata, position, scale, color, isSelected, isHovered, onClick, onHover }: SolidMeshProps) {
+function SolidMesh({ bodyId, metadata, position, scale, color, isSelected, isHovered, onClick, onHover }: SolidMeshProps) {
   const geometry = useMemo(() => {
     try {
       const params = metadata as AnyShapeParams;
       if (!params.shapeType) return new THREE.BoxGeometry(1, 1, 1);
+      // Use cached geometry for imported STL bodies
+      if (params.shapeType === 'imported_stl') {
+        const cached = getSTLGeometry(bodyId);
+        if (cached) return cached;
+        return new THREE.BoxGeometry(1, 1, 1);
+      }
       const result = generateShape(params);
       return result.threeGeometry;
     } catch (e) {
       console.error('Failed to generate solid geometry:', e);
       return new THREE.BoxGeometry(1, 1, 1);
     }
-  }, [metadata]);
+  }, [bodyId, metadata]);
 
   const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(geometry), [geometry]);
 

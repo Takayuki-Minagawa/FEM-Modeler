@@ -38,14 +38,11 @@ export function GeometryForm() {
   const handleCreate = () => {
     const shapeParams = { ...params, shapeType: selectedShape } as AnyShapeParams;
     const result = generateShape(shapeParams, shapeNames[selectedShape]);
-    // Add topology to IR
     const store = useAppStore.getState();
-    store.addBody(result.body);
-    // Add faces, edges, vertices to geometry
-    useAppStore.setState((state) => {
-      state.ir.geometry.faces.push(...result.faces);
-      state.ir.geometry.edges.push(...result.edges);
-      state.ir.geometry.vertices.push(...result.vertices);
+    store.addBodyWithTopology(result.body, {
+      faces: result.faces,
+      edges: result.edges,
+      vertices: result.vertices,
     });
   };
 

@@ -114,6 +114,13 @@ export function exportOpenSeesPy(ir: ProjectIR): OpenSeesPyExportResult {
   const sec = ir.sections[0];
   const mat = sec ? ir.materials.find((m) => m.id === sec.material_id) : ir.materials[0];
 
+  if (!mat) {
+    errors.push('No material defined. Define a material before exporting.');
+  }
+  if (!sec) {
+    errors.push('No section defined. Define a section before exporting.');
+  }
+
   const E = mat?.parameter_set.young_modulus.value ?? 2.05e11;
   const A = sec?.area ?? 0.01;
   const Iz = sec?.inertia_y ?? 1e-4;
@@ -150,9 +157,9 @@ export function exportOpenSeesPy(ir: ProjectIR): OpenSeesPyExportResult {
     }
   }
 
-  // Fallback: if no structural BCs resolved, warn and apply fixed at base
+  // No structural BCs resolved — report as error
   if (fixes.length === 0) {
-    warnings.push('No structural boundary conditions could be resolved. Applying fixed support at base nodes.');
+    errors.push('No structural boundary conditions could be resolved. Define boundary conditions before exporting.');
     const minY = Math.min(...nodes.map((n) => n.y));
     const bottomNodes = nodes.filter((n) => n.y === minY);
     for (const n of bottomNodes) {

@@ -22,6 +22,23 @@ export function ExportForm() {
 
   const handleExport = async (target: string) => {
     runValidation();
+
+    // Block solver exports when validation errors exist
+    const solverTargets = ['OpenSeesPy', 'DOLFINx', 'OpenFOAM'];
+    if (solverTargets.includes(target)) {
+      const currentErrors = useAppStore.getState().ir.validation.summary.error_count;
+      if (currentErrors > 0) {
+        setLastResult({
+          target,
+          errors: [isJa
+            ? `${currentErrors}件の検証エラーがあります。エラーを解消してからエクスポートしてください。`
+            : `${currentErrors} validation error(s) found. Resolve errors before exporting.`],
+          warnings: [],
+        });
+        return;
+      }
+    }
+
     setExporting(target);
     try {
       let result: { errors: string[]; warnings: string[] };

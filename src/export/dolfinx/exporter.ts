@@ -26,6 +26,9 @@ export function exportDOLFINx(ir: ProjectIR): DOLFINxExportResult {
 
   // Material
   const mat = ir.materials[0];
+  if (!mat) {
+    errors.push('No material defined. Define a material before exporting.');
+  }
   const E = mat?.parameter_set.young_modulus.value ?? 2.1e11;
   const nu = mat?.parameter_set.poisson_ratio.value ?? 0.3;
   const k = mat?.parameter_set.thermal_conductivity.value ?? 50;

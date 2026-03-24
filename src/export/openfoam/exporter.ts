@@ -88,7 +88,7 @@ export function exportOpenFOAM(ir: ProjectIR): OpenFOAMExportResult {
   const nu_val = fluidMat?.parameter_set.kinematic_viscosity.value ?? 1e-6;
 
   if (!fluidMat) {
-    warnings.push('No fluid material found. Using default kinematic viscosity (1e-6 m²/s).');
+    errors.push('No fluid material defined. Define a fluid material before exporting.');
   }
 
   // Resolve patches and BCs from IR
