@@ -44,7 +44,7 @@ export function GlobalBar() {
   const handleRestoreDraft = async () => {
     const confirmed = confirm(
       isJa
-        ? '現在のプロジェクトを置き換えて、自動保存された草稿を復元しますか？'
+        ? '現在のプロジェクトを置き換えて、自動保存データを復元しますか？'
         : 'Replace the current project with the auto-saved draft?',
     );
     if (!confirmed) return;

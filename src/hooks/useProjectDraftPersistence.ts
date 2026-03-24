@@ -150,7 +150,7 @@ export function useProjectDraftPersistence() {
           addActivity(
             'error',
             isJa
-              ? `草稿の自動保存に失敗しました: ${message}`
+              ? `自動保存に失敗しました: ${message}`
               : `Failed to auto-save project draft: ${message}`,
           );
         });
@@ -179,7 +179,7 @@ export function useProjectDraftPersistence() {
       if (!draft) {
         addActivity(
           'warning',
-          isJa ? '復元できる自動保存草稿はありません。' : 'No auto-saved draft is available.',
+          isJa ? '復元できる自動保存データはありません。' : 'No auto-saved draft is available.',
         );
         setDraftSummary(null);
         return false;
@@ -196,7 +196,7 @@ export function useProjectDraftPersistence() {
       addActivity(
         'success',
         isJa
-          ? `自動保存された草稿 "${draft.meta.project_name}" を復元しました。`
+          ? `自動保存データ "${draft.meta.project_name}" を復元しました。`
           : `Restored auto-saved draft "${draft.meta.project_name}".`,
       );
       return true;
@@ -209,7 +209,7 @@ export function useProjectDraftPersistence() {
       }));
       addActivity(
         'error',
-        isJa ? `草稿の復元に失敗しました: ${message}` : `Failed to restore draft: ${message}`,
+        isJa ? `データの復元に失敗しました: ${message}` : `Failed to restore draft: ${message}`,
       );
       return false;
     }
@@ -226,7 +226,7 @@ export function useProjectDraftPersistence() {
       });
       addActivity(
         'warning',
-        isJa ? '保存済みの草稿を破棄しました。' : 'Discarded the saved draft.',
+        isJa ? '保存データを破棄しました。' : 'Discarded the saved draft.',
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -237,7 +237,7 @@ export function useProjectDraftPersistence() {
       }));
       addActivity(
         'error',
-        isJa ? `草稿の破棄に失敗しました: ${message}` : `Failed to discard draft: ${message}`,
+        isJa ? `保存データの破棄に失敗しました: ${message}` : `Failed to discard draft: ${message}`,
       );
     }
   }, [addActivity, isJa]);

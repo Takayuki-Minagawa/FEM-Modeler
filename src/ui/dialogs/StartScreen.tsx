@@ -56,7 +56,7 @@ export function StartScreen() {
   const handleDiscardDraft = async () => {
     const confirmed = confirm(
       i18n.language === 'ja'
-        ? '自動保存された草稿を破棄しますか？'
+        ? '自動保存データを破棄しますか？'
         : 'Discard the auto-saved draft?',
     );
     if (!confirmed) return;
