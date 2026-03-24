@@ -1,10 +1,11 @@
 import { useHotkeys } from 'react-hotkeys-hook';
 import { useAppStore } from '@/state/store';
-import { downloadProjectFile } from '@/export/project/save';
+import { useAppContext } from '@/hooks/useAppContext';
 
 export function useKeyboardShortcuts() {
   const undo = useAppStore((s) => s.undo);
   const redo = useAppStore((s) => s.redo);
+  const { saveProjectFile } = useAppContext();
 
   // Undo
   useHotkeys('ctrl+z, meta+z', (e) => {
@@ -21,8 +22,7 @@ export function useKeyboardShortcuts() {
   // Save
   useHotkeys('ctrl+s, meta+s', (e) => {
     e.preventDefault();
-    const ir = useAppStore.getState().ir;
-    downloadProjectFile(ir);
+    saveProjectFile();
   }, { enableOnFormTags: true });
 
   // Delete selected

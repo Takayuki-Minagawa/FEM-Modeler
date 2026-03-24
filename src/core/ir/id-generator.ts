@@ -18,6 +18,7 @@ const PREFIX_MAP = {
   analysis_case: 'case_',
   solver_target: 'tgt_',
   validation: 'val_',
+  log: 'log_',
   ai_annotation: 'ai_',
   audit: 'aud_',
   reference_frame: 'ref_',

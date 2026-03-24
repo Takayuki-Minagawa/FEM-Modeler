@@ -4,6 +4,7 @@ import { useAppStore } from '@/state/store';
 import { readFileAsText, parseProjectFile } from '@/export/project/load';
 import { importSTL } from '@/geometry/import/stl-loader';
 import { cacheSTLGeometry } from '@/geometry/import/stl-geometry-cache';
+import { useAppContext } from '@/hooks/useAppContext';
 
 interface ImportDialogProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface ImportDialogProps {
 export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
   const { i18n } = useTranslation();
   const isJa = i18n.language === 'ja';
+  const { addActivity } = useAppContext();
   const loadProject = useAppStore((s) => s.loadProject);
   const addBodyWithTopology = useAppStore((s) => s.addBodyWithTopology);
 
@@ -30,9 +32,19 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
       const result = parseProjectFile(text);
       if (result.success && result.data) {
         loadProject(result.data);
+        addActivity(
+          'success',
+          isJa
+            ? `プロジェクト "${result.data.meta.project_name}" を読み込みました。`
+            : `Loaded project "${result.data.meta.project_name}".`,
+        );
+        if (result.warning) {
+          addActivity('warning', result.warning);
+        }
         setStatus({ type: 'success', message: isJa ? `プロジェクト "${result.data.meta.project_name}" を読み込みました。` : `Loaded project "${result.data.meta.project_name}".` });
         setTimeout(onClose, 1000);
       } else {
+        addActivity('error', result.error ?? 'Failed to load.');
         setStatus({ type: 'error', message: result.error ?? 'Failed to load.' });
       }
     } else if (ext === 'stl') {
@@ -43,11 +55,22 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
         if (result.geometry) {
           cacheSTLGeometry(result.body.id, result.geometry);
         }
+        addActivity(
+          'success',
+          isJa
+            ? `STL "${file.name}" を読み込みました。`
+            : `Imported STL "${file.name}".`,
+        );
         setStatus({ type: 'success', message: isJa ? `STL "${file.name}" (${result.triangleCount} 三角形) を読み込みました。` : `Imported STL "${file.name}" (${result.triangleCount} triangles).` });
       } else {
+        addActivity('error', result.error ?? 'STL import failed.');
         setStatus({ type: 'error', message: result.error ?? 'STL import failed.' });
       }
     } else {
+      addActivity(
+        'warning',
+        isJa ? `未対応のファイル形式です: .${ext}` : `Unsupported file format: .${ext}`,
+      );
       setStatus({ type: 'error', message: isJa ? `未対応のファイル形式です: .${ext}` : `Unsupported file format: .${ext}` });
     }
   };
