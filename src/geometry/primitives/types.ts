@@ -73,6 +73,12 @@ export interface ChannelParams extends ShapeParams {
   depth: number;
 }
 
+export interface ImportedStlParams extends ShapeParams {
+  shapeType: 'imported_stl';
+  fileName: string;
+  triangleCount: number;
+}
+
 export type AnyShapeParams =
   | BoxParams
   | CylinderParams
@@ -82,7 +88,8 @@ export type AnyShapeParams =
   | LBracketParams
   | FrameParams
   | TrussParams
-  | ChannelParams;
+  | ChannelParams
+  | ImportedStlParams;
 
 export interface GeneratedTopology {
   body: GeometryBody;

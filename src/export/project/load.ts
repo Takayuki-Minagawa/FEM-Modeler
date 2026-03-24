@@ -1,28 +1,28 @@
 import type { ProjectIR } from '@/core/ir/types';
-import { SCHEMA_NAME } from '@/core/ir/defaults';
+import { normalizeAndValidateProjectData } from './project-file-schema';
 
 export interface LoadResult {
   success: boolean;
   data?: ProjectIR;
   error?: string;
+  warning?: string;
 }
 
 export function parseProjectFile(json: string): LoadResult {
   try {
-    const data = JSON.parse(json) as ProjectIR;
-
-    if (!data.meta) {
-      return { success: false, error: 'Invalid project file: missing meta section' };
+    const raw = JSON.parse(json) as unknown;
+    const result = normalizeAndValidateProjectData(raw);
+    if (!result.success) {
+      return { success: false, error: result.error };
     }
 
-    if (data.meta.schema_name !== SCHEMA_NAME) {
-      return {
-        success: false,
-        error: `Unknown schema: ${data.meta.schema_name}. Expected: ${SCHEMA_NAME}`,
-      };
-    }
-
-    return { success: true, data };
+    return {
+      success: true,
+      data: result.data,
+      warning: result.migratedFromVersion
+        ? `Project file migrated from schema version ${result.migratedFromVersion} to the current version.`
+        : undefined,
+    };
   } catch (e) {
     return {
       success: false,

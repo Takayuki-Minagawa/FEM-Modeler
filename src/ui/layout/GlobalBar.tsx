@@ -1,43 +1,54 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
-import { downloadProjectFile } from '@/export/project/save';
-import { readFileAsText, parseProjectFile } from '@/export/project/load';
 import { useAppContext } from '@/hooks/useAppContext';
+import { useProjectFileLoader } from '@/hooks/useProjectFileLoader';
+
+function formatDraftTime(savedAt: string, language: string): string {
+  const locale = language === 'ja' ? 'ja-JP' : 'en-US';
+  return new Date(savedAt).toLocaleTimeString(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 export function GlobalBar() {
   const { t, i18n } = useTranslation();
-  const { theme, toggleTheme, openHelp, openImport } = useAppContext();
+  const {
+    theme,
+    toggleTheme,
+    openHelp,
+    openImport,
+    saveProjectFile,
+    draftSummary,
+    autosaveState,
+    restoreDraft,
+  } = useAppContext();
   const isJa = i18n.language === 'ja';
+  const { openFilePicker } = useProjectFileLoader();
   const projectName = useAppStore((s) => s.ir.meta.project_name);
   const unitSystem = useAppStore((s) => s.ir.units.system_name);
   const canUndo = useAppStore((s) => s.canUndo);
   const canRedo = useAppStore((s) => s.canRedo);
   const undo = useAppStore((s) => s.undo);
   const redo = useAppStore((s) => s.redo);
-  const ir = useAppStore((s) => s.ir);
-  const loadProject = useAppStore((s) => s.loadProject);
   const setStartScreenOpen = useAppStore((s) => s.setStartScreenOpen);
 
   const handleSave = () => {
-    downloadProjectFile(ir);
+    saveProjectFile();
   };
 
-  const handleLoad = async () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json,.fem.json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const text = await readFileAsText(file);
-      const result = parseProjectFile(text);
-      if (result.success && result.data) {
-        loadProject(result.data);
-      } else {
-        alert(result.error ?? 'Failed to load project');
-      }
-    };
-    input.click();
+  const handleLoad = () => {
+    openFilePicker('.json,.fem.json');
+  };
+
+  const handleRestoreDraft = async () => {
+    const confirmed = confirm(
+      isJa
+        ? '現在のプロジェクトを置き換えて、自動保存された草稿を復元しますか？'
+        : 'Replace the current project with the auto-saved draft?',
+    );
+    if (!confirmed) return;
+    await restoreDraft();
   };
 
   const toggleLang = () => {
@@ -45,6 +56,15 @@ export function GlobalBar() {
     i18n.changeLanguage(next);
     localStorage.setItem('fem-modeler-lang', next);
   };
+
+  const draftStatusLabel =
+    autosaveState.status === 'saving'
+      ? t('globalBar.draftSaving')
+      : autosaveState.status === 'error'
+        ? t('globalBar.draftError')
+        : draftSummary
+          ? t('globalBar.draftSavedAt', { time: formatDraftTime(draftSummary.savedAt, i18n.language) })
+          : null;
 
   return (
     <div
@@ -99,10 +119,38 @@ export function GlobalBar() {
         <BarButton onClick={openHelp}>
           {t('globalBar.help')}
         </BarButton>
+        {draftSummary && (
+          <BarButton onClick={handleRestoreDraft}>
+            {t('globalBar.restoreDraft')}
+          </BarButton>
+        )}
       </div>
 
       {/* Right: theme, lang, version */}
       <div className="flex items-center gap-2">
+        {draftStatusLabel && (
+          <span
+            className="px-2 py-1 text-xs rounded"
+            title={autosaveState.errorMessage ?? draftSummary?.savedAt ?? undefined}
+            style={{
+              backgroundColor:
+                autosaveState.status === 'error'
+                  ? 'rgba(244,67,54,0.12)'
+                  : autosaveState.status === 'saving'
+                    ? 'rgba(74,144,217,0.12)'
+                    : 'var(--color-bg-input)',
+              color:
+                autosaveState.status === 'error'
+                  ? 'var(--color-error)'
+                  : autosaveState.status === 'saving'
+                    ? 'var(--color-accent)'
+                    : 'var(--color-text-muted)',
+            }}
+          >
+            {draftStatusLabel}
+          </span>
+        )}
+
         <button
           onClick={toggleTheme}
           className="px-2 py-1 text-sm rounded cursor-pointer transition-colors"

@@ -1,8 +1,20 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
-import { readFileAsText, parseProjectFile } from '@/export/project/load';
 import { applyTemplate } from '@/lib/project-templates';
 import type { DomainType } from '@/core/ir/types';
+import { useAppContext } from '@/hooks/useAppContext';
+import { useProjectFileLoader } from '@/hooks/useProjectFileLoader';
+
+function formatDraftDate(savedAt: string, language: string): string {
+  const locale = language === 'ja' ? 'ja-JP' : 'en-US';
+  return new Date(savedAt).toLocaleString(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 const TEMPLATES: { i18nKey: string; domain: DomainType }[] = [
   { i18nKey: 'empty', domain: 'frame' },
@@ -15,29 +27,16 @@ const TEMPLATES: { i18nKey: string; domain: DomainType }[] = [
 
 export function StartScreen() {
   const { t, i18n } = useTranslation();
+  const { draftSummary, restoreDraft, discardDraft, addActivity } = useAppContext();
+  const { openFilePicker } = useProjectFileLoader();
   const isOpen = useAppStore((s) => s.isStartScreenOpen);
   const createProject = useAppStore((s) => s.createProject);
-  const loadProject = useAppStore((s) => s.loadProject);
   const setStartScreenOpen = useAppStore((s) => s.setStartScreenOpen);
 
   if (!isOpen) return null;
 
-  const handleLoadFile = async () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json,.fem.json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const text = await readFileAsText(file);
-      const result = parseProjectFile(text);
-      if (result.success && result.data) {
-        loadProject(result.data);
-      } else {
-        alert(result.error ?? 'Failed to load project');
-      }
-    };
-    input.click();
+  const handleLoadFile = () => {
+    openFilePicker('.json,.fem.json');
   };
 
   const handleCreate = (tmpl: typeof TEMPLATES[number]) => {
@@ -46,6 +45,22 @@ export function StartScreen() {
     if (tmpl.i18nKey !== 'empty') {
       applyTemplate(tmpl.domain, i18n.language);
     }
+    addActivity(
+      'info',
+      i18n.language === 'ja'
+        ? `テンプレート "${name}" から新規プロジェクトを作成しました。`
+        : `Created a new project from the "${name}" template.`,
+    );
+  };
+
+  const handleDiscardDraft = async () => {
+    const confirmed = confirm(
+      i18n.language === 'ja'
+        ? '自動保存された草稿を破棄しますか？'
+        : 'Discard the auto-saved draft?',
+    );
+    if (!confirmed) return;
+    await discardDraft();
   };
 
   return (
@@ -69,6 +84,48 @@ export function StartScreen() {
 
         {/* Content */}
         <div className="p-6">
+          {draftSummary && (
+            <div
+              className="mb-6 p-4 rounded border"
+              style={{
+                borderColor: 'var(--color-accent)',
+                backgroundColor: 'rgba(74,144,217,0.08)',
+              }}
+            >
+              <div className="text-sm font-bold" style={{ color: 'var(--color-accent)' }}>
+                {t('startScreen.recoveryTitle')}
+              </div>
+              <p className="text-sm mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+                {t('startScreen.recoveryDescription')}
+              </p>
+              <div className="text-xs mt-3" style={{ color: 'var(--color-text-muted)' }}>
+                {draftSummary.projectName} · {t('startScreen.draftSavedAt')}: {formatDraftDate(draftSummary.savedAt, i18n.language)}
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => void restoreDraft()}
+                  className="px-4 py-2 rounded text-sm font-medium cursor-pointer"
+                  style={{
+                    backgroundColor: 'var(--color-accent)',
+                    color: '#fff',
+                  }}
+                >
+                  {t('startScreen.restoreDraft')}
+                </button>
+                <button
+                  onClick={() => void handleDiscardDraft()}
+                  className="px-4 py-2 rounded text-sm cursor-pointer"
+                  style={{
+                    backgroundColor: 'var(--color-bg-input)',
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  {t('startScreen.discardDraft')}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Load existing */}
           <div className="mb-6">
             <button

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
-import { readFileAsText, parseProjectFile } from '@/export/project/load';
 import { importSTL } from '@/geometry/import/stl-loader';
 import { cacheSTLGeometry } from '@/geometry/import/stl-geometry-cache';
+import { useAppContext } from '@/hooks/useAppContext';
+import { useProjectFileLoader } from '@/hooks/useProjectFileLoader';
 
 interface ImportDialogProps {
   isOpen: boolean;
@@ -13,7 +14,8 @@ interface ImportDialogProps {
 export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
   const { i18n } = useTranslation();
   const isJa = i18n.language === 'ja';
-  const loadProject = useAppStore((s) => s.loadProject);
+  const { addActivity } = useAppContext();
+  const { loadFromFile } = useProjectFileLoader();
   const addBodyWithTopology = useAppStore((s) => s.addBodyWithTopology);
 
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -26,14 +28,20 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
     const ext = file.name.split('.').pop()?.toLowerCase();
 
     if (ext === 'json' || file.name.endsWith('.fem.json')) {
-      const text = await readFileAsText(file);
-      const result = parseProjectFile(text);
-      if (result.success && result.data) {
-        loadProject(result.data);
-        setStatus({ type: 'success', message: isJa ? `プロジェクト "${result.data.meta.project_name}" を読み込みました。` : `Loaded project "${result.data.meta.project_name}".` });
-        setTimeout(onClose, 1000);
-      } else {
-        setStatus({ type: 'error', message: result.error ?? 'Failed to load.' });
+      try {
+        const result = await loadFromFile(file);
+        if (result.success) {
+          const msg = isJa
+            ? `プロジェクト "${result.projectName}" を読み込みました。`
+            : `Loaded project "${result.projectName}".`;
+          setStatus({ type: 'success', message: msg });
+          setTimeout(onClose, 1000);
+        } else {
+          setStatus({ type: 'error', message: result.error ?? 'Failed to load.' });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setStatus({ type: 'error', message });
       }
     } else if (ext === 'stl') {
       const buffer = await file.arrayBuffer();
@@ -43,11 +51,22 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
         if (result.geometry) {
           cacheSTLGeometry(result.body.id, result.geometry);
         }
+        addActivity(
+          'success',
+          isJa
+            ? `STL "${file.name}" を読み込みました。`
+            : `Imported STL "${file.name}".`,
+        );
         setStatus({ type: 'success', message: isJa ? `STL "${file.name}" (${result.triangleCount} 三角形) を読み込みました。` : `Imported STL "${file.name}" (${result.triangleCount} triangles).` });
       } else {
+        addActivity('error', result.error ?? 'STL import failed.');
         setStatus({ type: 'error', message: result.error ?? 'STL import failed.' });
       }
     } else {
+      addActivity(
+        'warning',
+        isJa ? `未対応のファイル形式です: .${ext}` : `Unsupported file format: .${ext}`,
+      );
       setStatus({ type: 'error', message: isJa ? `未対応のファイル形式です: .${ext}` : `Unsupported file format: .${ext}` });
     }
   };
@@ -56,7 +75,7 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    if (file) void handleFile(file);
   };
 
   const handleBrowse = () => {
@@ -65,7 +84,7 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
     input.accept = '.json,.fem.json,.stl';
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) handleFile(file);
+      if (file) void handleFile(file);
     };
     input.click();
   };

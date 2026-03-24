@@ -4,13 +4,14 @@ import { useAppStore } from '@/state/store';
 import { downloadOpenSeesPyZip } from '@/export/openseespy/exporter';
 import { downloadDOLFINxZip } from '@/export/dolfinx/exporter';
 import { downloadOpenFOAMZip } from '@/export/openfoam/exporter';
-import { downloadProjectFile } from '@/export/project/save';
 import { downloadConditionsCsv } from '@/export/project/csv-export';
 import { downloadMarkdownSummary } from '@/export/project/markdown-summary';
+import { useAppContext } from '@/hooks/useAppContext';
 
 export function ExportForm() {
   const { i18n } = useTranslation();
   const isJa = i18n.language === 'ja';
+  const { addActivity, saveProjectFile, recordExportResult } = useAppContext();
   const ir = useAppStore((s) => s.ir);
   const validation = useAppStore((s) => s.ir.validation);
   const runValidation = useAppStore((s) => s.runValidation);
@@ -28,11 +29,19 @@ export function ExportForm() {
     if (solverTargets.includes(target)) {
       const currentErrors = useAppStore.getState().ir.validation.summary.error_count;
       if (currentErrors > 0) {
+        const blockedErrors = [isJa
+          ? `${currentErrors}件の検証エラーがあります。エラーを解消してからエクスポートしてください。`
+          : `${currentErrors} validation error(s) found. Resolve errors before exporting.`];
+        addActivity(
+          'warning',
+          isJa
+            ? `${target} のエクスポートを検証エラーのため中止しました。`
+            : `Blocked ${target} export because validation errors remain.`,
+        );
+        recordExportResult(target, blockedErrors, []);
         setLastResult({
           target,
-          errors: [isJa
-            ? `${currentErrors}件の検証エラーがあります。エラーを解消してからエクスポートしてください。`
-            : `${currentErrors} validation error(s) found. Resolve errors before exporting.`],
+          errors: blockedErrors,
           warnings: [],
         });
         return;
@@ -53,7 +62,7 @@ export function ExportForm() {
           result = await downloadOpenFOAMZip(ir);
           break;
         case 'JSON':
-          downloadProjectFile(ir);
+          saveProjectFile();
           result = { errors: [], warnings: [] };
           break;
         case 'CSV':
@@ -67,9 +76,36 @@ export function ExportForm() {
         default:
           result = { errors: ['Unknown target'], warnings: [] };
       }
+      if (target !== 'JSON') {
+        addActivity(
+          result.errors.length > 0 ? 'error' : result.warnings.length > 0 ? 'warning' : 'success',
+          result.errors.length > 0
+            ? isJa
+              ? `${target} の出力に失敗しました。`
+              : `${target} export failed.`
+            : result.warnings.length > 0
+              ? isJa
+                ? `${target} を警告付きで出力しました。`
+                : `${target} export completed with warnings.`
+              : isJa
+                ? `${target} を出力しました。`
+                : `${target} export completed.`,
+        );
+      }
+      if (target !== 'JSON') {
+        recordExportResult(target, result.errors, result.warnings);
+      }
       setLastResult({ target, ...result });
     } catch (e) {
-      setLastResult({ target, errors: [String(e)], warnings: [] });
+      const errors = [String(e)];
+      addActivity(
+        'error',
+        isJa
+          ? `${target} の出力中に例外が発生しました。`
+          : `An exception occurred while exporting ${target}.`,
+      );
+      recordExportResult(target, errors, []);
+      setLastResult({ target, errors, warnings: [] });
     }
     setExporting(null);
   };
@@ -109,7 +145,7 @@ export function ExportForm() {
             className="w-full p-3 rounded text-left transition-colors cursor-pointer disabled:opacity-50"
             style={{
               backgroundColor: 'var(--color-bg-input)',
-              border: `1px solid ${t.enabled ? 'var(--color-border)' : 'var(--color-border)'}`,
+              border: '1px solid var(--color-border)',
             }}
           >
             <div className="flex items-center justify-between">
