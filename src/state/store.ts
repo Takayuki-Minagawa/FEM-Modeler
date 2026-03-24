@@ -16,6 +16,7 @@ import type {
   GeometryEdge,
   GeometryVertex,
   DomainType,
+  Transform,
   UnitSystemName,
 } from '@/core/ir/types';
 import { createDefaultProject } from '@/core/ir/defaults';
@@ -23,6 +24,7 @@ import { getUnitPreset } from '@/core/units/presets';
 import { generateId } from '@/core/ir/id-generator';
 import { createUndoRedoManager } from './middleware/undo-redo';
 import { runValidation } from '@/validation/engine';
+import { duplicateBodiesLinear as duplicateBodiesLinearInGeometry } from '@/geometry/editing';
 
 // ---------------------------------------------------------------------------
 // Transient UI state (not persisted in project JSON)
@@ -62,7 +64,9 @@ export interface AppState extends TransientState {
   // Geometry actions
   addBody: (body: GeometryBody) => void;
   addBodyWithTopology: (body: GeometryBody, topology: { faces?: GeometryFace[]; edges?: GeometryEdge[]; vertices?: GeometryVertex[] }) => void;
+  updateBody: (id: string, updates: BodyUpdates) => void;
   removeBody: (id: string) => void;
+  duplicateBodiesLinear: (ids: string[], copies: number, offset: [number, number, number]) => string[];
 
   // Named selection actions
   addNamedSelection: (ns: NamedSelection) => void;
@@ -121,6 +125,10 @@ export interface AppState extends TransientState {
   toggleAxes: () => void;
   setStartScreenOpen: (open: boolean) => void;
 }
+
+export type BodyUpdates = Omit<Partial<GeometryBody>, 'transform'> & {
+  transform?: Partial<Transform>;
+};
 
 // ---------------------------------------------------------------------------
 // Undo/Redo manager (lives outside the store)
@@ -217,6 +225,26 @@ export const useAppStore = create<AppState>()(
         saveAfter(state);
       }),
 
+    updateBody: (id, updates) =>
+      set((state) => {
+        const idx = state.ir.geometry.bodies.findIndex((body) => body.id === id);
+        if (idx < 0) {
+          return;
+        }
+
+        saveBefore(state);
+        const currentBody = state.ir.geometry.bodies[idx];
+        const { transform, ...bodyUpdates } = updates;
+        Object.assign(currentBody, bodyUpdates);
+        if (transform) {
+          currentBody.transform = {
+            ...currentBody.transform,
+            ...transform,
+          };
+        }
+        saveAfter(state);
+      }),
+
     removeBody: (id) =>
       set((state) => {
         saveBefore(state);
@@ -250,6 +278,33 @@ export const useAppStore = create<AppState>()(
 
         saveAfter(state);
       }),
+
+    duplicateBodiesLinear: (ids, copies, offset) => {
+      let createdBodyIds: string[] = [];
+
+      set((state) => {
+        const duplicated = duplicateBodiesLinearInGeometry(
+          state.ir.geometry,
+          ids,
+          copies,
+          offset,
+        );
+
+        if (duplicated.createdBodyIds.length === 0) {
+          return;
+        }
+
+        saveBefore(state);
+        state.ir.geometry.bodies.push(...duplicated.bodies);
+        state.ir.geometry.faces.push(...duplicated.faces);
+        state.ir.geometry.edges.push(...duplicated.edges);
+        state.ir.geometry.vertices.push(...duplicated.vertices);
+        saveAfter(state);
+        createdBodyIds = duplicated.createdBodyIds;
+      });
+
+      return createdBodyIds;
+    },
 
     // --- Named selection actions ---
     addNamedSelection: (ns) =>

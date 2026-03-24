@@ -1,6 +1,7 @@
 import type { ProjectIR } from '@/core/ir/types';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { applyTransformToPoint } from '@/geometry/transforms';
 
 interface Node { id: number; x: number; y: number; z: number }
 interface Element { id: number; nodeI: number; nodeJ: number; sectionTag: number; transfTag: number }
@@ -67,6 +68,12 @@ export function exportOpenSeesPy(ir: ProjectIR): OpenSeesPyExportResult {
       }
     }
   }
+
+  const transformedNodes = nodes.map((node) => {
+    const [x, y, z] = applyTransformToPoint([node.x, node.y, node.z], body.transform);
+    return { ...node, x, y, z };
+  });
+  nodes.splice(0, nodes.length, ...transformedNodes);
 
   // Build elements
   const elements: Element[] = [];
@@ -296,6 +303,7 @@ function resolveTargetNodes(
   role: 'support' | 'load',
 ): Node[] {
   const ns = ir.named_selections.find((n) => n.id === nsId);
+  const body = ir.geometry.bodies.find((candidate) => candidate.id === bodyId);
 
   if (ns) {
     // Check if named selection directly references vertices
@@ -305,11 +313,14 @@ function resolveTargetNodes(
     if (matchedVertices.length > 0) {
       // Vertex-level named selection — resolve to matching nodes
       return nodes.filter((n) =>
-        matchedVertices.some((v) =>
-          Math.abs(v.position[0] - n.x) < 1e-6 &&
-          Math.abs(v.position[1] - n.y) < 1e-6 &&
-          Math.abs(v.position[2] - n.z) < 1e-6
-        ),
+        matchedVertices.some((v) => {
+          const [x, y, z] = body
+            ? applyTransformToPoint(v.position, body.transform)
+            : v.position;
+          return Math.abs(x - n.x) < 1e-6
+            && Math.abs(y - n.y) < 1e-6
+            && Math.abs(z - n.z) < 1e-6;
+        }),
       );
     }
 

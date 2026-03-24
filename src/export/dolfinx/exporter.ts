@@ -1,6 +1,7 @@
 import type { ProjectIR, BoundaryCondition } from '@/core/ir/types';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { isIdentityTransform, toRadiansTuple } from '@/geometry/transforms';
 
 export interface DOLFINxExportResult {
   success: boolean;
@@ -75,6 +76,10 @@ export function exportDOLFINx(ir: ProjectIR): DOLFINxExportResult {
     const h = (meta.height as number) ?? 2;
     const d = (meta.depth as number) ?? 2;
     geoLines.push(`Box(1) = {${-w / 2}, ${-h / 2}, ${-d / 2}, ${w}, ${h}, ${d}};`);
+  }
+
+  if (!isIdentityTransform(body.transform)) {
+    appendGmshTransform(geoLines, mainVolumeTag, body.transform);
   }
 
   // Mesh size
@@ -222,6 +227,36 @@ export function exportDOLFINx(ir: ProjectIR): DOLFINxExportResult {
   }, null, 2);
 
   return { success: errors.length === 0, script, geoFile, manifest, errors, warnings };
+}
+
+function appendGmshTransform(
+  lines: string[],
+  volumeTag: number,
+  transform: ProjectIR['geometry']['bodies'][number]['transform'],
+) {
+  const [sx, sy, sz] = transform.scale;
+  const [rx, ry, rz] = toRadiansTuple(transform.rotation);
+  const [tx, ty, tz] = transform.position;
+
+  lines.push('', '// Apply body transform');
+
+  if (Math.abs(sx - 1) > 1e-9 || Math.abs(sy - 1) > 1e-9 || Math.abs(sz - 1) > 1e-9) {
+    lines.push(`Dilate {{0, 0, 0}, {${sx}, ${sy}, ${sz}}} { Volume{${volumeTag}}; }`);
+  }
+  // Apply in reverse order (Z, Y, X) so that sequential extrinsic Gmsh
+  // rotations match the THREE.js Euler 'XYZ' intrinsic convention.
+  if (Math.abs(rz) > 1e-9) {
+    lines.push(`Rotate {{0, 0, 1}, {0, 0, 0}, ${rz}} { Volume{${volumeTag}}; }`);
+  }
+  if (Math.abs(ry) > 1e-9) {
+    lines.push(`Rotate {{0, 1, 0}, {0, 0, 0}, ${ry}} { Volume{${volumeTag}}; }`);
+  }
+  if (Math.abs(rx) > 1e-9) {
+    lines.push(`Rotate {{1, 0, 0}, {0, 0, 0}, ${rx}} { Volume{${volumeTag}}; }`);
+  }
+  if (Math.abs(tx) > 1e-9 || Math.abs(ty) > 1e-9 || Math.abs(tz) > 1e-9) {
+    lines.push(`Translate {${tx}, ${ty}, ${tz}} { Volume{${volumeTag}}; }`);
+  }
 }
 
 /**

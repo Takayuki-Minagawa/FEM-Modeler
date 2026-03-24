@@ -5,6 +5,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { generateShape } from '@/geometry/primitives/generators';
 import type { AnyShapeParams } from '@/geometry/primitives/types';
 import { getSTLGeometry } from '@/geometry/import/stl-geometry-cache';
+import { toRadiansTuple } from '@/geometry/transforms';
 
 export function GeometryRenderer() {
   const bodies = useAppStore((s) => s.ir.geometry.bodies);
@@ -36,6 +37,9 @@ export function GeometryRenderer() {
             <LineMesh
               key={body.id}
               metadata={body.metadata}
+              position={body.transform.position}
+              rotation={body.transform.rotation}
+              scale={body.transform.scale}
               color={body.color}
               isSelected={isSelected}
               isHovered={isHovered}
@@ -51,6 +55,7 @@ export function GeometryRenderer() {
             bodyId={body.id}
             metadata={body.metadata}
             position={body.transform.position}
+            rotation={body.transform.rotation}
             scale={body.transform.scale}
             color={body.color}
             isSelected={isSelected}
@@ -77,6 +82,7 @@ interface SolidMeshProps {
   bodyId: string;
   metadata: Record<string, unknown>;
   position: [number, number, number];
+  rotation: [number, number, number];
   scale: [number, number, number];
   color: string;
   isSelected: boolean;
@@ -85,7 +91,7 @@ interface SolidMeshProps {
   onHover: (hovered: boolean) => void;
 }
 
-function SolidMesh({ bodyId, metadata, position, scale, color, isSelected, isHovered, onClick, onHover }: SolidMeshProps) {
+function SolidMesh({ bodyId, metadata, position, rotation, scale, color, isSelected, isHovered, onClick, onHover }: SolidMeshProps) {
   const geometry = useMemo(() => {
     try {
       const params = metadata as AnyShapeParams;
@@ -111,9 +117,10 @@ function SolidMesh({ bodyId, metadata, position, scale, color, isSelected, isHov
     : isHovered
       ? '#5da0e9'
       : color;
+  const rotationInRadians = useMemo(() => toRadiansTuple(rotation), [rotation]);
 
   return (
-    <group position={position} scale={scale}>
+    <group position={position} rotation={rotationInRadians} scale={scale}>
       <mesh
         geometry={geometry}
         onClick={onClick}
@@ -140,6 +147,9 @@ function SolidMesh({ bodyId, metadata, position, scale, color, isSelected, isHov
 
 interface LineMeshProps {
   metadata: Record<string, unknown>;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
   color: string;
   isSelected: boolean;
   isHovered: boolean;
@@ -147,7 +157,7 @@ interface LineMeshProps {
   onHover: (hovered: boolean) => void;
 }
 
-function LineMesh({ metadata, color, isSelected, isHovered, onClick, onHover }: LineMeshProps) {
+function LineMesh({ metadata, position, rotation, scale, color, isSelected, isHovered, onClick, onHover }: LineMeshProps) {
   const geometry = useMemo(() => {
     try {
       const params = metadata as AnyShapeParams;
@@ -220,9 +230,10 @@ function LineMesh({ metadata, color, isSelected, isHovered, onClick, onHover }: 
 
   const displayColor = isSelected ? '#4a90d9' : isHovered ? '#5da0e9' : color;
   const lineColor = isSelected ? '#ffffff' : isHovered ? '#aaccff' : color;
+  const rotationInRadians = useMemo(() => toRadiansTuple(rotation), [rotation]);
 
   return (
-    <group>
+    <group position={position} rotation={rotationInRadians} scale={scale}>
       {/* Visible lines */}
       <lineSegments geometry={geometry}>
         <lineBasicMaterial color={lineColor} linewidth={2} />
