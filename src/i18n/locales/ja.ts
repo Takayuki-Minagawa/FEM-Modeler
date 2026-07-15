@@ -1,7 +1,7 @@
 export const ja = {
   app: {
     title: 'FEM Modeler',
-    version: 'v0.1.0',
+    version: 'v0.2.0',
   },
   globalBar: {
     undo: '元に戻す',
@@ -26,6 +26,7 @@ export const ja = {
     loads: '荷重',
     ic: '初期条件',
     analysis: '解析ケース',
+    results: '解析結果',
     export: 'ソルバ出力先',
     validation: '検証',
   },
@@ -40,6 +41,7 @@ export const ja = {
     loads: '名前付き選択に荷重を定義します。',
     ic: '非定常解析の初期条件を定義します。',
     analysis: '解析ケースとソルバ設定を行います。',
+    results: 'ソルバ結果と保存則・収束チェックを取り込みます。',
     export: 'ソルバ出力先を選択し、モデルをエクスポートします。',
     validation: 'エクスポート前に検証結果を確認します。',
   },
@@ -58,7 +60,7 @@ export const ja = {
   },
   startScreen: {
     subtitle: 'FEM/CAE 前処理環境',
-    openExisting: '既存プロジェクトを開く (.fem.json)',
+    openExisting: '既存プロジェクトを開く (.fem.json / .fem.zip)',
     newFromTemplate: 'テンプレートから新規作成',
     skip: '現在のプロジェクトを使用',
     recoveryTitle: '自動保存データがあります',
@@ -69,7 +71,7 @@ export const ja = {
     templates: {
       empty: { name: '空のプロジェクト', desc: 'ゼロから開始' },
       frame2d: { name: '2Dフレーム', desc: 'ラーメン構造 (OpenSeesPy)' },
-      truss3d: { name: '3Dトラス', desc: '立体トラス構造 (OpenSeesPy)' },
+      truss2d: { name: '2Dトラス', desc: '平面トラス構造 (OpenSeesPy)' },
       solidPlate: { name: 'ソリッド平板', desc: '穴あき平板 (DOLFINx)' },
       heat: { name: '熱伝導', desc: '定常熱伝導 (DOLFINx)' },
       channel: { name: 'チャネル流れ', desc: '2Dチャネル流 (OpenFOAM)' },

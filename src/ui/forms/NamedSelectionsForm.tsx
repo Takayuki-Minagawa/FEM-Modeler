@@ -28,6 +28,10 @@ export function NamedSelectionsForm() {
   const setSelectedEntities = useAppStore((s) => s.setSelectedEntities);
   const bodies = useAppStore((s) => s.ir.geometry.bodies);
   const faces = useAppStore((s) => s.ir.geometry.faces);
+  const edges = useAppStore((s) => s.ir.geometry.edges);
+  const vertices = useAppStore((s) => s.ir.geometry.vertices);
+  const setPickFilter = useAppStore((s) => s.setPickFilter);
+  const toggleEntitySelection = useAppStore((s) => s.toggleEntitySelection);
 
   const [newName, setNewName] = useState('');
   const [entityType, setEntityType] = useState<EntityType>('body');
@@ -35,7 +39,14 @@ export function NamedSelectionsForm() {
   const [editName, setEditName] = useState('');
 
   const handleCreate = () => {
-    if (!newName.trim() || selectedEntityIds.length === 0) return;
+    const validIds = new Set(
+      entityType === 'body' ? bodies.map((item) => item.id)
+        : entityType === 'face' ? faces.map((item) => item.id)
+          : entityType === 'edge' ? edges.map((item) => item.id)
+            : vertices.map((item) => item.id),
+    );
+    const memberRefs = selectedEntityIds.filter((id) => validIds.has(id));
+    if (!newName.trim() || memberRefs.length === 0) return;
 
     const ns: NamedSelection = {
       id: generateId('named_selection'),
@@ -43,7 +54,7 @@ export function NamedSelectionsForm() {
       display_name: newName.trim(),
       target_dimension: entityType === 'body' ? 3 : entityType === 'face' ? 2 : entityType === 'edge' ? 1 : 0,
       entity_type: entityType,
-      member_refs: [...selectedEntityIds],
+      member_refs: memberRefs,
       color: nextSelectionColor(),
       description: '',
       created_by: 'user',
@@ -100,25 +111,46 @@ export function NamedSelectionsForm() {
         </label>
 
         <div className="flex gap-2 mb-2">
-          {(['body', 'face', 'edge', 'vertex'] as EntityType[]).map((et) => {
-            const isAvailable = et === 'body'; // Only body selection is implemented
+          {(['body', 'face', 'edge', 'vertex'] as const).map((et) => {
             return (
               <button
                 key={et}
-                onClick={() => isAvailable && setEntityType(et)}
-                disabled={!isAvailable}
-                className="px-2 py-1 rounded text-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                onClick={() => {
+                  setEntityType(et);
+                  setPickFilter(et);
+                  setSelectedEntities([]);
+                }}
+                className="px-2 py-1 rounded text-xs cursor-pointer"
                 style={{
                   backgroundColor: entityType === et ? 'var(--color-accent)' : 'var(--color-bg-input)',
                   color: entityType === et ? '#fff' : 'var(--color-text-secondary)',
                   border: `1px solid ${entityType === et ? 'var(--color-accent)' : 'var(--color-border)'}`,
                 }}
-                title={!isAvailable ? (isJa ? '将来実装予定' : 'Coming soon') : undefined}
               >
                 {et}
               </button>
             );
           })}
+        </div>
+
+        <div className="max-h-40 overflow-y-auto mb-2 rounded" role="listbox" aria-multiselectable="true" aria-label={isJa ? '選択可能エンティティ' : 'Selectable entities'}>
+          {(entityType === 'body' ? bodies : entityType === 'face' ? faces : entityType === 'edge' ? edges : vertices).map((entity) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={selectedEntityIds.includes(entity.id)}
+              key={entity.id}
+              onClick={() => toggleEntitySelection(entity.id)}
+              className="w-full text-left px-2 py-1 text-xs flex items-center gap-2 cursor-pointer"
+              style={{
+                backgroundColor: selectedEntityIds.includes(entity.id) ? 'var(--color-bg-panel)' : 'var(--color-bg-input)',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              <span aria-hidden="true">{selectedEntityIds.includes(entity.id) ? '✓' : '○'}</span>
+              <span>{entity.name || entity.id}</span>
+            </button>
+          ))}
         </div>
 
         <div className="flex gap-2">

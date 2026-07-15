@@ -15,7 +15,7 @@ export function createItem(
   dismissible = true,
 ): ValidationItem {
   return {
-    id: `val_${code}_${Date.now()}`,
+    id: `val_${code}_${target_ref}`.replace(/[^A-Za-z0-9_-]/g, '_'),
     severity,
     code,
     title,

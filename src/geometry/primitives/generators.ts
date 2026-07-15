@@ -267,38 +267,96 @@ function generateFrame2D(p: FrameParams, name?: string): GeneratedTopology {
     }
   }
 
+  const vertexAt = (floor: number, column: number) => vertices[floor * p.columns + column];
+  for (let column = 0; column < p.columns; column += 1) {
+    for (let floor = 0; floor < p.floors; floor += 1) {
+      edges.push({
+        id: generateId('edge'),
+        name: `column_c${column}_f${floor}`,
+        body_id: body.id,
+        vertex_ids: [vertexAt(floor, column).id, vertexAt(floor + 1, column).id],
+        length: floorH,
+      });
+    }
+  }
+  for (let floor = 1; floor <= p.floors; floor += 1) {
+    for (let column = 0; column < p.columns - 1; column += 1) {
+      edges.push({
+        id: generateId('edge'),
+        name: `beam_f${floor}_c${column}`,
+        body_id: body.id,
+        vertex_ids: [vertexAt(floor, column).id, vertexAt(floor, column + 1).id],
+        length: colSpacing,
+      });
+    }
+  }
+
   return { body, faces: [], edges, vertices, threeGeometry: group };
 }
 
 function generateTruss2D(p: TrussParams, name?: string): GeneratedTopology {
   const body = makeBody(name ?? '2D Truss', 'beam_region', p);
-  const positions: number[] = [];
-  const segLen = p.span / p.divisions;
+  const divisions = Math.max(2, Math.round(p.divisions));
+  const segLen = p.span / divisions;
+  const vertices: GeometryVertex[] = [];
+  const edges: GeometryEdge[] = [];
+  const bottom: GeometryVertex[] = [];
+  const top = new Map<number, GeometryVertex>();
 
-  // Bottom chord
-  for (let i = 0; i < p.divisions; i++) {
-    positions.push(i * segLen, 0, 0, (i + 1) * segLen, 0, 0);
+  for (let index = 0; index <= divisions; index += 1) {
+    const vertex: GeometryVertex = {
+      id: generateId('vertex'),
+      name: `bottom_node_${index}`,
+      body_id: body.id,
+      position: [index * segLen, 0, 0],
+    };
+    bottom.push(vertex);
+    vertices.push(vertex);
   }
-  // Top chord (triangular)
-  for (let i = 0; i < p.divisions; i++) {
-    const x1 = i * segLen, x2 = (i + 1) * segLen;
-    const y1 = Math.min(i, p.divisions - i) * (p.height / (p.divisions / 2));
-    const y2 = Math.min(i + 1, p.divisions - i - 1) * (p.height / (p.divisions / 2));
-    positions.push(x1, y1, 0, x2, y2, 0);
+  for (let index = 1; index < divisions; index += 1) {
+    const height = Math.min(index, divisions - index) * (p.height / (divisions / 2));
+    const vertex: GeometryVertex = {
+      id: generateId('vertex'),
+      name: `top_node_${index}`,
+      body_id: body.id,
+      position: [index * segLen, height, 0],
+    };
+    top.set(index, vertex);
+    vertices.push(vertex);
   }
-  // Diagonals
-  for (let i = 0; i <= p.divisions; i++) {
-    const x = i * segLen;
-    const y = Math.min(i, p.divisions - i) * (p.height / (p.divisions / 2));
-    if (y > 0 || i === 0 || i === p.divisions) {
-      positions.push(x, 0, 0, x, y, 0);
-    }
+  const addEdge = (name: string, start: GeometryVertex, end: GeometryVertex) => {
+    const dx = end.position[0] - start.position[0];
+    const dy = end.position[1] - start.position[1];
+    edges.push({
+      id: generateId('edge'),
+      name,
+      body_id: body.id,
+      vertex_ids: [start.id, end.id],
+      length: Math.hypot(dx, dy),
+    });
+  };
+  for (let index = 0; index < divisions; index += 1) addEdge(`bottom_chord_${index}`, bottom[index], bottom[index + 1]);
+  const topChain = [bottom[0], ...Array.from(top.values()), bottom[divisions]];
+  for (let index = 0; index < topChain.length - 1; index += 1) addEdge(`top_chord_${index}`, topChain[index], topChain[index + 1]);
+  for (const [index, vertex] of top) addEdge(`web_${index}`, bottom[index], vertex);
+  // Triangulate every interior panel. Without these diagonals the vertical-web
+  // graph contains one shear mechanism per unbraced panel.
+  for (let index = 1; index < divisions - 1; index += 1) {
+    if (index % 2 === 1) addEdge(`diagonal_${index}`, bottom[index], topChain[index + 1]);
+    else addEdge(`diagonal_${index}`, topChain[index], bottom[index + 1]);
   }
+
+  const positions = edges.flatMap((edge) => {
+    const start = vertices.find((vertex) => vertex.id === edge.vertex_ids[0])!;
+    const end = vertices.find((vertex) => vertex.id === edge.vertex_ids[1])!;
+    return [...start.position, ...end.position];
+  });
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
 
-  return { body, faces: [], edges: [], vertices: [], threeGeometry: geo };
+  body.metadata.divisions = divisions;
+  return { body, faces: [], edges, vertices, threeGeometry: geo };
 }
 
 function generateChannel(p: ChannelParams, name?: string): GeneratedTopology {

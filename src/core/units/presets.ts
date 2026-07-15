@@ -2,13 +2,14 @@ import type { UnitSystem } from '../ir/types';
 import type { UnitPreset } from './types';
 
 const SI: UnitSystem = {
+  value_basis: 'SI',
   system_name: 'SI',
   base_length: 'm',
   base_mass: 'kg',
   base_time: 's',
   base_temperature: 'K',
   base_force: 'N',
-  angle_unit: 'rad',
+  angle_unit: 'deg',
   display_precision: 6,
   preferred_stress_unit: 'Pa',
   preferred_pressure_unit: 'Pa',
@@ -16,13 +17,14 @@ const SI: UnitSystem = {
 };
 
 const MM_N_S: UnitSystem = {
+  value_basis: 'SI',
   system_name: 'mm-N-s',
   base_length: 'mm',
   base_mass: 'kg',
   base_time: 's',
   base_temperature: 'K',
   base_force: 'N',
-  angle_unit: 'rad',
+  angle_unit: 'deg',
   display_precision: 4,
   preferred_stress_unit: 'MPa',
   preferred_pressure_unit: 'MPa',
@@ -30,13 +32,14 @@ const MM_N_S: UnitSystem = {
 };
 
 const MM_T_S: UnitSystem = {
+  value_basis: 'SI',
   system_name: 'mm-t-s',
   base_length: 'mm',
   base_mass: 't',
   base_time: 's',
   base_temperature: 'K',
   base_force: 'N',
-  angle_unit: 'rad',
+  angle_unit: 'deg',
   display_precision: 4,
   preferred_stress_unit: 'MPa',
   preferred_pressure_unit: 'MPa',

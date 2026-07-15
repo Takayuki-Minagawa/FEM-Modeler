@@ -9,8 +9,8 @@ const TREE_SECTIONS = [
   { key: 'mesh', i18nKey: 'tree.mesh', icon: '&#9638;' },
   { key: 'bc', i18nKey: 'tree.bc', icon: '&#9654;' },
   { key: 'loads', i18nKey: 'tree.loads', icon: '&#8595;' },
-  { key: 'ic', i18nKey: 'tree.ic', icon: '&#8635;' },
   { key: 'analysis', i18nKey: 'tree.analysis', icon: '&#9881;' },
+  { key: 'results', i18nKey: 'tree.results', icon: '&#8645;' },
   { key: 'export', i18nKey: 'tree.export', icon: '&#8680;' },
   { key: 'validation', i18nKey: 'tree.validation', icon: '&#10003;' },
 ] as const;
@@ -32,6 +32,7 @@ export function LeftSidebar() {
       case 'loads': return ir.loads.length;
       case 'ic': return ir.initial_conditions.length;
       case 'analysis': return ir.analysis_cases.length;
+      case 'results': return ir.results.length;
       case 'export': return ir.solver_targets.filter((st) => st.enabled).length;
       case 'validation': return ir.validation.summary.error_count + ir.validation.summary.warning_count;
       default: return 0;

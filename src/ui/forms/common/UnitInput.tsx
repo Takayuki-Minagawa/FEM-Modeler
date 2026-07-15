@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 interface UnitInputProps {
   label: string;
   value: number | null;
@@ -19,13 +21,15 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function UnitInput({ label, value, unit, onChange, status, step = 0.01, min, disabled }: UnitInputProps) {
+  const inputId = useId();
   return (
     <div className="flex items-center gap-2">
-      <span className="text-sm w-28 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>
+      <label htmlFor={inputId} className="text-sm w-28 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>
         {label}
-      </span>
+      </label>
       <div className="flex-1 flex items-center gap-1">
         <input
+          id={inputId}
           type="number"
           value={value ?? ''}
           onChange={(e) => {
@@ -51,6 +55,7 @@ export function UnitInput({ label, value, unit, onChange, status, step = 0.01, m
         <span
           className="w-2 h-2 rounded-full shrink-0"
           title={status}
+          aria-label={`status: ${status}`}
           style={{ backgroundColor: STATUS_COLORS[status] ?? 'var(--color-text-muted)' }}
         />
       )}

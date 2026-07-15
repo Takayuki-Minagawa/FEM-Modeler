@@ -23,6 +23,9 @@ const PREFIX_MAP = {
   audit: 'aud_',
   reference_frame: 'ref_',
   geometry_parameter: 'gp_',
+  asset: 'asset_',
+  result: 'result_',
+  result_field: 'field_',
 } as const;
 
 export type IdPrefix = keyof typeof PREFIX_MAP;

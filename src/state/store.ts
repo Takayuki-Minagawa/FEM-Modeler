@@ -18,6 +18,12 @@ import type {
   DomainType,
   Transform,
   UnitSystemName,
+  SolverTargetName,
+  MeshGlobalControls,
+  MeshLocalControl,
+  MeshQualityTargets,
+  GeometryAsset,
+  ResultIR,
 } from '@/core/ir/types';
 import { createDefaultProject } from '@/core/ir/defaults';
 import { getUnitPreset } from '@/core/units/presets';
@@ -25,6 +31,16 @@ import { generateId } from '@/core/ir/id-generator';
 import { createUndoRedoManager } from './middleware/undo-redo';
 import { runValidation } from '@/validation/engine';
 import { duplicateBodiesLinear as duplicateBodiesLinearInGeometry } from '@/geometry/editing';
+import {
+  deleteBodyCascade,
+  deleteBoundaryConditionCascade,
+  deleteInitialConditionCascade,
+  deleteLoadCascade,
+  deleteMaterialCascade,
+  deleteNamedSelectionCascade,
+  deleteSectionCascade,
+} from '@/core/ir/relations';
+import { clearSTLGeometryCache, removeSTLGeometry } from '@/geometry/import/stl-geometry-cache';
 
 // ---------------------------------------------------------------------------
 // Transient UI state (not persisted in project JSON)
@@ -60,10 +76,12 @@ export interface AppState extends TransientState {
   loadProject: (data: ProjectIR) => void;
   setProjectName: (name: string) => void;
   setUnitSystem: (name: UnitSystemName) => void;
+  mutateIR: (label: string, recipe: (ir: ProjectIR) => void) => void;
+  setSolverTargetEnabled: (name: SolverTargetName, enabled: boolean) => void;
 
   // Geometry actions
   addBody: (body: GeometryBody) => void;
-  addBodyWithTopology: (body: GeometryBody, topology: { faces?: GeometryFace[]; edges?: GeometryEdge[]; vertices?: GeometryVertex[] }) => void;
+  addBodyWithTopology: (body: GeometryBody, topology: { faces?: GeometryFace[]; edges?: GeometryEdge[]; vertices?: GeometryVertex[]; assets?: GeometryAsset[] }) => void;
   updateBody: (id: string, updates: BodyUpdates) => void;
   removeBody: (id: string) => void;
   duplicateBodiesLinear: (ids: string[], copies: number, offset: [number, number, number]) => string[];
@@ -104,10 +122,20 @@ export interface AppState extends TransientState {
   // Analysis case actions
   addAnalysisCase: (ac: AnalysisCase) => void;
   updateAnalysisCase: (id: string, updates: Partial<AnalysisCase>) => void;
+  setActiveAnalysisCase: (id: string) => void;
   removeAnalysisCase: (id: string) => void;
+  addResult: (result: ResultIR) => void;
+  removeResult: (id: string) => void;
+
+  // Mesh actions
+  updateGlobalMeshControls: (updates: Partial<MeshGlobalControls>) => void;
+  addLocalMeshControl: (control: MeshLocalControl) => void;
+  updateLocalMeshControl: (id: string, updates: Partial<MeshLocalControl>) => void;
+  removeLocalMeshControl: (id: string) => void;
+  updateMeshQualityTargets: (updates: Partial<MeshQualityTargets>) => void;
 
   // Validation
-  runValidation: () => void;
+  runValidation: (target?: SolverTargetName, analysisCaseId?: string) => void;
 
   // Undo/Redo
   undo: () => void;
@@ -144,6 +172,15 @@ function saveBefore(state: AppState) {
 /** Call AFTER mutating state.ir — completes the undo entry */
 function saveAfter(state: AppState) {
   state.ir.meta.updated_at = new Date().toISOString();
+  state.ir.validation.model_revision += 1;
+  undoRedoManager.saveAfter(state.ir);
+  state.canUndo = undoRedoManager.canUndo();
+  state.canRedo = undoRedoManager.canRedo();
+}
+
+/** Persist derived artifacts without invalidating the solver-input revision. */
+function saveArtifactAfter(state: AppState) {
+  state.ir.meta.updated_at = new Date().toISOString();
   undoRedoManager.saveAfter(state.ir);
   state.canUndo = undoRedoManager.canUndo();
   state.canRedo = undoRedoManager.canRedo();
@@ -178,6 +215,10 @@ export const useAppStore = create<AppState>()(
         if (name) ir.meta.project_name = name;
         if (domain) ir.meta.domain_type = domain;
         state.ir = ir;
+        clearSTLGeometryCache();
+        state.selectedEntityIds = [];
+        state.hoveredEntityId = null;
+        state.activePanel = 'geometry';
         state.isStartScreenOpen = false;
         undoRedoManager.clear();
         state.canUndo = false;
@@ -187,6 +228,10 @@ export const useAppStore = create<AppState>()(
     loadProject: (data) =>
       set((state) => {
         state.ir = data;
+        clearSTLGeometryCache();
+        state.selectedEntityIds = [];
+        state.hoveredEntityId = null;
+        state.activePanel = data.ui_state.active_panel || 'geometry';
         state.isStartScreenOpen = false;
         undoRedoManager.clear();
         state.canUndo = false;
@@ -202,8 +247,46 @@ export const useAppStore = create<AppState>()(
 
     setUnitSystem: (name) =>
       set((state) => {
+        if (state.ir.units.system_name === name) return;
         saveBefore(state);
+        const previous = state.ir.units.system_name;
         state.ir.units = getUnitPreset(name);
+        state.ir.audit_trail.push({
+          id: generateId('audit'),
+          timestamp: new Date().toISOString(),
+          actor: 'user',
+          action_type: 'unit_conversion',
+          target_ref: 'units',
+          before_summary: previous,
+          after_summary: name,
+          note: 'Changed display units; canonical SI values were preserved.',
+        });
+        saveAfter(state);
+      }),
+
+    mutateIR: (label, recipe) =>
+      set((state) => {
+        saveBefore(state);
+        recipe(state.ir);
+        state.ir.audit_trail.push({
+          id: generateId('audit'),
+          timestamp: new Date().toISOString(),
+          actor: 'user',
+          action_type: 'update',
+          target_ref: 'project',
+          before_summary: '',
+          after_summary: label,
+          note: label,
+        });
+        saveAfter(state);
+      }),
+
+    setSolverTargetEnabled: (name, enabled) =>
+      set((state) => {
+        const target = state.ir.solver_targets.find((item) => item.target_name === name);
+        if (!target || target.enabled === enabled) return;
+        saveBefore(state);
+        target.enabled = enabled;
         saveAfter(state);
       }),
 
@@ -222,6 +305,11 @@ export const useAppStore = create<AppState>()(
         if (topology.faces) state.ir.geometry.faces.push(...topology.faces);
         if (topology.edges) state.ir.geometry.edges.push(...topology.edges);
         if (topology.vertices) state.ir.geometry.vertices.push(...topology.vertices);
+        if (topology.assets) {
+          const existing = new Set(state.ir.assets.map((asset) => asset.id));
+          state.ir.assets.push(...topology.assets.filter((asset) => !existing.has(asset.id)));
+          state.ir.geometry.source = 'imported_stl';
+        }
         saveAfter(state);
       }),
 
@@ -248,34 +336,10 @@ export const useAppStore = create<AppState>()(
     removeBody: (id) =>
       set((state) => {
         saveBefore(state);
-        // Collect all entity IDs being removed (body + its faces/edges/vertices)
-        const removedFaceIds = new Set(state.ir.geometry.faces.filter((f) => f.body_id === id).map((f) => f.id));
-        const removedEdgeIds = new Set(state.ir.geometry.edges.filter((e) => e.body_id === id).map((e) => e.id));
-        const removedVertexIds = new Set(state.ir.geometry.vertices.filter((v) => v.body_id === id).map((v) => v.id));
-        const allRemovedIds = new Set([id, ...removedFaceIds, ...removedEdgeIds, ...removedVertexIds]);
-
-        // Remove geometry entities
-        state.ir.geometry.bodies = state.ir.geometry.bodies.filter((b) => b.id !== id);
-        state.ir.geometry.faces = state.ir.geometry.faces.filter((f) => f.body_id !== id);
-        state.ir.geometry.edges = state.ir.geometry.edges.filter((e) => e.body_id !== id);
-        state.ir.geometry.vertices = state.ir.geometry.vertices.filter((v) => v.body_id !== id);
-
-        // Cascade: clean up named selection member_refs
-        for (const ns of state.ir.named_selections) {
-          ns.member_refs = ns.member_refs.filter((ref) => !allRemovedIds.has(ref));
-        }
-        // Remove empty named selections
-        state.ir.named_selections = state.ir.named_selections.filter((ns) => ns.member_refs.length > 0);
-
-        // Cascade: remove orphaned assignments/conditions referencing deleted named selections
-        const validNsIds = new Set(state.ir.named_selections.map((ns) => ns.id));
-        state.ir.material_assignments = state.ir.material_assignments.filter((a) => validNsIds.has(a.target_named_selection_id));
-        state.ir.section_assignments = state.ir.section_assignments.filter((a) => validNsIds.has(a.target_named_selection_id));
-        state.ir.boundary_conditions = state.ir.boundary_conditions.filter((bc) => !bc.target_named_selection_id || validNsIds.has(bc.target_named_selection_id));
-        state.ir.loads = state.ir.loads.filter((l) => !l.target_named_selection_id || validNsIds.has(l.target_named_selection_id));
-        state.ir.initial_conditions = state.ir.initial_conditions.filter((ic) => !ic.target_named_selection_id || validNsIds.has(ic.target_named_selection_id));
-        state.ir.mesh_controls.local = state.ir.mesh_controls.local.filter((m) => !m.target_named_selection_id || validNsIds.has(m.target_named_selection_id));
-
+        removeSTLGeometry(id);
+        deleteBodyCascade(state.ir, id);
+        const referencedAssets = new Set(state.ir.geometry.bodies.map((body) => body.asset_ref).filter(Boolean));
+        state.ir.assets = state.ir.assets.filter((asset) => referencedAssets.has(asset.id));
         saveAfter(state);
       }),
 
@@ -327,14 +391,7 @@ export const useAppStore = create<AppState>()(
     removeNamedSelection: (id) =>
       set((state) => {
         saveBefore(state);
-        state.ir.named_selections = state.ir.named_selections.filter((n) => n.id !== id);
-        // Cascade: remove assignments/conditions referencing this named selection
-        state.ir.material_assignments = state.ir.material_assignments.filter((a) => a.target_named_selection_id !== id);
-        state.ir.section_assignments = state.ir.section_assignments.filter((a) => a.target_named_selection_id !== id);
-        state.ir.boundary_conditions = state.ir.boundary_conditions.filter((bc) => bc.target_named_selection_id !== id);
-        state.ir.loads = state.ir.loads.filter((l) => l.target_named_selection_id !== id);
-        state.ir.initial_conditions = state.ir.initial_conditions.filter((ic) => ic.target_named_selection_id !== id);
-        state.ir.mesh_controls.local = state.ir.mesh_controls.local.filter((m) => m.target_named_selection_id !== id);
+        deleteNamedSelectionCascade(state.ir, id);
         saveAfter(state);
       }),
 
@@ -359,16 +416,16 @@ export const useAppStore = create<AppState>()(
     removeMaterial: (id) =>
       set((state) => {
         saveBefore(state);
-        state.ir.materials = state.ir.materials.filter((m) => m.id !== id);
-        state.ir.material_assignments = state.ir.material_assignments.filter(
-          (a) => a.material_id !== id,
-        );
+        deleteMaterialCascade(state.ir, id);
         saveAfter(state);
       }),
 
     addMaterialAssignment: (a) =>
       set((state) => {
         saveBefore(state);
+        state.ir.material_assignments = state.ir.material_assignments.filter(
+          (item) => item.target_named_selection_id !== a.target_named_selection_id,
+        );
         state.ir.material_assignments.push(a);
         saveAfter(state);
       }),
@@ -403,16 +460,16 @@ export const useAppStore = create<AppState>()(
     removeSection: (id) =>
       set((state) => {
         saveBefore(state);
-        state.ir.sections = state.ir.sections.filter((s) => s.id !== id);
-        state.ir.section_assignments = state.ir.section_assignments.filter(
-          (a) => a.section_id !== id,
-        );
+        deleteSectionCascade(state.ir, id);
         saveAfter(state);
       }),
 
     addSectionAssignment: (a) =>
       set((state) => {
         saveBefore(state);
+        state.ir.section_assignments = state.ir.section_assignments.filter(
+          (item) => item.target_named_selection_id !== a.target_named_selection_id,
+        );
         state.ir.section_assignments.push(a);
         saveAfter(state);
       }),
@@ -447,9 +504,7 @@ export const useAppStore = create<AppState>()(
     removeBoundaryCondition: (id) =>
       set((state) => {
         saveBefore(state);
-        state.ir.boundary_conditions = state.ir.boundary_conditions.filter(
-          (b) => b.id !== id,
-        );
+        deleteBoundaryConditionCascade(state.ir, id);
         saveAfter(state);
       }),
 
@@ -474,7 +529,7 @@ export const useAppStore = create<AppState>()(
     removeLoad: (id) =>
       set((state) => {
         saveBefore(state);
-        state.ir.loads = state.ir.loads.filter((l) => l.id !== id);
+        deleteLoadCascade(state.ir, id);
         saveAfter(state);
       }),
 
@@ -489,9 +544,7 @@ export const useAppStore = create<AppState>()(
     removeInitialCondition: (id) =>
       set((state) => {
         saveBefore(state);
-        state.ir.initial_conditions = state.ir.initial_conditions.filter(
-          (ic) => ic.id !== id,
-        );
+        deleteInitialConditionCascade(state.ir, id);
         saveAfter(state);
       }),
 
@@ -499,6 +552,9 @@ export const useAppStore = create<AppState>()(
     addAnalysisCase: (ac) =>
       set((state) => {
         saveBefore(state);
+        if (ac.active) {
+          for (const item of state.ir.analysis_cases) item.active = false;
+        }
         state.ir.analysis_cases.push(ac);
         saveAfter(state);
       }),
@@ -508,22 +564,91 @@ export const useAppStore = create<AppState>()(
         const idx = state.ir.analysis_cases.findIndex((c) => c.id === id);
         if (idx >= 0) {
           saveBefore(state);
+          if (updates.active === true) {
+            for (const item of state.ir.analysis_cases) item.active = false;
+          }
           Object.assign(state.ir.analysis_cases[idx], updates);
           saveAfter(state);
         }
       }),
 
+    setActiveAnalysisCase: (id) =>
+      set((state) => {
+        if (!state.ir.analysis_cases.some((item) => item.id === id)) return;
+        if (state.ir.analysis_cases.every((item) => item.active === (item.id === id))) return;
+        saveBefore(state);
+        for (const item of state.ir.analysis_cases) item.active = item.id === id;
+        saveAfter(state);
+      }),
+
     removeAnalysisCase: (id) =>
       set((state) => {
+        const removedWasActive = state.ir.analysis_cases.some((item) => item.id === id && item.active);
         saveBefore(state);
         state.ir.analysis_cases = state.ir.analysis_cases.filter((c) => c.id !== id);
+        if (removedWasActive && state.ir.analysis_cases.length > 0) {
+          state.ir.analysis_cases[0].active = true;
+        }
+        state.ir.results = state.ir.results.filter((result) => result.analysis_case_id !== id);
+        saveAfter(state);
+      }),
+
+    addResult: (result) =>
+      set((state) => {
+        saveBefore(state);
+        state.ir.results.push(result);
+        saveArtifactAfter(state);
+      }),
+
+    removeResult: (id) =>
+      set((state) => {
+        saveBefore(state);
+        state.ir.results = state.ir.results.filter((result) => result.id !== id);
+        saveArtifactAfter(state);
+      }),
+
+    // --- Mesh actions ---
+    updateGlobalMeshControls: (updates) =>
+      set((state) => {
+        saveBefore(state);
+        Object.assign(state.ir.mesh_controls.global, updates);
+        saveAfter(state);
+      }),
+
+    addLocalMeshControl: (control) =>
+      set((state) => {
+        saveBefore(state);
+        state.ir.mesh_controls.local.push(control);
+        saveAfter(state);
+      }),
+
+    updateLocalMeshControl: (id, updates) =>
+      set((state) => {
+        const control = state.ir.mesh_controls.local.find((item) => item.id === id);
+        if (!control) return;
+        saveBefore(state);
+        Object.assign(control, updates);
+        saveAfter(state);
+      }),
+
+    removeLocalMeshControl: (id) =>
+      set((state) => {
+        saveBefore(state);
+        state.ir.mesh_controls.local = state.ir.mesh_controls.local.filter((item) => item.id !== id);
+        saveAfter(state);
+      }),
+
+    updateMeshQualityTargets: (updates) =>
+      set((state) => {
+        saveBefore(state);
+        Object.assign(state.ir.mesh_controls.quality_targets, updates);
         saveAfter(state);
       }),
 
     // --- Validation ---
-    runValidation: () =>
+    runValidation: (target, analysisCaseId) =>
       set((state) => {
-        state.ir.validation = runValidation(state.ir);
+        state.ir.validation = runValidation(state.ir, target, analysisCaseId);
       }),
 
     // --- Undo/Redo ---

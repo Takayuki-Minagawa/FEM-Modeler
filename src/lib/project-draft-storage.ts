@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { ProjectIR } from '@/core/ir/types';
+import { normalizeAndValidateProjectData } from '@/export/project/project-file-schema';
 
 const DB_NAME = 'fem-modeler';
 const DB_VERSION = 2;
@@ -56,6 +57,9 @@ function getDraftDb(): Promise<IDBPDatabase<FEMModelerDraftDB>> {
         }
       },
     });
+    dbPromise.catch(() => {
+      dbPromise = null;
+    });
   }
   return dbPromise;
 }
@@ -95,13 +99,17 @@ function toRow(record: StoredProjectDraft): StoredDraftRow {
 }
 
 function fromRow(row: StoredDraftRow): StoredProjectDraft {
+  const normalized = normalizeAndValidateProjectData(JSON.parse(row.irJson));
+  if (!normalized.success || !normalized.data) {
+    throw new Error(normalized.error ?? 'Stored project draft is invalid.');
+  }
   return {
     key: CURRENT_DRAFT_KEY,
     savedAt: row.savedAt,
     projectId: row.projectId,
     projectName: row.projectName,
     schemaVersion: row.schemaVersion,
-    ir: JSON.parse(row.irJson) as ProjectIR,
+    ir: normalized.data,
   };
 }
 

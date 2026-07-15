@@ -1,4 +1,5 @@
 import type { ProjectIR } from '@/core/ir/types';
+import { sanitizeArtifactName } from '@/export/shared/artifact-sanitization';
 
 export function serializeProject(ir: ProjectIR): string {
   const data = {
@@ -17,7 +18,7 @@ export function downloadProjectFile(ir: ProjectIR): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${ir.meta.project_name.replace(/\s+/g, '_')}.fem.json`;
+  a.download = `${sanitizeArtifactName(ir.meta.project_name)}.fem.json`;
   a.click();
   URL.revokeObjectURL(url);
 }

@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 interface SelectInputProps {
   label: string;
   value: string;
@@ -7,12 +9,14 @@ interface SelectInputProps {
 }
 
 export function SelectInput({ label, value, options, onChange, disabled }: SelectInputProps) {
+  const selectId = useId();
   return (
     <div className="flex items-center gap-2">
-      <span className="text-sm w-28 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>
+      <label htmlFor={selectId} className="text-sm w-28 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>
         {label}
-      </span>
+      </label>
       <select
+        id={selectId}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}

@@ -7,6 +7,7 @@ import { MATERIAL_LIBRARY, createMaterialFromLibrary } from '@/lib/material-libr
 import { UnitInput } from './common/UnitInput';
 import { SelectInput } from './common/SelectInput';
 import type { Material, MaterialParameterKey } from '@/core/ir/types';
+import { fromSINullable, quantityUnitLabel, toSINullable, type QuantityKind } from '@/core/units';
 
 export function MaterialForm() {
   const { t, i18n } = useTranslation();
@@ -18,21 +19,21 @@ export function MaterialForm() {
   const updateMaterial = useAppStore((s) => s.updateMaterial);
   const removeMaterial = useAppStore((s) => s.removeMaterial);
   const addMaterialAssignment = useAppStore((s) => s.addMaterialAssignment);
+  const removeMaterialAssignment = useAppStore((s) => s.removeMaterialAssignment);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
   const [assignMatId, setAssignMatId] = useState<string | null>(null);
 
   const isJa = i18n.language === 'ja';
-  const isSI = units.system_name === 'SI';
-
-  const unitMap: Record<MaterialParameterKey, string> = {
-    density: isSI ? 'kg/m³' : 'kg/mm³',
-    young_modulus: isSI ? 'Pa' : 'MPa',
-    poisson_ratio: '—',
-    thermal_conductivity: isSI ? 'W/(m·K)' : 'W/(mm·K)',
-    specific_heat: 'J/(kg·K)',
-    dynamic_viscosity: 'Pa·s',
-    kinematic_viscosity: 'm²/s',
+  const unitSystem = units.system_name;
+  const quantityMap: Record<MaterialParameterKey, QuantityKind> = {
+    density: 'density',
+    young_modulus: 'stress',
+    poisson_ratio: 'dimensionless',
+    thermal_conductivity: 'thermal_conductivity',
+    specific_heat: 'specific_heat',
+    dynamic_viscosity: 'dynamic_viscosity',
+    kinematic_viscosity: 'kinematic_viscosity',
   };
 
   const paramKeys: { key: MaterialParameterKey; labelKey: string }[] = [
@@ -71,7 +72,10 @@ export function MaterialForm() {
     const mat = materials.find((m) => m.id === matId);
     if (!mat) return;
     const updated = { ...mat.parameter_set };
-    updated[key] = { value, status: value !== null ? 'confirmed' : 'missing' };
+    updated[key] = {
+      value: toSINullable(value, quantityMap[key], unitSystem),
+      status: value !== null ? 'confirmed' : 'missing',
+    };
     updateMaterial(matId, { parameter_set: updated });
   };
 
@@ -160,15 +164,23 @@ export function MaterialForm() {
               { value: 'thermo_elastic', label: isJa ? '熱弾性体' : 'Thermo-Elastic' },
               { value: 'fluid_newtonian', label: isJa ? 'ニュートン流体' : 'Newtonian Fluid' },
             ]}
-            onChange={(v) => updateMaterial(editingMat.id, { class: v as Material['class'] })}
+            onChange={(v) => {
+              const materialClass = v as Material['class'];
+              updateMaterial(editingMat.id, {
+                class: materialClass,
+                physical_model: materialClass === 'fluid_newtonian'
+                  ? 'incompressible_newtonian'
+                  : 'isotropic_linear',
+              });
+            }}
           />
 
           {paramKeys.map(({ key, labelKey }) => (
             <UnitInput
               key={key}
               label={t(labelKey)}
-              value={editingMat.parameter_set[key].value}
-              unit={unitMap[key]}
+              value={fromSINullable(editingMat.parameter_set[key].value, quantityMap[key], unitSystem)}
+              unit={quantityUnitLabel(quantityMap[key], unitSystem)}
               status={editingMat.parameter_set[key].status}
               onChange={(v) => handleParamChange(editingMat.id, key, v)}
             />
@@ -193,11 +205,6 @@ export function MaterialForm() {
         <div className="space-y-1">
           {materials.map((mat) => {
             const assignments = materialAssignments.filter((a) => a.material_id === mat.id);
-            const nsNames = assignments.map((a) => {
-              const ns = namedSelections.find((n) => n.id === a.target_named_selection_id);
-              return ns?.display_name ?? ns?.name ?? '?';
-            });
-
             return (
               <div
                 key={mat.id}
@@ -231,9 +238,23 @@ export function MaterialForm() {
                     </button>
                   </div>
                 </div>
-                {nsNames.length > 0 && (
-                  <div className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                    → {nsNames.join(', ')}
+                {assignments.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {assignments.map((assignment) => {
+                      const ns = namedSelections.find((item) => item.id === assignment.target_named_selection_id);
+                      return (
+                        <button
+                          key={assignment.id}
+                          type="button"
+                          onClick={() => removeMaterialAssignment(assignment.id)}
+                          className="text-xs px-1.5 py-0.5 rounded cursor-pointer"
+                          style={{ color: 'var(--color-text-muted)', backgroundColor: 'var(--color-bg-secondary)' }}
+                          title={isJa ? '割当を解除' : 'Remove assignment'}
+                        >
+                          → {ns?.display_name ?? ns?.name ?? '?'} ×
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 

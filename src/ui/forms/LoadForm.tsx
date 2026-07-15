@@ -5,13 +5,50 @@ import { generateId } from '@/core/ir/id-generator';
 import { SelectInput } from './common/SelectInput';
 import { VectorInput } from './common/VectorInput';
 import { UnitInput } from './common/UnitInput';
-import type { Load, LoadType, PhysicsDomain } from '@/core/ir/types';
+import type { Load, LoadApplicationMode, LoadType, PhysicsDomain } from '@/core/ir/types';
+import { fromSI, quantityUnitLabel, toSI, type QuantityKind } from '@/core/units';
 
 const LOAD_TYPES_BY_DOMAIN: Record<PhysicsDomain, LoadType[]> = {
   structural: ['nodal_force', 'surface_traction', 'body_force', 'gravity', 'line_load', 'pressure'],
   thermal: ['heat_source', 'volumetric_heat'],
   fluid: ['body_force', 'mass_flow_rate'],
 };
+
+function loadQuantity(load: Pick<Load, 'load_type' | 'application_mode'>): QuantityKind {
+  if (load.load_type === 'gravity') return 'acceleration';
+  if (load.load_type === 'mass_flow_rate') return 'mass_flow_rate';
+  if (load.application_mode === 'total') {
+    return load.load_type === 'heat_source' || load.load_type === 'volumetric_heat' ? 'power' : 'force';
+  }
+  if (load.application_mode === 'per_area') {
+    if (load.load_type === 'pressure') return 'pressure';
+    return load.load_type === 'heat_source' ? 'heat_flux' : 'surface_load';
+  }
+  if (load.application_mode === 'per_volume') {
+    return load.load_type === 'heat_source' || load.load_type === 'volumetric_heat'
+      ? 'volumetric_heat'
+      : 'volume_load';
+  }
+  return 'line_load';
+}
+
+function applicationModes(type: LoadType): LoadApplicationMode[] {
+  if (type === 'surface_traction') return ['per_area', 'total'];
+  if (type === 'body_force') return ['per_volume', 'total'];
+  if (type === 'line_load') return ['per_length', 'total'];
+  if (type === 'pressure') return ['per_area'];
+  if (type === 'heat_source') return ['per_area', 'total'];
+  if (type === 'volumetric_heat') return ['per_volume', 'total'];
+  return ['total'];
+}
+
+function requiredTargetDimension(type: LoadType): number {
+  if (type === 'nodal_force') return 0;
+  if (type === 'line_load') return 1;
+  if (type === 'surface_traction' || type === 'pressure' || type === 'mass_flow_rate') return 2;
+  if (type === 'heat_source') return 2;
+  return 3;
+}
 
 export function LoadForm() {
   const { t } = useTranslation();
@@ -25,9 +62,7 @@ export function LoadForm() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [domain, setDomain] = useState<PhysicsDomain>('structural');
 
-  const isSI = units.system_name === 'SI';
-  const forceUnit = isSI ? 'N' : 'N';
-  const pressureUnit = isSI ? 'Pa' : 'MPa';
+  const unitSystem = units.system_name;
 
   const handleAdd = () => {
     const loadType = LOAD_TYPES_BY_DOMAIN[domain][0];
@@ -36,8 +71,14 @@ export function LoadForm() {
       name: `Load_${loads.length + 1}`,
       physics_domain: domain,
       load_type: loadType,
-      target_named_selection_id: namedSelections[0]?.id ?? '',
-      application_mode: 'total',
+      target_named_selection_id: namedSelections.find((item) => item.target_dimension === requiredTargetDimension(loadType))?.id ?? '',
+      application_mode: loadType === 'surface_traction' || loadType === 'pressure' || loadType === 'heat_source'
+        ? 'per_area'
+        : loadType === 'body_force' || loadType === 'volumetric_heat'
+          ? 'per_volume'
+          : loadType === 'line_load'
+            ? 'per_length'
+            : 'total',
       direction: [0, -1, 0],
       magnitude: loadType === 'gravity' ? 9.81 : 1000,
       distribution: 'uniform',
@@ -88,17 +129,45 @@ export function LoadForm() {
 
           <SelectInput label={t('loads.type')} value={editingLoad.load_type}
             options={LOAD_TYPES_BY_DOMAIN[editingLoad.physics_domain].map((lt) => ({ value: lt, label: t(`loads.types.${lt}`) }))}
-            onChange={(v) => updateLoad(editingLoad.id, { load_type: v as LoadType })}
+            onChange={(v) => {
+              const nextType = v as LoadType;
+              const dimension = requiredTargetDimension(nextType);
+              const currentTarget = namedSelections.find((item) => item.id === editingLoad.target_named_selection_id);
+              updateLoad(editingLoad.id, {
+                load_type: nextType,
+                target_named_selection_id: currentTarget?.target_dimension === dimension
+                  ? currentTarget.id
+                  : namedSelections.find((item) => item.target_dimension === dimension)?.id ?? '',
+                application_mode: nextType === 'surface_traction' || nextType === 'pressure' || nextType === 'heat_source'
+                  ? 'per_area'
+                  : nextType === 'body_force' || nextType === 'volumetric_heat'
+                    ? 'per_volume'
+                    : nextType === 'line_load'
+                      ? 'per_length'
+                      : 'total',
+              });
+            }}
           />
 
           <SelectInput label={t('loads.target')} value={editingLoad.target_named_selection_id}
-            options={[{ value: '', label: '—' }, ...namedSelections.map((ns) => ({ value: ns.id, label: ns.display_name ?? ns.name }))]}
+            options={[{ value: '', label: '—' }, ...namedSelections.filter((ns) => ns.target_dimension === requiredTargetDimension(editingLoad.load_type)).map((ns) => ({ value: ns.id, label: ns.display_name ?? ns.name }))]}
             onChange={(v) => updateLoad(editingLoad.id, { target_named_selection_id: v })}
           />
 
-          <UnitInput label={t('loads.magnitude')} value={editingLoad.magnitude}
-            unit={editingLoad.load_type === 'pressure' ? pressureUnit : forceUnit}
-            onChange={(v) => updateLoad(editingLoad.id, { magnitude: v ?? 0 })}
+          <SelectInput
+            label={t('loads.applicationMode', { defaultValue: 'Application mode' })}
+            value={editingLoad.application_mode}
+            options={applicationModes(editingLoad.load_type).map((mode) => ({
+              value: mode,
+              label: mode.replaceAll('_', ' '),
+            }))}
+            onChange={(value) => updateLoad(editingLoad.id, { application_mode: value as LoadApplicationMode })}
+          />
+
+          <UnitInput label={t('loads.magnitude')}
+            value={fromSI(editingLoad.magnitude, loadQuantity(editingLoad), unitSystem)}
+            unit={quantityUnitLabel(loadQuantity(editingLoad), unitSystem)}
+            onChange={(v) => updateLoad(editingLoad.id, { magnitude: toSI(v ?? 0, loadQuantity(editingLoad), unitSystem) })}
           />
 
           <VectorInput label={t('loads.direction')} value={editingLoad.direction}
@@ -124,7 +193,7 @@ export function LoadForm() {
                 <div className="cursor-pointer" onClick={() => setEditingId(editingId === load.id ? null : load.id)}>
                   <span style={{ color: 'var(--color-text)' }}>{load.name}</span>
                   <span className="text-xs ml-2" style={{ color: 'var(--color-text-muted)' }}>
-                    {t(`loads.types.${load.load_type}`)} {load.magnitude} → {ns?.display_name ?? ns?.name ?? '—'}
+                    {t(`loads.types.${load.load_type}`)} {fromSI(load.magnitude, loadQuantity(load), unitSystem)} {quantityUnitLabel(loadQuantity(load), unitSystem)} ({load.application_mode}) → {ns?.display_name ?? ns?.name ?? '—'}
                   </span>
                 </div>
                 <button onClick={() => { removeLoad(load.id); if (editingId === load.id) setEditingId(null); }}

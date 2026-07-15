@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
-import { readFileAsText, parseProjectFile } from '@/export/project/load';
+import { MAX_PROJECT_FILE_BYTES, readFileAsText, parseProjectFile } from '@/export/project/load';
 import { useAppContext } from '@/hooks/useAppContext';
 
 export interface ProjectFileLoadResult {
@@ -19,8 +19,14 @@ export function useProjectFileLoader() {
 
   const loadFromFile = useCallback(
     async (file: File): Promise<ProjectFileLoadResult> => {
-      const text = await readFileAsText(file);
-      const result = parseProjectFile(text);
+      if (file.size > MAX_PROJECT_FILE_BYTES) {
+        const error = 'Project file exceeds the 100 MB safety limit.';
+        addActivity('error', error);
+        return { success: false, error };
+      }
+      const result = file.name.toLowerCase().endsWith('.fem.zip')
+        ? await (await import('@/export/project/bundle')).parseProjectBundle(await file.arrayBuffer())
+        : parseProjectFile(await readFileAsText(file));
 
       if (!result.success || !result.data) {
         const error = result.error ?? 'Failed to load project';
