@@ -4,15 +4,53 @@ import { useAppStore } from '@/state/store';
 import { generateId } from '@/core/ir/id-generator';
 import { SelectInput } from './common/SelectInput';
 import { VectorInput } from './common/VectorInput';
+import { UnitInput } from './common/UnitInput';
 import type { BoundaryCondition, BoundaryConditionType, PhysicsDomain, DofMap } from '@/core/ir/types';
+import { fromSI, quantityUnitLabel, toSI, type QuantityKind } from '@/core/units';
 
 const BC_TYPES_BY_DOMAIN: Record<PhysicsDomain, BoundaryConditionType[]> = {
-  structural: ['fixed', 'prescribed_displacement', 'symmetry'],
+  structural: ['fixed', 'prescribed_displacement'],
   thermal: ['temperature', 'heat_flux', 'convection', 'insulation'],
-  fluid: ['velocity_inlet', 'pressure_outlet', 'wall', 'slip', 'no_slip'],
+  fluid: ['velocity_inlet', 'pressure_outlet', 'wall', 'no_slip'],
 };
 
-const DEFAULT_DOF_MAP: DofMap = { ux: 'fixed', uy: 'fixed', uz: 'fixed', rx: 'free', ry: 'free', rz: 'free' };
+function fixedDofMap(targetDimension?: number): DofMap {
+  const rotation = targetDimension === 0 ? 'fixed' : 'free';
+  return { ux: 'fixed', uy: 'fixed', uz: 'fixed', rx: rotation, ry: rotation, rz: rotation };
+}
+
+function defaultValuesFor(type: BoundaryConditionType, targetDimension?: number): BoundaryCondition['values'] {
+  if (type === 'fixed') return { dof_map: fixedDofMap(targetDimension) };
+  if (type === 'prescribed_displacement') {
+    return { scalar: 0, dof_map: { ux: 'prescribed', uy: 'free', uz: 'free', rx: 'free', ry: 'free', rz: 'free' } };
+  }
+  if (type === 'velocity_inlet') return { vector: [1, 0, 0] };
+  if (type === 'pressure_outlet') return { scalar: 0, pressure_basis: 'dynamic' };
+  if (type === 'temperature') return { scalar: 293.15 };
+  if (type === 'heat_flux') return { scalar: 0 };
+  if (type === 'convection') return { heat_transfer_coefficient: 10, ambient_temperature: 293.15 };
+  return {};
+}
+
+function scalarQuantity(type: BoundaryConditionType): QuantityKind {
+  if (type === 'prescribed_displacement') return 'length';
+  if (type === 'temperature') return 'temperature';
+  if (type === 'heat_flux') return 'heat_flux';
+  if (type === 'convection') return 'convection_coefficient';
+  if (type === 'pressure_outlet') return 'pressure';
+  return 'dimensionless';
+}
+
+function scalarQuantityForCondition(condition: BoundaryCondition): QuantityKind {
+  return condition.bc_type === 'pressure_outlet' && condition.values.pressure_basis === 'kinematic'
+    ? 'kinematic_pressure'
+    : scalarQuantity(condition.bc_type);
+}
+
+function isValidBCTarget(type: BoundaryConditionType, dimension: number): boolean {
+  if (type === 'fixed' || type === 'prescribed_displacement' || type === 'symmetry') return dimension === 0 || dimension === 2;
+  return dimension === 2;
+}
 
 export function BoundaryConditionForm() {
   const { t } = useTranslation();
@@ -21,20 +59,22 @@ export function BoundaryConditionForm() {
   const addBC = useAppStore((s) => s.addBoundaryCondition);
   const updateBC = useAppStore((s) => s.updateBoundaryCondition);
   const removeBC = useAppStore((s) => s.removeBoundaryCondition);
+  const unitSystem = useAppStore((s) => s.ir.units.system_name);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [domain, setDomain] = useState<PhysicsDomain>('structural');
 
   const handleAdd = () => {
     const bcType = BC_TYPES_BY_DOMAIN[domain][0];
+    const target = namedSelections.find((item) => isValidBCTarget(bcType, item.target_dimension));
     const bc: BoundaryCondition = {
       id: generateId('boundary_condition'),
       name: `BC_${bcs.length + 1}`,
       physics_domain: domain,
       bc_type: bcType,
-      target_named_selection_id: namedSelections[0]?.id ?? '',
+      target_named_selection_id: target?.id ?? '',
       coordinate_system: 'global',
-      values: domain === 'structural' ? { dof_map: { ...DEFAULT_DOF_MAP } } : { scalar: 0 },
+      values: defaultValuesFor(bcType, target?.target_dimension),
       temporal_profile: 'constant',
       status: 'confirmed',
       notes: '',
@@ -90,14 +130,29 @@ export function BoundaryConditionForm() {
             label={t('bc.type')}
             value={editingBC.bc_type}
             options={BC_TYPES_BY_DOMAIN[editingBC.physics_domain].map((bt) => ({ value: bt, label: t(`bc.types.${bt}`) }))}
-            onChange={(v) => updateBC(editingBC.id, { bc_type: v as BoundaryConditionType })}
+            onChange={(v) => {
+              const nextType = v as BoundaryConditionType;
+              const currentTarget = namedSelections.find((item) => item.id === editingBC.target_named_selection_id);
+              const target = currentTarget && isValidBCTarget(nextType, currentTarget.target_dimension)
+                ? currentTarget
+                : namedSelections.find((item) => isValidBCTarget(nextType, item.target_dimension));
+              updateBC(editingBC.id, { bc_type: nextType, target_named_selection_id: target?.id ?? '', values: defaultValuesFor(nextType, target?.target_dimension) });
+            }}
           />
 
           <SelectInput
             label={t('bc.target')}
             value={editingBC.target_named_selection_id}
-            options={[{ value: '', label: '—' }, ...namedSelections.map((ns) => ({ value: ns.id, label: ns.display_name ?? ns.name }))]}
-            onChange={(v) => updateBC(editingBC.id, { target_named_selection_id: v })}
+            options={[{ value: '', label: '—' }, ...namedSelections.filter((ns) => isValidBCTarget(editingBC.bc_type, ns.target_dimension)).map((ns) => ({ value: ns.id, label: ns.display_name ?? ns.name }))]}
+            onChange={(v) => {
+              const target = namedSelections.find((item) => item.id === v);
+              updateBC(editingBC.id, {
+                target_named_selection_id: v,
+                ...(editingBC.bc_type === 'fixed'
+                  ? { values: defaultValuesFor('fixed', target?.target_dimension) }
+                  : {}),
+              });
+            }}
           />
 
           {/* DOF selector for structural */}
@@ -107,12 +162,18 @@ export function BoundaryConditionForm() {
               <div>
                 <span className="text-sm block mb-1" style={{ color: 'var(--color-text-secondary)' }}>DOF</span>
                 <div className="grid grid-cols-3 gap-1">
-                  {(['ux', 'uy', 'uz', 'rx', 'ry', 'rz'] as const).map((dof) => (
+                  {(editingBC.bc_type === 'prescribed_displacement'
+                    ? (['ux', 'uy', 'uz'] as const)
+                    : (['ux', 'uy', 'uz', 'rx', 'ry', 'rz'] as const)).map((dof) => (
                     <button
                       key={dof}
                       onClick={() => {
                         const map = { ...dofMap };
-                        map[dof] = map[dof] === 'fixed' ? 'free' : 'fixed';
+                        if (editingBC.bc_type === 'prescribed_displacement') {
+                          map[dof] = map[dof] === 'prescribed' ? 'free' : 'prescribed';
+                        } else {
+                          map[dof] = map[dof] === 'fixed' ? 'free' : 'fixed';
+                        }
                         updateBC(editingBC.id, { values: { ...editingBC.values, dof_map: map } });
                       }}
                       className="px-2 py-1 rounded text-xs cursor-pointer"
@@ -131,23 +192,70 @@ export function BoundaryConditionForm() {
 
           {/* Scalar value for thermal/fluid */}
           {editingBC.values.scalar !== undefined && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm w-28 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>{t('bc.values')}</span>
-              <input
-                type="number" value={editingBC.values.scalar ?? 0}
-                onChange={(e) => updateBC(editingBC.id, { values: { ...editingBC.values, scalar: parseFloat(e.target.value) || 0 } })}
-                className="flex-1 px-2 py-1.5 rounded text-sm outline-none"
-                style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+            <UnitInput
+              label={t('bc.values')}
+              value={fromSI(editingBC.values.scalar, scalarQuantityForCondition(editingBC), unitSystem)}
+              unit={quantityUnitLabel(scalarQuantityForCondition(editingBC), unitSystem)}
+              onChange={(value) => updateBC(editingBC.id, {
+                values: {
+                  ...editingBC.values,
+                  scalar: toSI(value ?? 0, scalarQuantityForCondition(editingBC), unitSystem),
+                },
+              })}
+            />
+          )}
+
+          {editingBC.bc_type === 'convection' && (
+            <>
+              <UnitInput
+                label={t('bc.filmCoefficient', { defaultValue: 'Film coefficient' })}
+                value={fromSI(editingBC.values.heat_transfer_coefficient ?? 10, 'convection_coefficient', unitSystem)}
+                unit={quantityUnitLabel('convection_coefficient', unitSystem)}
+                min={0}
+                onChange={(value) => updateBC(editingBC.id, {
+                  values: {
+                    ...editingBC.values,
+                    heat_transfer_coefficient: toSI(value ?? 0, 'convection_coefficient', unitSystem),
+                  },
+                })}
               />
-            </div>
+              <UnitInput
+                label={t('bc.ambientTemperature', { defaultValue: 'Ambient temperature' })}
+                value={fromSI(editingBC.values.ambient_temperature ?? 293.15, 'temperature', unitSystem)}
+                unit={quantityUnitLabel('temperature', unitSystem)}
+                onChange={(value) => updateBC(editingBC.id, {
+                  values: {
+                    ...editingBC.values,
+                    ambient_temperature: toSI(value ?? 0, 'temperature', unitSystem),
+                  },
+                })}
+              />
+            </>
+          )}
+
+          {editingBC.bc_type === 'pressure_outlet' && (
+            <SelectInput
+              label={t('bc.pressureBasis', { defaultValue: 'Pressure basis' })}
+              value={editingBC.values.pressure_basis ?? 'dynamic'}
+              options={[
+                { value: 'dynamic', label: 'Dynamic [Pa]' },
+                { value: 'kinematic', label: 'Kinematic [m²/s²]' },
+              ]}
+              onChange={(value) => updateBC(editingBC.id, {
+                values: { ...editingBC.values, scalar: 0, pressure_basis: value as 'dynamic' | 'kinematic' },
+              })}
+            />
           )}
 
           {/* Vector for velocity inlet */}
           {editingBC.bc_type === 'velocity_inlet' && (
             <VectorInput
               label={t('bc.direction')}
-              value={editingBC.values.vector ?? [0, 0, 0]}
-              onChange={(v) => updateBC(editingBC.id, { values: { ...editingBC.values, vector: v } })}
+              value={(editingBC.values.vector ?? [0, 0, 0]).map((value) => fromSI(value, 'velocity', unitSystem)) as [number, number, number]}
+              unit={quantityUnitLabel('velocity', unitSystem)}
+              onChange={(v) => updateBC(editingBC.id, {
+                values: { ...editingBC.values, vector: v.map((value) => toSI(value, 'velocity', unitSystem)) as [number, number, number] },
+              })}
             />
           )}
 

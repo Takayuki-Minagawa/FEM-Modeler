@@ -1,15 +1,10 @@
+import { applyPatches, current as currentDraft, enablePatches, isDraft, produceWithPatches, type Draft, type Patch } from 'immer';
 import type { ProjectIR } from '@/core/ir/types';
 
+enablePatches();
+
 export interface UndoRedoManager {
-  /**
-   * Save state BEFORE a mutation. Call this once before modifying state.
-   * The "current" pointer is moved forward when saveBefore + saveAfter are paired.
-   */
   saveBefore: (ir: ProjectIR) => void;
-  /**
-   * Save state AFTER a mutation. Must be called after saveBefore + mutation.
-   * This creates a complete undo entry (before → after).
-   */
   saveAfter: (ir: ProjectIR) => void;
   undo: () => ProjectIR | null;
   redo: () => ProjectIR | null;
@@ -19,46 +14,105 @@ export interface UndoRedoManager {
 }
 
 interface HistoryEntry {
-  before: string;
-  after: string;
+  patches: Patch[];
+  inversePatches: Patch[];
 }
 
 const MAX_HISTORY = 100;
 
+function cloneIR(ir: ProjectIR): ProjectIR {
+  const plain = isDraft(ir) ? currentDraft(ir as Draft<ProjectIR>) : ir;
+  return structuredClone(plain) as ProjectIR;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Synchronize a draft recursively so Immer emits narrow patches instead of a full IR snapshot. */
+function syncValue(draft: unknown, target: unknown): unknown {
+  if (Object.is(draft, target)) return draft;
+  if (!isObject(draft) || !isObject(target) || Array.isArray(draft) !== Array.isArray(target)) {
+    return structuredClone(target);
+  }
+
+  if (Array.isArray(draft) && Array.isArray(target)) {
+    // Binary/mesh asset arrays are intentionally replaced as one patch; recursively
+    // patching millions of coordinates costs more memory than a single asset revision.
+    if (target.length > 2_000) return structuredClone(target);
+    const targetLength = target.length;
+    while (draft.length > targetLength) draft.pop();
+    for (let index = 0; index < targetLength; index += 1) {
+      if (index >= draft.length) {
+        draft.push(structuredClone(target[index]));
+      } else {
+        const replacement = syncValue(draft[index], target[index]);
+        if (replacement !== draft[index]) draft[index] = replacement;
+      }
+    }
+    return draft;
+  }
+
+  const draftRecord = draft as Record<string, unknown>;
+  const targetRecord = target as Record<string, unknown>;
+  for (const key of Object.keys(draftRecord)) {
+    if (!(key in targetRecord)) delete draftRecord[key];
+  }
+  for (const [key, targetValue] of Object.entries(targetRecord)) {
+    if (!(key in draftRecord)) {
+      draftRecord[key] = structuredClone(targetValue);
+      continue;
+    }
+    const replacement = syncValue(draftRecord[key], targetValue);
+    if (replacement !== draftRecord[key]) draftRecord[key] = replacement;
+  }
+  return draftRecord;
+}
+
 export function createUndoRedoManager(): UndoRedoManager {
   const history: HistoryEntry[] = [];
-  let pendingBefore: string | null = null;
   const redoStack: HistoryEntry[] = [];
+  let pendingBefore: ProjectIR | null = null;
+  let current: ProjectIR | null = null;
 
   return {
-    saveBefore(ir: ProjectIR) {
-      pendingBefore = JSON.stringify(ir);
+    saveBefore(ir) {
+      pendingBefore = cloneIR(ir);
+      current = pendingBefore;
     },
 
-    saveAfter(ir: ProjectIR) {
-      if (pendingBefore === null) return;
-      const after = JSON.stringify(ir);
-      // Only push if state actually changed
-      if (pendingBefore !== after) {
-        history.push({ before: pendingBefore, after });
+    saveAfter(ir) {
+      if (!pendingBefore) return;
+      const target = cloneIR(ir);
+      const [next, patches, inversePatches] = produceWithPatches(
+        pendingBefore,
+        (draft: Draft<ProjectIR>) => {
+          syncValue(draft, target);
+        },
+      );
+      if (patches.length > 0) {
+        history.push({ patches, inversePatches });
         if (history.length > MAX_HISTORY) history.shift();
         redoStack.length = 0;
       }
+      current = next;
       pendingBefore = null;
     },
 
-    undo(): ProjectIR | null {
-      if (history.length === 0) return null;
-      const entry = history.pop()!;
+    undo() {
+      const entry = history.pop();
+      if (!entry || !current) return null;
+      current = applyPatches(current, entry.inversePatches);
       redoStack.push(entry);
-      return JSON.parse(entry.before);
+      return cloneIR(current);
     },
 
-    redo(): ProjectIR | null {
-      if (redoStack.length === 0) return null;
-      const entry = redoStack.pop()!;
+    redo() {
+      const entry = redoStack.pop();
+      if (!entry || !current) return null;
+      current = applyPatches(current, entry.patches);
       history.push(entry);
-      return JSON.parse(entry.after);
+      return cloneIR(current);
     },
 
     canUndo: () => history.length > 0,
@@ -68,6 +122,7 @@ export function createUndoRedoManager(): UndoRedoManager {
       history.length = 0;
       redoStack.length = 0;
       pendingBefore = null;
+      current = null;
     },
   };
 }

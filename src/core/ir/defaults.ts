@@ -13,8 +13,8 @@ import { generateId } from './id-generator';
 import { getUnitPreset } from '../units/presets';
 
 export const SCHEMA_NAME = 'fem-modeler-ir';
-export const SCHEMA_VERSION = '0.1.0';
-export const APP_VERSION = '0.1.0';
+export const SCHEMA_VERSION = '0.2.0';
+export const APP_VERSION = '0.2.0';
 
 function now(): string {
   return new Date().toISOString();
@@ -79,6 +79,8 @@ export function createDefaultMeshControls(): MeshControls {
 export function createDefaultValidation(): ValidationState {
   return {
     last_run_at: '',
+    model_revision: 0,
+    validated_revision: -1,
     summary: { error_count: 0, warning_count: 0, info_count: 0 },
     items: [],
   };
@@ -131,6 +133,7 @@ export function createDefaultProject(): ProjectIR {
     meta: createDefaultMeta(),
     units: createDefaultUnits(),
     geometry: createDefaultGeometry(),
+    assets: [],
     named_selections: [],
     materials: [],
     material_assignments: [],
@@ -141,11 +144,12 @@ export function createDefaultProject(): ProjectIR {
     loads: [],
     initial_conditions: [],
     analysis_cases: [],
+    results: [],
     solver_targets: [
       {
         target_name: 'OpenSeesPy',
         enabled: true,
-        export_profile: 'permissive',
+        export_profile: 'strict',
         solver_options: {},
         path_preferences: {},
         packaging: 'zip_bundle',
@@ -153,7 +157,7 @@ export function createDefaultProject(): ProjectIR {
       {
         target_name: 'DOLFINx',
         enabled: false,
-        export_profile: 'permissive',
+        export_profile: 'strict',
         solver_options: {},
         path_preferences: {},
         packaging: 'zip_bundle',
@@ -161,7 +165,7 @@ export function createDefaultProject(): ProjectIR {
       {
         target_name: 'OpenFOAM',
         enabled: false,
-        export_profile: 'template_based',
+        export_profile: 'strict',
         solver_options: {},
         path_preferences: {},
         packaging: 'zip_bundle',

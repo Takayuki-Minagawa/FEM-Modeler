@@ -1,7 +1,7 @@
 export const en = {
   app: {
     title: 'FEM Modeler',
-    version: 'v0.1.0',
+    version: 'v0.2.0',
   },
   globalBar: {
     undo: 'Undo',
@@ -26,6 +26,7 @@ export const en = {
     loads: 'Loads',
     ic: 'Initial Conditions',
     analysis: 'Analysis Cases',
+    results: 'Results',
     export: 'Solver Targets',
     validation: 'Validation',
   },
@@ -40,6 +41,7 @@ export const en = {
     loads: 'Define loads on named selections.',
     ic: 'Define initial conditions for transient analyses.',
     analysis: 'Configure analysis cases and solver settings.',
+    results: 'Import solver fields and conservation/convergence checks.',
     export: 'Select solver targets and export your model.',
     validation: 'Review validation results before export.',
   },
@@ -58,7 +60,7 @@ export const en = {
   },
   startScreen: {
     subtitle: 'FEM/CAE Pre-processing Environment',
-    openExisting: 'Open Existing Project (.fem.json)',
+    openExisting: 'Open Existing Project (.fem.json / .fem.zip)',
     newFromTemplate: 'New from Template',
     skip: 'Use current project',
     recoveryTitle: 'Auto-saved draft available',
@@ -69,7 +71,7 @@ export const en = {
     templates: {
       empty: { name: 'Empty Project', desc: 'Start from scratch' },
       frame2d: { name: '2D Frame', desc: 'Portal frame structure (OpenSeesPy)' },
-      truss3d: { name: '3D Truss', desc: 'Space truss structure (OpenSeesPy)' },
+      truss2d: { name: '2D Truss', desc: 'Planar truss structure (OpenSeesPy)' },
       solidPlate: { name: 'Solid Plate', desc: 'Plate with hole (DOLFINx)' },
       heat: { name: 'Heat Transfer', desc: 'Steady-state thermal (DOLFINx)' },
       channel: { name: 'Channel Flow', desc: '2D channel flow (OpenFOAM)' },

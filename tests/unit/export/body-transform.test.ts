@@ -4,6 +4,8 @@ import { generateShape } from '@/geometry/primitives/generators';
 import { exportOpenSeesPy } from '@/export/openseespy/exporter';
 import { exportDOLFINx } from '@/export/dolfinx/exporter';
 import { exportOpenFOAM } from '@/export/openfoam/exporter';
+import { applyTemplate } from '@/lib/project-templates';
+import { useAppStore } from '@/state/store';
 
 describe('body transform export support', () => {
   it('applies body transforms to OpenSeesPy node coordinates', () => {
@@ -97,19 +99,16 @@ describe('body transform export support', () => {
   });
 
   it('writes transformed blockMesh vertices for channel bodies', () => {
-    const project = createDefaultProject();
-    const shape = generateShape(
-      { shapeType: 'channel', length: 6, height: 1, depth: 1 },
-      'Channel',
-    );
-    shape.body.transform.position = [1, 0, 0];
-
-    project.geometry.bodies.push(shape.body);
+    useAppStore.getState().createProject('Transformed channel', 'fluid');
+    applyTemplate('fluid', 'en');
+    const project = structuredClone(useAppStore.getState().ir);
+    project.geometry.bodies[0].transform.position = [1, 0, 0];
 
     const result = exportOpenFOAM(project);
     const blockMesh = result.files['system/blockMeshDict'];
 
-    expect(blockMesh).toContain('(-2 -0.5 -0.5)');
-    expect(blockMesh).toContain('(4 0.5 0.5)');
+    expect(result.success).toBe(true);
+    expect(blockMesh).toContain('(-2 -0.5 -0.05)');
+    expect(blockMesh).toContain('(4 0.5 0.05)');
   });
 });

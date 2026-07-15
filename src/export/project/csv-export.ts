@@ -1,21 +1,26 @@
 import type { ProjectIR } from '@/core/ir/types';
+import {
+  sanitizeArtifactName,
+  serializeCsv,
+  type ArtifactScalar,
+} from '@/export/shared/artifact-sanitization';
 
 export function exportConditionsCsv(ir: ProjectIR): string {
-  const lines: string[] = [];
+  const records: ArtifactScalar[][] = [];
 
   // Header
-  lines.push('# FEM Modeler - Conditions Summary');
-  lines.push(`# Project: ${ir.meta.project_name}`);
-  lines.push(`# Units: ${ir.units.system_name}`);
-  lines.push(`# Exported: ${new Date().toISOString()}`);
-  lines.push('');
+  records.push(['# FEM Modeler - Conditions Summary']);
+  records.push([`# Project: ${ir.meta.project_name}`]);
+  records.push([`# Units: ${ir.units.system_name}`]);
+  records.push([`# Exported: ${new Date().toISOString()}`]);
+  records.push([]);
 
   // Materials
-  lines.push('## Materials');
-  lines.push('Name,Class,E,nu,rho,k,cp,mu');
+  records.push(['## Materials']);
+  records.push(['Name', 'Class', 'E', 'nu', 'rho', 'k', 'cp', 'mu']);
   for (const mat of ir.materials) {
     const p = mat.parameter_set;
-    lines.push([
+    records.push([
       mat.name,
       mat.class,
       p.young_modulus.value ?? '',
@@ -24,45 +29,45 @@ export function exportConditionsCsv(ir: ProjectIR): string {
       p.thermal_conductivity.value ?? '',
       p.specific_heat.value ?? '',
       p.dynamic_viscosity.value ?? '',
-    ].join(','));
+    ]);
   }
-  lines.push('');
+  records.push([]);
 
   // Sections
-  lines.push('## Sections');
-  lines.push('Name,Type,Area,Iy,Iz,J,Thickness');
+  records.push(['## Sections']);
+  records.push(['Name', 'Type', 'Area', 'Iy', 'Iz', 'J', 'Thickness']);
   for (const sec of ir.sections) {
-    lines.push([sec.name, sec.section_type, sec.area ?? '', sec.inertia_y ?? '', sec.inertia_z ?? '', sec.torsion_constant ?? '', sec.thickness ?? ''].join(','));
+    records.push([sec.name, sec.section_type, sec.area ?? '', sec.inertia_y ?? '', sec.inertia_z ?? '', sec.torsion_constant ?? '', sec.thickness ?? '']);
   }
-  lines.push('');
+  records.push([]);
 
   // Named Selections
-  lines.push('## Named Selections');
-  lines.push('Name,EntityType,MemberCount');
+  records.push(['## Named Selections']);
+  records.push(['Name', 'EntityType', 'MemberCount']);
   for (const ns of ir.named_selections) {
-    lines.push([ns.display_name ?? ns.name, ns.entity_type, ns.member_refs.length].join(','));
+    records.push([ns.display_name ?? ns.name, ns.entity_type, ns.member_refs.length]);
   }
-  lines.push('');
+  records.push([]);
 
   // Boundary Conditions
-  lines.push('## Boundary Conditions');
-  lines.push('Name,Type,Domain,Target,Values');
+  records.push(['## Boundary Conditions']);
+  records.push(['Name', 'Type', 'Domain', 'Target', 'Values']);
   for (const bc of ir.boundary_conditions) {
     const ns = ir.named_selections.find((n) => n.id === bc.target_named_selection_id);
     const vals = bc.values.scalar != null ? String(bc.values.scalar) : bc.values.vector ? `[${bc.values.vector.join(',')}]` : bc.values.dof_map ? Object.entries(bc.values.dof_map).filter(([, v]) => v === 'fixed').map(([k]) => k).join('+') : '';
-    lines.push([bc.name, bc.bc_type, bc.physics_domain, ns?.name ?? '', vals].join(','));
+    records.push([bc.name, bc.bc_type, bc.physics_domain, ns?.name ?? '', vals]);
   }
-  lines.push('');
+  records.push([]);
 
   // Loads
-  lines.push('## Loads');
-  lines.push('Name,Type,Domain,Target,Magnitude,Direction');
+  records.push(['## Loads']);
+  records.push(['Name', 'Type', 'Domain', 'Target', 'Magnitude', 'Direction']);
   for (const load of ir.loads) {
     const ns = ir.named_selections.find((n) => n.id === load.target_named_selection_id);
-    lines.push([load.name, load.load_type, load.physics_domain, ns?.name ?? '', load.magnitude, `[${load.direction.join(',')}]`].join(','));
+    records.push([load.name, load.load_type, load.physics_domain, ns?.name ?? '', load.magnitude, `[${load.direction.join(',')}]`]);
   }
 
-  return lines.join('\n');
+  return serializeCsv(records);
 }
 
 export function downloadConditionsCsv(ir: ProjectIR): void {
@@ -71,7 +76,7 @@ export function downloadConditionsCsv(ir: ProjectIR): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${ir.meta.project_name.replace(/\s+/g, '_')}_conditions.csv`;
+  a.download = `${sanitizeArtifactName(ir.meta.project_name, 'project')}_conditions.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

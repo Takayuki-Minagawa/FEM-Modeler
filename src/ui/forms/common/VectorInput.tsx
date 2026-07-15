@@ -1,11 +1,15 @@
+import { useId } from 'react';
+
 interface VectorInputProps {
   label: string;
   value: [number, number, number];
   onChange: (val: [number, number, number]) => void;
   labels?: [string, string, string];
+  unit?: string;
 }
 
-export function VectorInput({ label, value, onChange, labels = ['X', 'Y', 'Z'] }: VectorInputProps) {
+export function VectorInput({ label, value, onChange, labels = ['X', 'Y', 'Z'], unit }: VectorInputProps) {
+  const groupId = useId();
   const handleChange = (idx: number, v: string) => {
     const num = parseFloat(v);
     if (isNaN(num)) return;
@@ -15,8 +19,8 @@ export function VectorInput({ label, value, onChange, labels = ['X', 'Y', 'Z'] }
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm w-28 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>
+    <div className="flex items-center gap-2" role="group" aria-labelledby={`${groupId}-label`}>
+      <span id={`${groupId}-label`} className="text-sm w-28 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>
         {label}
       </span>
       <div className="flex-1 flex gap-1">
@@ -26,6 +30,7 @@ export function VectorInput({ label, value, onChange, labels = ['X', 'Y', 'Z'] }
               {labels[i]}
             </span>
             <input
+              aria-label={`${label} ${labels[i]}`}
               type="number"
               value={value[i]}
               onChange={(e) => handleChange(i, e.target.value)}
@@ -40,6 +45,7 @@ export function VectorInput({ label, value, onChange, labels = ['X', 'Y', 'Z'] }
           </div>
         ))}
       </div>
+      {unit && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{unit}</span>}
     </div>
   );
 }

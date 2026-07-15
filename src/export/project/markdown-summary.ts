@@ -1,14 +1,19 @@
 import type { ProjectIR } from '@/core/ir/types';
+import {
+  escapeMarkdownInline,
+  markdownTableRow,
+  sanitizeArtifactName,
+} from '@/export/shared/artifact-sanitization';
 
 export function exportMarkdownSummary(ir: ProjectIR): string {
   const lines: string[] = [];
 
-  lines.push(`# ${ir.meta.project_name}`);
+  lines.push(`# ${escapeMarkdownInline(ir.meta.project_name)}`);
   lines.push('');
-  lines.push(`- **Domain**: ${ir.meta.domain_type}`);
-  lines.push(`- **Units**: ${ir.units.system_name} (${ir.units.base_length}, ${ir.units.base_force}, ${ir.units.base_mass})`);
-  lines.push(`- **Created**: ${ir.meta.created_at}`);
-  lines.push(`- **Updated**: ${ir.meta.updated_at}`);
+  lines.push(`- **Domain**: ${escapeMarkdownInline(ir.meta.domain_type)}`);
+  lines.push(`- **Units**: ${escapeMarkdownInline(ir.units.system_name)} (${escapeMarkdownInline(ir.units.base_length)}, ${escapeMarkdownInline(ir.units.base_force)}, ${escapeMarkdownInline(ir.units.base_mass)})`);
+  lines.push(`- **Created**: ${escapeMarkdownInline(ir.meta.created_at)}`);
+  lines.push(`- **Updated**: ${escapeMarkdownInline(ir.meta.updated_at)}`);
   lines.push('');
 
   // Geometry
@@ -21,7 +26,7 @@ export function exportMarkdownSummary(ir: ProjectIR): string {
     lines.push('| Body | Category | Shape |');
     lines.push('|------|----------|-------|');
     for (const b of ir.geometry.bodies) {
-      lines.push(`| ${b.name} | ${b.category} | ${(b.metadata.shapeType as string) ?? '—'} |`);
+      lines.push(markdownTableRow([b.name, b.category, (b.metadata.shapeType as string) ?? '—']));
     }
   }
   lines.push('');
@@ -34,7 +39,7 @@ export function exportMarkdownSummary(ir: ProjectIR): string {
     lines.push('|----------|-------|---|----|----|');
     for (const m of ir.materials) {
       const p = m.parameter_set;
-      lines.push(`| ${m.name} | ${m.class} | ${p.young_modulus.value ?? '—'} | ${p.poisson_ratio.value ?? '—'} | ${p.density.value ?? '—'} |`);
+      lines.push(markdownTableRow([m.name, m.class, p.young_modulus.value ?? '—', p.poisson_ratio.value ?? '—', p.density.value ?? '—']));
     }
     lines.push('');
   }
@@ -47,7 +52,7 @@ export function exportMarkdownSummary(ir: ProjectIR): string {
     lines.push('|------|------|--------|--------|');
     for (const bc of ir.boundary_conditions) {
       const ns = ir.named_selections.find((n) => n.id === bc.target_named_selection_id);
-      lines.push(`| ${bc.name} | ${bc.bc_type} | ${bc.physics_domain} | ${ns?.name ?? '—'} |`);
+      lines.push(markdownTableRow([bc.name, bc.bc_type, bc.physics_domain, ns?.name ?? '—']));
     }
     lines.push('');
   }
@@ -59,7 +64,7 @@ export function exportMarkdownSummary(ir: ProjectIR): string {
     lines.push('| Name | Type | Magnitude | Direction |');
     lines.push('|------|------|-----------|-----------|');
     for (const l of ir.loads) {
-      lines.push(`| ${l.name} | ${l.load_type} | ${l.magnitude} | [${l.direction.join(', ')}] |`);
+      lines.push(markdownTableRow([l.name, l.load_type, l.magnitude, `[${l.direction.join(', ')}]`]));
     }
     lines.push('');
   }
@@ -67,7 +72,7 @@ export function exportMarkdownSummary(ir: ProjectIR): string {
   // Solver targets
   lines.push('## Solver Targets');
   for (const t of ir.solver_targets) {
-    lines.push(`- **${t.target_name}**: ${t.enabled ? 'Enabled' : 'Disabled'} (${t.export_profile})`);
+    lines.push(`- **${escapeMarkdownInline(t.target_name)}**: ${t.enabled ? 'Enabled' : 'Disabled'} (${escapeMarkdownInline(t.export_profile)})`);
   }
   lines.push('');
 
@@ -93,7 +98,7 @@ export function downloadMarkdownSummary(ir: ProjectIR): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${ir.meta.project_name.replace(/\s+/g, '_')}_summary.md`;
+  a.download = `${sanitizeArtifactName(ir.meta.project_name, 'project')}_summary.md`;
   a.click();
   URL.revokeObjectURL(url);
 }

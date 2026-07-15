@@ -1,9 +1,9 @@
 import type { ProjectIR, ValidationItem } from '@/core/ir/types';
 import { createItem } from '../types';
 
-export function validateOpenFOAM(ir: ProjectIR): ValidationItem[] {
+export function validateOpenFOAM(ir: ProjectIR, force = false): ValidationItem[] {
   const target = ir.solver_targets.find((t) => t.target_name === 'OpenFOAM');
-  if (!target?.enabled) return [];
+  if (!force && !target?.enabled) return [];
 
   const items: ValidationItem[] = [];
   const fluidBodies = ir.geometry.bodies.filter((b) => b.category === 'fluid_region');

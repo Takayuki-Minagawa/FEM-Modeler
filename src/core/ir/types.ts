@@ -32,6 +32,7 @@ export interface ProjectIR {
   meta: ProjectMeta;
   units: UnitSystem;
   geometry: Geometry;
+  assets: GeometryAsset[];
   named_selections: NamedSelection[];
   materials: Material[];
   material_assignments: MaterialAssignment[];
@@ -42,6 +43,7 @@ export interface ProjectIR {
   loads: Load[];
   initial_conditions: InitialCondition[];
   analysis_cases: AnalysisCase[];
+  results: ResultIR[];
   solver_targets: SolverTarget[];
   validation: ValidationState;
   ui_state: UIState;
@@ -87,13 +89,16 @@ export interface ProjectMeta {
 export type UnitSystemName = 'SI' | 'mm-N-s' | 'mm-t-s' | 'custom';
 
 export interface UnitSystem {
+  /** Numeric values stored in ProjectIR are always canonical SI values. */
+  value_basis: 'SI';
   system_name: UnitSystemName;
   base_length: string;
   base_mass: string;
   base_time: string;
   base_temperature: string;
   base_force: string;
-  angle_unit: string;
+  /** Body transform rotations are canonical degrees. */
+  angle_unit: 'deg';
   display_precision: number;
   preferred_stress_unit: string;
   preferred_pressure_unit: string;
@@ -140,7 +145,34 @@ export interface GeometryBody {
   color: string;
   transform: Transform;
   topology_ref: string;
+  asset_ref?: string;
   metadata: Record<string, unknown>;
+}
+
+export interface GeometryAsset {
+  id: string;
+  kind: 'stl_mesh';
+  file_name: string;
+  media_type: 'model/stl';
+  encoding: 'base64';
+  data: string;
+  content_hash: string;
+  byte_length: number;
+  /** Unit declared by the user because STL itself is unitless. */
+  source_unit: 'm' | 'mm' | 'cm' | 'in' | 'ft';
+  /** Uniform scale applied to raw STL coordinates to obtain canonical metres. */
+  scale_to_meters: number;
+  triangle_count: number;
+  bounds: {
+    min: [number, number, number];
+    max: [number, number, number];
+  };
+  diagnostics: {
+    degenerate_triangles: number;
+    finite_coordinates: boolean;
+    watertight: boolean | null;
+    manifold: boolean | null;
+  };
 }
 
 export interface GeometryFace {
@@ -413,6 +445,12 @@ export interface BCValues {
   vector?: [number, number, number];
   dof_map?: DofMap;
   function_ref?: string;
+  /** Pressure values must declare whether they are dynamic [Pa] or kinematic [m2/s2]. */
+  pressure_basis?: 'dynamic' | 'kinematic';
+  /** Convection film coefficient h in W/(m2 K), stored in canonical SI. */
+  heat_transfer_coefficient?: number;
+  /** Convection ambient temperature in K. */
+  ambient_temperature?: number;
 }
 
 export interface BoundaryCondition {
@@ -537,6 +575,45 @@ export interface AnalysisCase {
 }
 
 // ---------------------------------------------------------------------------
+// solver result import
+// ---------------------------------------------------------------------------
+
+export type ResultLocation = 'node' | 'element' | 'facet' | 'cell' | 'global';
+
+export interface ResultField {
+  id: string;
+  name: string;
+  location: ResultLocation;
+  component_names: string[];
+  unit: string;
+  entity_ids: string[];
+  values: number[];
+  minimum: number;
+  maximum: number;
+}
+
+export interface ConservationCheck {
+  kind: 'force_balance' | 'heat_balance' | 'mass_balance' | 'solver_convergence' | 'solver_execution';
+  status: 'pass' | 'warning' | 'fail' | 'not_available';
+  value: number | null;
+  tolerance: number | null;
+  unit: string;
+  message: string;
+}
+
+export interface ResultIR {
+  id: string;
+  analysis_case_id: string;
+  solver_target: SolverTargetName;
+  source_file_name: string;
+  imported_at: string;
+  status: 'complete' | 'partial' | 'failed';
+  fields: ResultField[];
+  checks: ConservationCheck[];
+  metadata: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
 // solver_targets (Section 16)
 // ---------------------------------------------------------------------------
 
@@ -587,6 +664,8 @@ export interface ValidationSummary {
 
 export interface ValidationState {
   last_run_at: string;
+  model_revision: number;
+  validated_revision: number;
   summary: ValidationSummary;
   items: ValidationItem[];
 }

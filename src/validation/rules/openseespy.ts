@@ -1,9 +1,9 @@
 import type { ProjectIR, ValidationItem } from '@/core/ir/types';
 import { createItem } from '../types';
 
-export function validateOpenSeesPy(ir: ProjectIR): ValidationItem[] {
+export function validateOpenSeesPy(ir: ProjectIR, force = false): ValidationItem[] {
   const target = ir.solver_targets.find((t) => t.target_name === 'OpenSeesPy');
-  if (!target?.enabled) return [];
+  if (!force && !target?.enabled) return [];
 
   const items: ValidationItem[] = [];
   const frameBodies = ir.geometry.bodies.filter((b) => b.category === 'beam_region');

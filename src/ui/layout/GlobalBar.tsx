@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useProjectFileLoader } from '@/hooks/useProjectFileLoader';
+import type { UnitSystemName } from '@/core/ir/types';
 
 function formatDraftTime(savedAt: string, language: string): string {
   const locale = language === 'ja' ? 'ja-JP' : 'en-US';
@@ -27,6 +28,7 @@ export function GlobalBar() {
   const { openFilePicker } = useProjectFileLoader();
   const projectName = useAppStore((s) => s.ir.meta.project_name);
   const unitSystem = useAppStore((s) => s.ir.units.system_name);
+  const setUnitSystem = useAppStore((s) => s.setUnitSystem);
   const canUndo = useAppStore((s) => s.canUndo);
   const canRedo = useAppStore((s) => s.canRedo);
   const undo = useAppStore((s) => s.undo);
@@ -38,7 +40,7 @@ export function GlobalBar() {
   };
 
   const handleLoad = () => {
-    openFilePicker('.json,.fem.json');
+    openFilePicker('.json,.fem.json,.fem.zip');
   };
 
   const handleRestoreDraft = async () => {
@@ -54,6 +56,7 @@ export function GlobalBar() {
   const toggleLang = () => {
     const next = i18n.language === 'ja' ? 'en' : 'ja';
     i18n.changeLanguage(next);
+    document.documentElement.lang = next;
     localStorage.setItem('fem-modeler-lang', next);
   };
 
@@ -83,15 +86,21 @@ export function GlobalBar() {
         <span className="text-base" style={{ color: 'var(--color-text-secondary)' }}>
           {projectName}
         </span>
-        <span
-          className="text-sm px-2 py-0.5 rounded"
+        <select
+          aria-label={isJa ? '表示単位系' : 'Display unit system'}
+          value={unitSystem}
+          onChange={(event) => setUnitSystem(event.target.value as UnitSystemName)}
+          className="text-sm px-2 py-0.5 rounded outline-none cursor-pointer"
           style={{
             backgroundColor: 'var(--color-bg-input)',
             color: 'var(--color-text-muted)',
+            border: '1px solid var(--color-border)',
           }}
         >
-          {unitSystem}
-        </span>
+          <option value="SI">SI (m, kg, N, Pa)</option>
+          <option value="mm-N-s">mm-N-s (mm, kg, N, MPa)</option>
+          <option value="mm-t-s">mm-t-s (mm, t, N, MPa)</option>
+        </select>
       </div>
 
       {/* Center: actions */}

@@ -5,6 +5,8 @@ import { generateId } from '@/core/ir/id-generator';
 import { UnitInput } from './common/UnitInput';
 import { SelectInput } from './common/SelectInput';
 import type { Section, SectionType } from '@/core/ir/types';
+import { fromSINullable, quantityUnitLabel, toSINullable } from '@/core/units';
+import { calculateSectionProperties, defaultSectionDimensions } from '@/core/sections/properties';
 
 const SECTION_TYPES: SectionType[] = ['beam_rect', 'beam_circle', 'beam_h', 'shell_thickness', 'generic_frame_section'];
 
@@ -18,29 +20,32 @@ export function SectionForm() {
   const updateSection = useAppStore((s) => s.updateSection);
   const removeSection = useAppStore((s) => s.removeSection);
   const addSectionAssignment = useAppStore((s) => s.addSectionAssignment);
+  const removeSectionAssignment = useAppStore((s) => s.removeSectionAssignment);
   const units = useAppStore((s) => s.ir.units);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [assignSecId, setAssignSecId] = useState<string | null>(null);
 
-  const isSI = units.system_name === 'SI';
-  const lengthUnit = isSI ? 'm' : 'mm';
-  const areaUnit = isSI ? 'm²' : 'mm²';
-  const inertiaUnit = isSI ? 'm⁴' : 'mm⁴';
+  const unitSystem = units.system_name;
+  const lengthUnit = quantityUnitLabel('length', unitSystem);
+  const areaUnit = quantityUnitLabel('area', unitSystem);
+  const inertiaUnit = quantityUnitLabel('fourth_moment', unitSystem);
 
   const handleAdd = () => {
+    const dimensions = defaultSectionDimensions('beam_rect');
+    const calculated = calculateSectionProperties({ section_type: 'beam_rect', dimensions });
     const sec: Section = {
       id: generateId('section'),
       name: 'New Section',
       section_type: 'beam_rect',
-      dimensions: { width: 0.3, height: 0.5 },
+      dimensions,
       material_id: materials[0]?.id ?? '',
-      area: null,
-      inertia_y: null,
-      inertia_z: null,
-      torsion_constant: null,
+      area: calculated?.area ?? null,
+      inertia_y: calculated?.inertiaY ?? null,
+      inertia_z: calculated?.inertiaZ ?? null,
+      torsion_constant: calculated?.torsionConstant ?? null,
       thickness: null,
-      metadata: {},
+      metadata: { effective_length_factor: 1, property_source: 'dimensions' },
     };
     addSection(sec);
     setEditingId(sec.id);
@@ -56,6 +61,55 @@ export function SectionForm() {
   };
 
   const editingSec = editingId ? sections.find((s) => s.id === editingId) : null;
+
+  const updateDimension = (section: Section, key: string, displayedValue: number | null) => {
+    const value = toSINullable(displayedValue, 'length', unitSystem);
+    const dimensions = { ...section.dimensions };
+    if (value === null) delete dimensions[key];
+    else dimensions[key] = value;
+    const calculated = calculateSectionProperties({ section_type: section.section_type, dimensions });
+    const hasDerivedProperties = section.section_type === 'beam_rect'
+      || section.section_type === 'beam_circle'
+      || section.section_type === 'beam_h';
+    updateSection(section.id, {
+      dimensions,
+      ...(calculated ? {
+        area: calculated.area,
+        inertia_y: calculated.inertiaY,
+        inertia_z: calculated.inertiaZ,
+        torsion_constant: calculated.torsionConstant,
+        metadata: { ...section.metadata, property_source: calculated.source },
+      } : hasDerivedProperties ? {
+        area: null,
+        inertia_y: null,
+        inertia_z: null,
+        torsion_constant: null,
+        metadata: { ...section.metadata, property_source: 'needs_review' },
+      } : {}),
+    });
+  };
+
+  const changeSectionType = (section: Section, sectionType: SectionType) => {
+    const dimensions = defaultSectionDimensions(sectionType);
+    const calculated = calculateSectionProperties({ section_type: sectionType, dimensions });
+    updateSection(section.id, {
+      section_type: sectionType,
+      dimensions,
+      area: calculated?.area ?? null,
+      inertia_y: calculated?.inertiaY ?? null,
+      inertia_z: calculated?.inertiaZ ?? null,
+      torsion_constant: calculated?.torsionConstant ?? null,
+      thickness: null,
+      metadata: { ...section.metadata, property_source: calculated?.source ?? 'manual' },
+    });
+  };
+
+  const updateEffectiveLengthFactor = (section: Section, value: number | null) => {
+    const metadata = { ...section.metadata };
+    if (value === null) delete metadata.effective_length_factor;
+    else metadata.effective_length_factor = value;
+    updateSection(section.id, { metadata });
+  };
 
   return (
     <div className="space-y-4">
@@ -85,8 +139,34 @@ export function SectionForm() {
             label={t('sections.type')}
             value={editingSec.section_type}
             options={SECTION_TYPES.map((st) => ({ value: st, label: t(`sections.types.${st}`) }))}
-            onChange={(v) => updateSection(editingSec.id, { section_type: v as SectionType })}
+            onChange={(v) => changeSectionType(editingSec, v as SectionType)}
           />
+
+          {(['beam_rect', 'beam_h'].includes(editingSec.section_type)) && (
+            <>
+              <UnitInput label={t('sections.width')} value={fromSINullable(editingSec.dimensions.width ?? null, 'length', unitSystem)} unit={lengthUnit} onChange={(v) => updateDimension(editingSec, 'width', v)} />
+              <UnitInput label={t('sections.height')} value={fromSINullable(editingSec.dimensions.height ?? null, 'length', unitSystem)} unit={lengthUnit} onChange={(v) => updateDimension(editingSec, 'height', v)} />
+            </>
+          )}
+          {editingSec.section_type === 'beam_circle' && (
+            <UnitInput label={t('sections.diameter')} value={fromSINullable(editingSec.dimensions.diameter ?? null, 'length', unitSystem)} unit={lengthUnit} onChange={(v) => updateDimension(editingSec, 'diameter', v)} />
+          )}
+          {editingSec.section_type === 'beam_h' && (
+            <>
+              <UnitInput label={t('sections.flangeThickness')} value={fromSINullable(editingSec.dimensions.flange_thickness ?? null, 'length', unitSystem)} unit={lengthUnit} onChange={(v) => updateDimension(editingSec, 'flange_thickness', v)} />
+              <UnitInput label={t('sections.webThickness')} value={fromSINullable(editingSec.dimensions.web_thickness ?? null, 'length', unitSystem)} unit={lengthUnit} onChange={(v) => updateDimension(editingSec, 'web_thickness', v)} />
+            </>
+          )}
+
+          {editingSec.section_type !== 'shell_thickness' && (
+            <UnitInput
+              label={t('sections.effectiveLengthFactor')}
+              value={typeof editingSec.metadata.effective_length_factor === 'number' ? editingSec.metadata.effective_length_factor : null}
+              unit="—"
+              min={0}
+              onChange={(value) => updateEffectiveLengthFactor(editingSec, value)}
+            />
+          )}
 
           <SelectInput
             label={t('sections.material')}
@@ -98,12 +178,12 @@ export function SectionForm() {
             onChange={(v) => updateSection(editingSec.id, { material_id: v })}
           />
 
-          <UnitInput label={t('sections.area')} value={editingSec.area} unit={areaUnit} onChange={(v) => updateSection(editingSec.id, { area: v })} />
-          <UnitInput label={t('sections.inertiaY')} value={editingSec.inertia_y} unit={inertiaUnit} onChange={(v) => updateSection(editingSec.id, { inertia_y: v })} />
-          <UnitInput label={t('sections.inertiaZ')} value={editingSec.inertia_z} unit={inertiaUnit} onChange={(v) => updateSection(editingSec.id, { inertia_z: v })} />
-          <UnitInput label={t('sections.torsion')} value={editingSec.torsion_constant} unit={inertiaUnit} onChange={(v) => updateSection(editingSec.id, { torsion_constant: v })} />
+          <UnitInput label={t('sections.area')} value={fromSINullable(editingSec.area, 'area', unitSystem)} unit={areaUnit} onChange={(v) => updateSection(editingSec.id, { area: toSINullable(v, 'area', unitSystem) })} />
+          <UnitInput label={t('sections.inertiaY')} value={fromSINullable(editingSec.inertia_y, 'fourth_moment', unitSystem)} unit={inertiaUnit} onChange={(v) => updateSection(editingSec.id, { inertia_y: toSINullable(v, 'fourth_moment', unitSystem) })} />
+          <UnitInput label={t('sections.inertiaZ')} value={fromSINullable(editingSec.inertia_z, 'fourth_moment', unitSystem)} unit={inertiaUnit} onChange={(v) => updateSection(editingSec.id, { inertia_z: toSINullable(v, 'fourth_moment', unitSystem) })} />
+          <UnitInput label={t('sections.torsion')} value={fromSINullable(editingSec.torsion_constant, 'fourth_moment', unitSystem)} unit={inertiaUnit} onChange={(v) => updateSection(editingSec.id, { torsion_constant: toSINullable(v, 'fourth_moment', unitSystem) })} />
           {editingSec.section_type === 'shell_thickness' && (
-            <UnitInput label={t('sections.thickness')} value={editingSec.thickness} unit={lengthUnit} onChange={(v) => updateSection(editingSec.id, { thickness: v })} />
+            <UnitInput label={t('sections.thickness')} value={fromSINullable(editingSec.thickness, 'length', unitSystem)} unit={lengthUnit} onChange={(v) => updateSection(editingSec.id, { thickness: toSINullable(v, 'length', unitSystem) })} />
           )}
 
           <button
@@ -123,7 +203,6 @@ export function SectionForm() {
         <div className="space-y-1">
           {sections.map((sec) => {
             const assignments = sectionAssignments.filter((a) => a.section_id === sec.id);
-            const nsNames = assignments.map((a) => namedSelections.find((n) => n.id === a.target_named_selection_id)?.name ?? '?');
             return (
               <div key={sec.id} className="px-3 py-2 rounded text-sm" style={{ backgroundColor: 'var(--color-bg-input)' }}>
                 <div className="flex items-center justify-between">
@@ -137,7 +216,25 @@ export function SectionForm() {
                     <button onClick={() => { removeSection(sec.id); if (editingId === sec.id) setEditingId(null); }} className="text-xs px-1.5 cursor-pointer" style={{ color: 'var(--color-error)' }}>&times;</button>
                   </div>
                 </div>
-                {nsNames.length > 0 && <div className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>→ {nsNames.join(', ')}</div>}
+                {assignments.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {assignments.map((assignment) => {
+                      const ns = namedSelections.find((item) => item.id === assignment.target_named_selection_id);
+                      return (
+                        <button
+                          key={assignment.id}
+                          type="button"
+                          onClick={() => removeSectionAssignment(assignment.id)}
+                          className="text-xs px-1.5 py-0.5 rounded cursor-pointer"
+                          style={{ color: 'var(--color-text-muted)', backgroundColor: 'var(--color-bg-secondary)' }}
+                          title={t('common.remove', { defaultValue: 'Remove assignment' })}
+                        >
+                          → {ns?.display_name ?? ns?.name ?? '?'} ×
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 {assignSecId === sec.id && (
                   <div className="mt-2 p-2 rounded space-y-1" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
                     {namedSelections.length === 0 ? (

@@ -19,7 +19,7 @@ function formatDraftDate(savedAt: string, language: string): string {
 const TEMPLATES: { i18nKey: string; domain: DomainType }[] = [
   { i18nKey: 'empty', domain: 'frame' },
   { i18nKey: 'frame2d', domain: 'frame' },
-  { i18nKey: 'truss3d', domain: 'truss' },
+  { i18nKey: 'truss2d', domain: 'truss' },
   { i18nKey: 'solidPlate', domain: 'solid' },
   { i18nKey: 'heat', domain: 'thermal' },
   { i18nKey: 'channel', domain: 'fluid' },
@@ -35,12 +35,17 @@ export function StartScreen() {
 
   if (!isOpen) return null;
 
+  const templateText = (
+    template: typeof TEMPLATES[number],
+    field: 'name' | 'desc',
+  ): string => t(`startScreen.templates.${template.i18nKey}.${field}`);
+
   const handleLoadFile = () => {
-    openFilePicker('.json,.fem.json');
+    openFilePicker('.json,.fem.json,.fem.zip');
   };
 
   const handleCreate = (tmpl: typeof TEMPLATES[number]) => {
-    const name = t(`startScreen.templates.${tmpl.i18nKey}.name`);
+    const name = templateText(tmpl, 'name');
     createProject(name, tmpl.domain);
     if (tmpl.i18nKey !== 'empty') {
       applyTemplate(tmpl.domain, i18n.language);
@@ -174,10 +179,10 @@ export function StartScreen() {
                 }}
               >
                 <div className="text-base font-medium" style={{ color: 'var(--color-text)' }}>
-                  {t(`startScreen.templates.${tmpl.i18nKey}.name`)}
+                  {templateText(tmpl, 'name')}
                 </div>
                 <div className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                  {t(`startScreen.templates.${tmpl.i18nKey}.desc`)}
+                  {templateText(tmpl, 'desc')}
                 </div>
               </button>
             ))}

@@ -5,10 +5,13 @@ import { generateShape, DEFAULT_SHAPE_PARAMS } from '@/geometry/primitives/gener
 import { shapesJa, shapesEn, paramLabelsJa, paramLabelsEn } from '@/i18n/locales/shapes';
 import type { AnyShapeParams } from '@/geometry/primitives/types';
 import type { GeometryBody } from '@/core/ir/types';
+import type { UnitSystemName } from '@/core/ir/types';
+import { fromSI, quantityUnitLabel, toSI } from '@/core/units';
 
 const SHAPE_TYPES = Object.keys(DEFAULT_SHAPE_PARAMS);
 const PARAM_EXCLUDE = ['shapeType'];
 const AXIS_LABELS = ['X', 'Y', 'Z'] as const;
+const COUNT_PARAMS = new Set(['segments', 'columns', 'floors', 'divisions']);
 
 type TupleInput = [string, string, string];
 
@@ -103,6 +106,8 @@ export function GeometryForm() {
   const shapeNames = isJa ? shapesJa : shapesEn;
   const paramLabels = isJa ? paramLabelsJa : paramLabelsEn;
   const bodies = ir.geometry.bodies;
+  const unitSystem = ir.units.system_name;
+  const lengthUnit = quantityUnitLabel('length', unitSystem);
   const selectedBodies = bodies.filter((body) => selectedIds.includes(body.id));
   const selectedBody = selectedIds.length === 1
     ? bodies.find((body) => body.id === selectedIds[0]) ?? null
@@ -116,7 +121,10 @@ export function GeometryForm() {
   const handleParamChange = (key: string, value: string) => {
     const num = parseFloat(value);
     if (!isNaN(num)) {
-      setParams((prev) => ({ ...prev, [key]: num }));
+      setParams((prev) => ({
+        ...prev,
+        [key]: COUNT_PARAMS.has(key) ? Math.max(1, Math.round(num)) : toSI(num, 'length', unitSystem),
+      }));
     }
   };
 
@@ -177,17 +185,19 @@ export function GeometryForm() {
         <div className="space-y-2">
           {paramKeys.map((key) => (
             <div key={key} className="flex items-center gap-2">
-              <span
+              <label
+                htmlFor={`geometry-param-${key}`}
                 className="text-sm w-24 shrink-0"
                 style={{ color: 'var(--color-text-secondary)' }}
               >
                 {paramLabels[key] ?? key}
-              </span>
+              </label>
               <input
+                id={`geometry-param-${key}`}
                 type="number"
-                value={params[key] as number}
+                value={COUNT_PARAMS.has(key) ? params[key] as number : fromSI(params[key] as number, 'length', unitSystem)}
                 onChange={(e) => handleParamChange(key, e.target.value)}
-                step={key === 'segments' || key === 'columns' || key === 'floors' || key === 'divisions' ? 1 : 0.1}
+                step={COUNT_PARAMS.has(key) ? 1 : 0.1}
                 min={0.01}
                 className="flex-1 px-2 py-1.5 rounded text-sm outline-none"
                 style={{
@@ -196,6 +206,7 @@ export function GeometryForm() {
                   border: '1px solid var(--color-border)',
                 }}
               />
+              {!COUNT_PARAMS.has(key) && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{lengthUnit}</span>}
             </div>
           ))}
         </div>
@@ -290,19 +301,21 @@ export function GeometryForm() {
 
       {selectedBody && (
         <BodyEditor
-          key={bodyEditorKey(selectedBody)}
+          key={`${bodyEditorKey(selectedBody)}:${unitSystem}`}
           body={selectedBody}
           isJa={isJa}
+          unitSystem={unitSystem}
           onApply={(updates) => updateBody(selectedBody.id, updates)}
         />
       )}
 
       {selectedBodies.length > 0 && (
         <LinearPatternEditor
-          key={selectedBodies.map((body) => body.id).join(':')}
+          key={`${selectedBodies.map((body) => body.id).join(':')}:${unitSystem}`}
           bodyIds={selectedBodies.map((body) => body.id)}
           defaultOffset={estimatePatternOffset(selectedBody ?? selectedBodies[0] ?? null)}
           isJa={isJa}
+          unitSystem={unitSystem}
           onCreate={(copies, offset) => {
             const createdIds = duplicateBodiesLinear(selectedBodies.map((body) => body.id), copies, offset);
             if (createdIds.length > 0) {
@@ -318,6 +331,7 @@ export function GeometryForm() {
 interface BodyEditorProps {
   body: GeometryBody;
   isJa: boolean;
+  unitSystem: UnitSystemName;
   onApply: (updates: {
     name: string;
     visible: boolean;
@@ -329,10 +343,10 @@ interface BodyEditorProps {
   }) => void;
 }
 
-function BodyEditor({ body, isJa, onApply }: BodyEditorProps) {
+function BodyEditor({ body, isJa, unitSystem, onApply }: BodyEditorProps) {
   const [bodyName, setBodyName] = useState(body.name);
   const [bodyVisible, setBodyVisible] = useState(body.visible);
-  const [positionInputs, setPositionInputs] = useState<TupleInput>(formatTuple(body.transform.position));
+  const [positionInputs, setPositionInputs] = useState<TupleInput>(formatTuple(body.transform.position.map((value) => fromSI(value, 'length', unitSystem)) as [number, number, number]));
   const [rotationInputs, setRotationInputs] = useState<TupleInput>(formatTuple(body.transform.rotation));
   const [scaleInputs, setScaleInputs] = useState<TupleInput>(formatTuple(body.transform.scale));
 
@@ -381,6 +395,7 @@ function BodyEditor({ body, isJa, onApply }: BodyEditorProps) {
         values={positionInputs}
         onChange={setPositionInputs}
         step="0.1"
+        unit={quantityUnitLabel('length', unitSystem)}
       />
       <TupleEditor
         label={isJa ? '回転 (deg)' : 'Rotation (deg)'}
@@ -404,7 +419,10 @@ function BodyEditor({ body, isJa, onApply }: BodyEditorProps) {
             name: nextName.length > 0 ? nextName : body.name,
             visible: bodyVisible,
             transform: {
-              position: parseTuple(positionInputs, body.transform.position),
+              position: parseTuple(
+                positionInputs,
+                body.transform.position.map((value) => fromSI(value, 'length', unitSystem)) as [number, number, number],
+              ).map((value) => toSI(value, 'length', unitSystem)) as [number, number, number],
               rotation: parseTuple(rotationInputs, body.transform.rotation),
               scale: parseScale(scaleInputs, body.transform.scale),
             },
@@ -427,6 +445,7 @@ interface LinearPatternEditorProps {
   bodyIds: string[];
   defaultOffset: TupleInput;
   isJa: boolean;
+  unitSystem: UnitSystemName;
   onCreate: (copies: number, offset: [number, number, number]) => void;
 }
 
@@ -434,10 +453,11 @@ function LinearPatternEditor({
   bodyIds,
   defaultOffset,
   isJa,
+  unitSystem,
   onCreate,
 }: LinearPatternEditorProps) {
   const [patternCopies, setPatternCopies] = useState('1');
-  const [patternOffset, setPatternOffset] = useState<TupleInput>(defaultOffset);
+  const [patternOffset, setPatternOffset] = useState<TupleInput>(() => defaultOffset.map((value) => `${fromSI(Number(value), 'length', unitSystem)}`) as TupleInput);
 
   return (
     <div className="space-y-3">
@@ -472,6 +492,7 @@ function LinearPatternEditor({
         values={patternOffset}
         onChange={setPatternOffset}
         step="0.1"
+        unit={quantityUnitLabel('length', unitSystem)}
       />
 
       <button
@@ -481,7 +502,7 @@ function LinearPatternEditor({
           if (copies < 1 || bodyIds.length === 0) {
             return;
           }
-          onCreate(copies, parseTuple(patternOffset, [2, 0, 0]));
+          onCreate(copies, parseTuple(patternOffset, [2, 0, 0]).map((value) => toSI(value, 'length', unitSystem)) as [number, number, number]);
         }}
         className="w-full py-2 rounded text-sm font-bold cursor-pointer transition-colors"
         style={{
@@ -501,6 +522,7 @@ interface TupleEditorProps {
   onChange: (values: TupleInput) => void;
   step: string;
   min?: string;
+  unit?: string;
 }
 
 function TupleEditor({
@@ -509,6 +531,7 @@ function TupleEditor({
   onChange,
   step,
   min,
+  unit,
 }: TupleEditorProps) {
   return (
     <div>
@@ -516,7 +539,7 @@ function TupleEditor({
         className="block text-sm font-bold mb-2"
         style={{ color: 'var(--color-text-muted)' }}
       >
-        {label}
+        {label}{unit ? ` [${unit}]` : ''}
       </label>
       <div className="grid grid-cols-3 gap-2">
         {AXIS_LABELS.map((axis, index) => (
@@ -525,6 +548,7 @@ function TupleEditor({
               {axis}
             </span>
             <input
+              aria-label={`${label} ${axis}`}
               type="number"
               value={values[index]}
               onChange={(e) => onChange(updateTupleInput(values, index, e.target.value))}
