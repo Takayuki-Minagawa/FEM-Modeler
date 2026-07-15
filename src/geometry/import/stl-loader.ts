@@ -229,11 +229,13 @@ export function parseSTL(buffer: ArrayBuffer): THREE.BufferGeometry {
   if (buffer.byteLength >= 84) {
     const count = new DataView(buffer).getUint32(80, true);
     const expected = 84 + count * 50;
-    if (expected === buffer.byteLength) return parseBinarySTL(buffer, count);
+    if (count > 0 && count <= MAX_TRIANGLES && expected <= buffer.byteLength) {
+      return parseBinarySTL(buffer, count);
+    }
   }
   const text = new TextDecoder().decode(buffer);
   if (/^\s*solid\b/i.test(text)) return parseASCIISTL(text);
-  throw new Error('Binary STL length does not match 84 + 50 × triangleCount, and the file is not ASCII STL.');
+  throw new Error('Binary STL is shorter than 84 + 50 × triangleCount, and the file is not ASCII STL.');
 }
 
 function parseBinarySTL(buffer: ArrayBuffer, triangleCount: number): THREE.BufferGeometry {

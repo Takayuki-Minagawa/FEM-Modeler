@@ -1337,8 +1337,10 @@ export function exportOpenFOAM(ir: ProjectIR): OpenFOAMExportResult {
     errors,
     warnings,
   );
-  const hydraulicDiameter = 2 * scaledDimensions.height * scaledDimensions.depth
-    / (scaledDimensions.height + scaledDimensions.depth) * convertToMeters;
+  const hydraulicDiameter = (mode === '2D'
+    ? 2 * scaledDimensions.height
+    : 2 * scaledDimensions.height * scaledDimensions.depth
+      / (scaledDimensions.height + scaledDimensions.depth)) * convertToMeters;
   const reynoldsNumber = inletVelocity && material.kinematicViscosity !== undefined
     ? Math.hypot(...inletVelocity) * hydraulicDiameter / material.kinematicViscosity
     : null;
@@ -1475,6 +1477,7 @@ export function exportOpenFOAM(ir: ProjectIR): OpenFOAMExportResult {
       input_basis: pressure.basis,
       emitted_kinematic_value: pressure.kinematicValue,
     } : null,
+    hydraulic_diameter_m: hydraulicDiameter,
     reynolds_number: reynoldsNumber,
     mesh_control_coverage: {
       consumed_fields: ['mesh_controls.global.global_size'],

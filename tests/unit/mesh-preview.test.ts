@@ -88,6 +88,34 @@ describe('mesh preview estimator', () => {
     expect(bounds?.max[1]).toBeCloseTo(1);
   });
 
+  it('scales fallback shell area along the shell span axes', () => {
+    const ir = createDefaultProject();
+    ir.geometry.bodies.push({
+      id: 'shell_xz',
+      name: 'X-Z shell',
+      category: 'shell',
+      visible: true,
+      locked: false,
+      color: '#fff',
+      transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [2, 2, 1] },
+      topology_ref: '',
+      metadata: {},
+    });
+    ir.geometry.vertices.push(
+      { id: 'v1', name: 'v1', body_id: 'shell_xz', position: [-1, 0, -0.5] },
+      { id: 'v2', name: 'v2', body_id: 'shell_xz', position: [1, 0, -0.5] },
+      { id: 'v3', name: 'v3', body_id: 'shell_xz', position: [1, 0, 0.5] },
+      { id: 'v4', name: 'v4', body_id: 'shell_xz', position: [-1, 0, 0.5] },
+    );
+    ir.mesh_controls.global.global_size = 1;
+
+    const body = estimateMeshPreview(ir).bodies[0];
+
+    expect(body.geometricMeasure?.value).toBe(4);
+    expect(body.elementCount?.value).toBe(8);
+    expect(body.bounds?.value).toEqual({ min: [-2, 0, -0.5], max: [2, 0, 0.5] });
+  });
+
   it('reports invalid preflight controls without inventing quality measurements', () => {
     const ir = createDefaultProject();
     const shape = generateShape({ shapeType: 'box', width: 1, height: 1, depth: 1 });

@@ -68,7 +68,27 @@ describe('portable STL assets', () => {
     const result = importSTL(bytes.buffer, 'broken.stl');
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('length does not match');
+    expect(result.error).toContain('shorter than');
+  });
+
+  it('accepts a binary STL with trailing padding bytes', () => {
+    const bytes = new Uint8Array(84 + 50 + 8);
+    const view = new DataView(bytes.buffer);
+    view.setUint32(80, 1, true);
+    const values = [
+      0, 0, 1,
+      0, 0, 0,
+      1, 0, 0,
+      0, 1, 0,
+    ];
+    values.forEach((value, index) => view.setFloat32(84 + index * 4, value, true));
+    bytes.fill(0xa5, 84 + 50);
+
+    const result = importSTL(bytes.buffer, 'padded-binary.stl');
+
+    expect(result.success).toBe(true);
+    expect(result.asset?.triangle_count).toBe(1);
+    expect(result.asset?.byte_length).toBe(bytes.byteLength);
   });
 
   it('converts an explicit unitless-STL source unit to canonical metres', () => {

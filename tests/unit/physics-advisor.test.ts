@@ -190,6 +190,19 @@ describe('physics advisor', () => {
     expect(fourier?.status).toBe('caution');
     expect(report.notices.some((notice) => notice.code === 'BIOT_MODERATE')).toBe(true);
     expect(report.notices.some((notice) => notice.code === 'FOURIER_EARLY_TRANSIENT')).toBe(true);
+
+    delete ir.solver_targets.find((target) => target.target_name === 'DOLFINx')!.solver_options.duration;
+    ir.solver_targets.find((target) => target.target_name === 'OpenFOAM')!.solver_options.endTime = 7_800;
+    const unrelatedDuration = buildPhysicsAdvisorReport(ir);
+    expect(unrelatedDuration.metrics.some((metric) => metric.kind === 'fourier_number')).toBe(false);
+    expect(unrelatedDuration.notices.some((notice) => notice.code === 'FOURIER_INPUTS_INCOMPLETE')).toBe(true);
+
+    ir.analysis_cases[0].analysis_type = 'steady_thermal';
+    ir.analysis_cases[0].transient = false;
+    ir.solver_targets.find((target) => target.target_name === 'DOLFINx')!.solver_options.duration = 7_800;
+    const steady = buildPhysicsAdvisorReport(ir);
+    expect(steady.metrics.some((metric) => metric.kind === 'fourier_number')).toBe(false);
+    expect(steady.notices.some((notice) => notice.code.startsWith('FOURIER_'))).toBe(false);
   });
 
   it('emits typed missing-input notices instead of fabricated fluid metrics', () => {

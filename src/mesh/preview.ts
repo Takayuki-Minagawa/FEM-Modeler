@@ -69,6 +69,7 @@ interface PrimitiveGeometry {
   bounds: AxisAlignedBounds;
   measure: number;
   dimension: 1 | 2 | 3;
+  measureAxes?: [0 | 1 | 2, 0 | 1 | 2];
 }
 
 const LARGE_ELEMENT_COUNT = 5_000_000;
@@ -149,7 +150,7 @@ function previewBody(
     ? Math.min(...localSizes, ...(globalSize === null ? [] : [globalSize]))
     : globalSize;
   const scaledMeasure = primitive
-    ? scaleMeasure(primitive.measure, dimension, body)
+    ? scaleMeasure(primitive.measure, dimension, body, primitive.measureAxes)
     : null;
 
   if (controls.some((control) => control.control_type !== 'local_size')) {
@@ -376,8 +377,16 @@ function geometryForBody(ir: ProjectIR, body: GeometryBody): PrimitiveGeometry |
       if (!bounds) return null;
       const extents = bounds.max.map((value, index) => value - bounds.min[index]) as [number, number, number];
       if (body.category === 'shell') {
-        const positive = extents.filter((extent) => extent > 0).sort((a, b) => b - a);
-        return positive.length >= 2 ? { bounds, measure: positive[0] * positive[1], dimension: 2 } : null;
+        const positive = extents
+          .map((extent, axis) => ({ extent, axis: axis as 0 | 1 | 2 }))
+          .filter(({ extent }) => extent > 0)
+          .sort((a, b) => b.extent - a.extent);
+        return positive.length >= 2 ? {
+          bounds,
+          measure: positive[0].extent * positive[1].extent,
+          dimension: 2,
+          measureAxes: [positive[0].axis, positive[1].axis],
+        } : null;
       }
       return null;
     }
@@ -432,10 +441,16 @@ function estimateElementCount(
   return Math.max(1, Math.ceil((measure / size ** dimension) * simplexFactor));
 }
 
-function scaleMeasure(measure: number, dimension: 1 | 2 | 3, body: GeometryBody): number {
+function scaleMeasure(
+  measure: number,
+  dimension: 1 | 2 | 3,
+  body: GeometryBody,
+  measureAxes?: [0 | 1 | 2, 0 | 1 | 2],
+): number {
   const [sx, sy, sz] = body.transform.scale.map(Math.abs);
   if (dimension === 3) return measure * sx * sy * sz;
   if (dimension === 2) {
+    if (measureAxes) return measure * Math.abs(body.transform.scale[measureAxes[0]] * body.transform.scale[measureAxes[1]]);
     const scales = [sx, sy, sz].sort((a, b) => b - a);
     return measure * scales[0] * scales[1];
   }

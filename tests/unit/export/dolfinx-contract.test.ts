@@ -378,6 +378,26 @@ describe('DOLFINx strict exporter contract', () => {
     expect(result.script).toContain('V.sub(0)');
   });
 
+  it('rejects a directionless prescribed-displacement scalar', () => {
+    const { project, faces } = boxProject();
+    const left = addFaceSelection(project, faces, 'left');
+    const right = addFaceSelection(project, faces, 'right');
+    project.boundary_conditions.push(
+      fixedBoundary('fixed', left),
+      {
+        ...fixedBoundary('ambiguous', right),
+        bc_type: 'prescribed_displacement',
+        values: { scalar: 0.0125 },
+      },
+    );
+
+    const result = exportDOLFINx(project);
+
+    expect(result.success).toBe(false);
+    expect(result.errors.join('\n')).toContain('DFX_AMBIGUOUS_BC_VALUE');
+    expect(result.script).toBe('');
+  });
+
   it('adds heat sources, outward flux, Robin convection, temperature, and insulation semantics', () => {
     const { project, faces, bodySelectionId } = boxProject('thermal');
     const left = addFaceSelection(project, faces, 'left');

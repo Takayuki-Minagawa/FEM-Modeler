@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDefaultProject, SCHEMA_VERSION } from '@/core/ir/defaults';
+import { createDefaultProject, createEmptyParameterSet, SCHEMA_VERSION } from '@/core/ir/defaults';
 import { parseProjectFile } from '@/export/project/load';
 
 describe('parseProjectFile', () => {
@@ -267,6 +267,35 @@ describe('parseProjectFile', () => {
     expect(result.data?.materials[1].parameter_set.density.value).toBeCloseTo(7850);
     expect(result.data?.materials[1].parameter_set.young_modulus.value).toBeCloseTo(2.05e11);
     expect(result.data?.materials[1].parameter_set.thermal_conductivity.value).toBeCloseTo(50.2);
+  });
+
+  it('loads ambiguous legacy material values with a conversion warning', () => {
+    const project = createDefaultProject();
+    project.meta.schema_version = '0.1.0';
+    project.units.system_name = 'mm-N-s';
+    const parameterSet = createEmptyParameterSet();
+    parameterSet.young_modulus = { value: 205000, status: 'needs_review' };
+    project.materials.push({
+      id: 'ambiguous_steel',
+      name: 'Ambiguous steel',
+      class: 'elastic',
+      physical_model: 'isotropic_linear',
+      parameter_set: parameterSet,
+      source: '',
+      notes: '',
+    });
+    const raw = JSON.parse(JSON.stringify(project)) as Record<string, unknown>;
+    delete (raw.units as Record<string, unknown>).value_basis;
+
+    const result = parseProjectFile(JSON.stringify(raw));
+
+    expect(result.success).toBe(true);
+    expect(result.data?.materials[0].parameter_set.young_modulus).toEqual({
+      value: 205e9,
+      status: 'needs_review',
+    });
+    expect(result.warning).toContain('ambiguous unit provenance');
+    expect(result.warning).toContain('marked needs_review');
   });
 
   it('preserves legacy raw solver inputs and only converts the pressure field that was displayed as MPa', () => {

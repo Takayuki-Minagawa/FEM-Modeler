@@ -742,6 +742,11 @@ function validateStructuralDofs(bc: BoundaryCondition, errors: string[]): void {
         `DFX_INVALID_BC_VALUE: Prescribed displacement "${safeComment(bc.name)}" requires a finite values.vector or scalar.`,
       );
     }
+    if (!hasVector && isFiniteNumber(bc.values.scalar) && !bc.values.dof_map) {
+      errors.push(
+        `DFX_AMBIGUOUS_BC_VALUE: Prescribed displacement "${safeComment(bc.name)}" uses a scalar value and requires an explicit dof_map to select its direction.`,
+      );
+    }
   }
 
   const dofMap = bc.values.dof_map;
@@ -1301,6 +1306,7 @@ function structuralDofValues(bc: BoundaryCondition): { component: number; value:
   if (bc.bc_type !== 'fixed' && bc.bc_type !== 'prescribed_displacement') return [];
   const keys = ['ux', 'uy', 'uz'] as const;
   const dofMap = bc.values.dof_map;
+  if (bc.bc_type === 'prescribed_displacement' && !bc.values.vector && !dofMap) return [];
   const scalar = bc.values.scalar ?? 0;
   const vector = bc.values.vector ?? [scalar, scalar, scalar];
   const values: { component: number; value: number }[] = [];

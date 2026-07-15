@@ -26,9 +26,12 @@ export function parseProjectFile(json: string): LoadResult {
     return {
       success: true,
       data: result.data,
-      warning: result.migratedFromVersion
-        ? `Project file migrated from schema version ${result.migratedFromVersion} to the current version.`
-        : undefined,
+      warning: [
+        ...(result.migratedFromVersion
+          ? [`Project file migrated from schema version ${result.migratedFromVersion} to the current version.`]
+          : []),
+        ...(result.migrationWarnings ?? []),
+      ].join(' ') || undefined,
     };
   } catch (e) {
     return {

@@ -444,6 +444,7 @@ interface NormalizeResult {
   data?: ProjectIR;
   error?: string;
   migratedFromVersion?: string;
+  migrationWarnings?: string[];
 }
 
 // Default templates for array elements — used when the defaults project has
@@ -681,8 +682,12 @@ function factorFor(kind: QuantityKind, system: 'SI' | 'mm-N-s' | 'mm-t-s'): numb
  * library materials and raw solver inputs, so a blanket dimensional scaling
  * would corrupt valid projects.
  */
-function migrateLegacyUnits(raw: Record<string, unknown>): Record<string, unknown> {
+function migrateLegacyUnits(raw: Record<string, unknown>): {
+  data: Record<string, unknown>;
+  warnings: string[];
+} {
   const migrated = structuredClone(raw);
+  const warnings: string[] = [];
   const units = isRecord(migrated.units) ? migrated.units : {};
   const geometry = isRecord(migrated.geometry) ? migrated.geometry : {};
   if (units.angle_unit === 'rad') {
@@ -700,7 +705,7 @@ function migrateLegacyUnits(raw: Record<string, unknown>): Record<string, unknow
   }
   units.angle_unit = 'deg';
   migrated.units = units;
-  if (units.value_basis === 'SI') return migrated;
+  if (units.value_basis === 'SI') return { data: migrated, warnings };
 
   const systemName = units.system_name;
   if (systemName === 'custom') {
@@ -748,7 +753,13 @@ function migrateLegacyUnits(raw: Record<string, unknown>): Record<string, unknow
         continue;
       }
       if (system !== 'SI') {
-        throw new Error(`Legacy material ${String(material.id ?? material.name ?? '')}.${key} has ambiguous unit provenance (status: ${String(tracked.status)}).`);
+        const reference = `${String(material.id ?? material.name ?? '')}.${key}`;
+        const originalStatus = String(tracked.status);
+        scaleNumber(tracked, 'value', factor);
+        tracked.status = 'needs_review';
+        warnings.push(
+          `Legacy material ${reference} had ambiguous unit provenance (status: ${originalStatus}); its value was interpreted using ${system} display units and marked needs_review.`,
+        );
       }
     }
   }
@@ -802,7 +813,7 @@ function migrateLegacyUnits(raw: Record<string, unknown>): Record<string, unknow
     note: 'Field-aware migration: unlabeled raw geometry, SI library materials, and raw solver inputs were preserved; explicitly labelled display-basis fields were converted.',
   });
   migrated.audit_trail = auditTrail;
-  return migrated;
+  return { data: migrated, warnings };
 }
 
 export function normalizeAndValidateProjectData(raw: unknown): NormalizeResult {
@@ -853,12 +864,13 @@ export function normalizeAndValidateProjectData(raw: unknown): NormalizeResult {
   const defaults = createDefaultProject();
   const migratedFromVersion = rawVersion;
 
-  let migratedRaw: Record<string, unknown>;
+  let migration: ReturnType<typeof migrateLegacyUnits>;
   try {
-    migratedRaw = migrateLegacyUnits(raw);
+    migration = migrateLegacyUnits(raw);
   } catch (error) {
     return { success: false, error: `Invalid project file: ${String(error)}` };
   }
+  const migratedRaw = migration.data;
 
   const merged = mergeWithDefaults(defaults, migratedRaw);
   const normalized: ProjectIR = {
@@ -884,5 +896,6 @@ export function normalizeAndValidateProjectData(raw: unknown): NormalizeResult {
     success: true,
     data: parsed.data as ProjectIR,
     migratedFromVersion,
+    migrationWarnings: migration.warnings,
   };
 }

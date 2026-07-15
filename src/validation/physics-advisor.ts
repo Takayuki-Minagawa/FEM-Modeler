@@ -253,7 +253,15 @@ function addThermalMetrics(
   notices: PhysicsAdvisorNotice[],
 ): void {
   const convectionConditions = ir.boundary_conditions.filter((condition) => condition.bc_type === 'convection');
-  const duration = findThermalDuration(ir);
+  const transientThermalCases = ir.analysis_cases.filter(
+    (analysisCase) => analysisCase.active
+      && analysisCase.domain_type === 'thermal'
+      && analysisCase.analysis_type === 'transient_thermal'
+      && analysisCase.transient,
+  );
+  const duration = transientThermalCases[0]
+    ? findThermalDuration(ir, transientThermalCases[0])
+    : null;
 
   for (const condition of convectionConditions) {
     const selection = ir.named_selections.find((candidate) => candidate.id === condition.target_named_selection_id);
@@ -354,17 +362,12 @@ function addThermalMetrics(
       targetRefs: convectionConditions.map((condition) => condition.id),
     });
   }
-  const transientThermal = ir.analysis_cases.some(
-    (analysisCase) => analysisCase.active && analysisCase.analysis_type === 'transient_thermal',
-  );
-  if (transientThermal && !metrics.some((metric) => metric.kind === 'fourier_number')) {
+  if (transientThermalCases.length > 0 && !metrics.some((metric) => metric.kind === 'fourier_number')) {
     notices.push({
       severity: 'info',
       code: 'FOURIER_INPUTS_INCOMPLETE',
       message: 'Fourier number requires Biot geometry inputs, density, specific heat, and a positive duration in solver options.',
-      targetRefs: ir.analysis_cases
-        .filter((analysisCase) => analysisCase.active && analysisCase.analysis_type === 'transient_thermal')
-        .map((analysisCase) => analysisCase.id),
+      targetRefs: transientThermalCases.map((analysisCase) => analysisCase.id),
     });
   }
 }
@@ -551,16 +554,22 @@ function scaledMetadataLength(body: GeometryBody, key: string, axis: 0 | 1 | 2):
   return length ? length * Math.abs(body.transform.scale[axis]) : null;
 }
 
-function findThermalDuration(ir: ProjectIR): ThermalDuration | null {
+function findThermalDuration(
+  ir: ProjectIR,
+  analysisCase: ProjectIR['analysis_cases'][number],
+): ThermalDuration | null {
   const keys = [
     'duration', 'end_time', 'endTime', 'total_time', 'totalTime',
     'simulation_time', 'simulationTime', 'time_horizon', 'timeHorizon',
   ];
-  for (const target of ir.solver_targets) {
-    for (const key of keys) {
-      const seconds = positiveNumber(target.solver_options[key]);
-      if (seconds) return { seconds, sourceRef: `${target.target_name}.solver_options.${key}` };
-    }
+  const targetName = analysisCase.solver_profile_hint.startsWith('openseespy_')
+    ? 'OpenSeesPy'
+    : analysisCase.solver_profile_hint.startsWith('dolfinx_') ? 'DOLFINx' : 'OpenFOAM';
+  const target = ir.solver_targets.find((candidate) => candidate.target_name === targetName);
+  if (!target) return null;
+  for (const key of keys) {
+    const seconds = positiveNumber(target.solver_options[key]);
+    if (seconds) return { seconds, sourceRef: `${target.target_name}.solver_options.${key}` };
   }
   return null;
 }

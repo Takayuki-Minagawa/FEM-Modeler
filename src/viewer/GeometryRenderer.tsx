@@ -184,6 +184,7 @@ interface SolidMeshProps {
 }
 
 function SolidMesh({ bodyId, asset, metadata, position, rotation, scale, color, isSelected, isHovered, onClick, onHover, topologyEdges, topologyVertices, pickFilter, selectedIds, onSelect }: SolidMeshProps) {
+  const usesSharedSTLGeometry = metadata.shapeType === 'imported_stl';
   const geometry = useMemo(() => {
     try {
       const params = metadata as AnyShapeParams;
@@ -217,6 +218,7 @@ function SolidMesh({ bodyId, asset, metadata, position, rotation, scale, color, 
     <group position={position} rotation={rotationInRadians} scale={scale}>
       <mesh
         geometry={geometry}
+        dispose={usesSharedSTLGeometry ? null : undefined}
         onClick={onClick}
         onPointerEnter={() => onHover(true)}
         onPointerLeave={() => onHover(false)}

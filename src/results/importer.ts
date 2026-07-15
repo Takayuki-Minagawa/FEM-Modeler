@@ -85,13 +85,13 @@ function parseCsv(text: string): string[][] {
   return records;
 }
 
-function locationFromHeader(header: string): ResultLocation {
+function locationFromHeader(header: string, solverTarget: SolverTargetName): ResultLocation {
   const normalized = header.toLowerCase();
   if (normalized.includes('node')) return 'node';
   if (normalized.includes('element')) return 'element';
   if (normalized.includes('facet') || normalized.includes('face')) return 'facet';
   if (normalized.includes('cell')) return 'cell';
-  return 'global';
+  return solverTarget === 'OpenFOAM' ? 'cell' : 'node';
 }
 
 function fieldNameAndUnit(header: string): { name: string; unit: string } {
@@ -133,17 +133,13 @@ function importCsv(text: string, sourceFileName: string, analysisCaseId: string,
   const entityIds = rows.map((row, index) => entityColumn >= 0 ? row[entityColumn].trim() : String(index + 1));
   if (entityIds.some((id) => id.length === 0)) throw new Error('Result CSV entity IDs must not be empty.');
   if (new Set(entityIds).size !== entityIds.length) throw new Error('Result CSV entity IDs must be unique.');
-  const location = entityColumn >= 0 ? locationFromHeader(headers[entityColumn]) : 'global';
+  const location = entityColumn >= 0 ? locationFromHeader(headers[entityColumn], solverTarget) : 'global';
   const fields: ResultField[] = [];
   const skippedColumns: string[] = [];
   for (let column = 0; column < headers.length; column += 1) {
     if (column === entityColumn) continue;
     const rawValues = rows.map((row) => row[column].trim());
-    const finiteNonEmptyValues = rawValues.filter((value) => value.length > 0).map(Number);
     if (rawValues.some((value) => value.length === 0)) {
-      if (finiteNonEmptyValues.length > 0 && finiteNonEmptyValues.every(Number.isFinite)) {
-        throw new Error(`Result CSV numeric column "${headers[column]}" contains a missing value.`);
-      }
       skippedColumns.push(headers[column]);
       continue;
     }

@@ -14,6 +14,7 @@ describe('ResultIR import', () => {
     expect(response.result?.fields[1].minimum).toBe(-0.004);
     expect(response.result?.fields[1].maximum).toBe(-0.001);
     expect(response.result?.fields[0].entity_ids).toEqual(['1', '2']);
+    expect(response.result?.fields.every((field) => field.location === 'node')).toBe(true);
     expect(response.result?.status).toBe('partial');
     expect(response.result?.metadata.provenance_verified).toBe(false);
   });
@@ -74,9 +75,8 @@ describe('ResultIR import', () => {
     expect(response.error).toContain('256-column safety limit');
   });
 
-  it('rejects missing numeric cells and ambiguous headers or entity IDs', () => {
+  it('rejects ambiguous headers or entity IDs', () => {
     const samples = [
-      ['node_id,ux_m\n1,0\n2,', 'missing value'],
       ['node_id,ux_m,ux_m\n1,0,0', 'headers must be unique'],
       ['node_id,ux_m\n,0', 'entity IDs must not be empty'],
       ['node_id,ux_m\n1,0\n1,1', 'entity IDs must be unique'],
@@ -86,6 +86,33 @@ describe('ResultIR import', () => {
       expect(response.success).toBe(false);
       expect(response.error).toContain(message);
     }
+  });
+
+  it('keeps valid numeric fields when another numeric column has a missing cell', () => {
+    const provenance = JSON.stringify({
+      export_target: 'OpenSeesPy', analysis_case_id: 'case_1', model_revision: 3,
+    });
+    const response = importResultText(
+      `# FEM_MODELER_PROVENANCE ${provenance}\nid,ux_m,reaction_x_N\n1,0,10\n2,0.5,`,
+      'results.csv',
+      'case_1',
+      'OpenSeesPy',
+      { expectedModelRevision: 3 },
+    );
+
+    expect(response.success).toBe(true);
+    expect(response.result?.fields).toEqual([
+      expect.objectContaining({ name: 'ux', location: 'node', values: [0, 0.5] }),
+    ]);
+    expect(response.warnings.some((warning) => warning.includes('reaction_x_N'))).toBe(true);
+    expect(response.result?.status).toBe('partial');
+  });
+
+  it('infers generic OpenFOAM entity IDs as cell locations', () => {
+    const response = importResultText('tag,pressure_pa\n1,10\n2,20', 'cells.csv', 'case_1', 'OpenFOAM');
+
+    expect(response.success).toBe(true);
+    expect(response.result?.fields[0].location).toBe('cell');
   });
 
   it('warns when explicitly nonnumeric CSV columns are skipped', () => {

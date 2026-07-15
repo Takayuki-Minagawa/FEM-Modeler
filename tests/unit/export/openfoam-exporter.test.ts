@@ -204,12 +204,18 @@ describe('OpenFOAM exporter contract', () => {
 
   it('rejects a turbulent-regime request while only the laminar model is implemented', () => {
     const project = validProject('2D');
-    project.boundary_conditions.find((bc) => bc.id === IDS.inletBC)!.values.vector = [1, 0, 0];
+    project.boundary_conditions.find((bc) => bc.id === IDS.inletBC)!.values.vector = [0.0012, 0, 0];
 
     const result = exportOpenFOAM(project);
+    const manifest = JSON.parse(result.manifest) as {
+      hydraulic_diameter_m: number;
+      reynolds_number: number;
+    };
 
     expect(result.success).toBe(false);
     expect(result.errors.some((error) => error.includes('Reynolds number below 2300'))).toBe(true);
+    expect(manifest.hydraulic_diameter_m).toBeCloseTo(2);
+    expect(manifest.reynolds_number).toBeCloseTo(2400);
   });
 
   it('requires inlet velocity to follow the transformed channel axis', () => {
