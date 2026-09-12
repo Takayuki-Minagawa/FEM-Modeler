@@ -82,7 +82,7 @@ export function buildManifest(
     },
     consumed_ir_ids: [...consumedIdSet],
     ignored_ir_ids: ignoredIds,
-    generated_files: ['solve.py', 'model.geo', 'export_manifest.json', 'run.sh', 'README.txt', 'pyproject.toml', 'uv.lock', '.python-version', 'result_manifest.json (runtime)', 'result_package.json (runtime)'],
+    generated_files: ['solve.py', 'model.geo', 'export_manifest.json', 'run.sh', 'README.txt', 'runtime/lifecycle.sh', 'runtime/failure_manifest.json', 'pyproject.toml', 'uv.lock', '.python-version', 'result_manifest.json (runtime)', 'result_package.json (runtime)'],
     errors,
     warnings,
   }, null, 2);

@@ -1,3 +1,4 @@
+import { solverLifecycleFiles, solverRunScript } from '@/export/shared/runtime-lifecycle';
 import type { ProjectIR } from '@/core/ir/types';
 import { scopeProjectForAnalysisCaseValidation } from '@/export/compiler';
 import { downloadArtifactZip, type ArtifactFiles } from '@/export/shared/packaging';
@@ -10,9 +11,10 @@ export function openFoamPackageFiles(result: OpenFOAMExportResult): ArtifactFile
   return {
     ...result.files,
     ...pythonRuntimeFiles('openfoam'),
+    ...solverLifecycleFiles(result.manifest),
     'export_manifest.json': result.manifest,
     'collect_results.py': collector,
-    'run.sh': '#!/usr/bin/env bash\nset -euo pipefail\ncd "$(dirname "$0")"\nuv sync --locked --no-dev\nblockMesh | tee blockMesh.log\ncheckMesh | tee checkMesh.log\nset +e\nsimpleFoam | tee solver.log\nsolver_status=${PIPESTATUS[0]}\nset -e\nuv run --locked --no-dev python collect_results.py "$solver_status"\nexit "$solver_status"\n',
+    'run.sh': solverRunScript('uv sync --locked --no-dev\nrm -rf postProcessing\nblockMesh | tee blockMesh.log\ncheckMesh | tee checkMesh.log\nif ! grep -Eq "^[[:space:]]*Mesh OK[.][[:space:]]*$" checkMesh.log; then\n  echo "checkMesh did not report Mesh OK.; solve cancelled." >&2\n  exit 1\nfi\nset +e\nsimpleFoam | tee solver.log\nsolver_status=$?\nset -e\nuv run --locked --no-dev python collect_results.py "$solver_status"\nexit "$solver_status"\n'),
     'README.txt': 'Verified with OpenFOAM Foundation 10 / uv 0.9.7 / Python 3.12.12. Native image:\nopenfoam/openfoam10-paraview510@sha256:d6ff1f9a2e7bc3c9177f373bebbdeb542fd8b49144afc24d5e3a3cd9bfae253d\nSource /opt/openfoam10/etc/bashrc, install uv, then run bash run.sh.\ncheckMesh gates the solve. surfaceFieldValue measures signed volumetric patch flux; density converts it to mass flow. The collector records measured residual history and imports never equate process success with numerical convergence.\nresult_package.json contains actual blockMesh hexahedra, cell pressure and speed.\n',
   };
 }

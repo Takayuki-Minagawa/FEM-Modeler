@@ -3,9 +3,10 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 import { sharedWorkers } from './build/shared-workers.ts'
+import { compressedText } from './build/compressed-text.ts'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), sharedWorkers()],
+  plugins: [react(), tailwindcss(), sharedWorkers(), compressedText()],
   base: '/FEM-Modeler/',
   resolve: {
     alias: {

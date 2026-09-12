@@ -60,6 +60,11 @@ def test_package_provenance_and_measured_conservation(case):
         close(f"{case}.heat_balance_W", sum(manifest["heat_boundary_outward_W"]), manifest["heat_source_W"], absolute=manifest["heat_balance_tolerance_W"])
     if case.startswith("fluid"):
         assert "Mesh OK." in (OUTPUT / case / "checkMesh.log").read_text()
+        nodes = [node["position"] for node in mesh["nodes"]]
+        area = (max(row[0] for row in nodes) - min(row[0] for row in nodes)) * (max(row[1] for row in nodes) - min(row[1] for row in nodes))
+        expected_h = math.sqrt(area / len(mesh["elements"]))
+        close(f"{case}.representative_mesh_size_m", manifest["representative_mesh_size"], expected_h)
+        assert mesh["representative_size"] == manifest["representative_mesh_size"]
         close(f"{case}.mass_balance_kg_s", sum(manifest["mass_boundary_outward_kg_s"]), 0, absolute=manifest["mass_balance_tolerance_kg_s"])
         last = manifest["residual_history"][-1]["values"]
         for name, tolerance in manifest["residual_tolerances"].items():

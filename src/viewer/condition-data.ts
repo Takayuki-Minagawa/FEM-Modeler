@@ -103,7 +103,7 @@ export function conditionOverlays(ir: ProjectIR): ConditionOverlay[] {
       const direction = worldDirection(ir, bc.coordinate_system, [axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, axis === 2 ? 1 : 0]);
       return direction ? [direction] : [];
     });
-    const unit = bc.physics_domain === 'structural' ? 'm / rad' : bc.bc_type === 'temperature' ? 'K' : bc.bc_type === 'heat_flux' ? 'W/m²' : bc.bc_type === 'convection' ? 'W/(m²·K), K' : bc.bc_type === 'velocity_inlet' ? 'm/s' : bc.bc_type === 'pressure_outlet' ? 'Pa' : '';
+    const unit = bc.physics_domain === 'structural' ? 'm / rad' : bc.bc_type === 'temperature' ? 'K' : bc.bc_type === 'heat_flux' ? 'W/m²' : bc.bc_type === 'convection' ? 'W/(m²·K), K' : bc.bc_type === 'velocity_inlet' ? 'm/s' : bc.bc_type === 'pressure_outlet' ? (bc.values.pressure_basis === 'kinematic' ? 'm²/s²' : 'Pa') : '';
     output.push({ id: bc.id, name: bc.name, kind: 'bc', color: '#38bdf8', selectionId: bc.target_named_selection_id,
       target: selectionGeometry(ir, bc.target_named_selection_id), constraints, detail: `${bc.bc_type} · ${bc.coordinate_system} · ${JSON.stringify(bc.values)} ${unit}` });
   }

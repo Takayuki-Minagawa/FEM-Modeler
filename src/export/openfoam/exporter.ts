@@ -261,7 +261,7 @@ export function exportOpenFOAM(ir: ProjectIR): OpenFOAMExportResult {
     },
     consumed_ir_ids: [...consumedIrIds],
     ignored_ir_ids: ignoredIrIds,
-    generated_files: [...Object.keys(files), 'export_manifest.json', 'run.sh', 'README.txt', 'pyproject.toml', 'uv.lock', '.python-version', 'collect_results.py', 'result_manifest.json (runtime)', 'result_package.json (runtime)'],
+    generated_files: [...Object.keys(files), 'export_manifest.json', 'run.sh', 'README.txt', 'runtime/lifecycle.sh', 'runtime/failure_manifest.json', 'pyproject.toml', 'uv.lock', '.python-version', 'collect_results.py', 'result_manifest.json (runtime)', 'result_package.json (runtime)'],
     warnings,
     errors,
   });

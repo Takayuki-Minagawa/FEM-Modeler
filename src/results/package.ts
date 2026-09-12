@@ -50,6 +50,25 @@ export const resultPackageSchema = z.object({
   fields: z.array(packageFieldSchema).max(256).default([]),
 }).strict();
 
+/** Shared by standalone packages and persisted projects; loading must not bypass mesh ownership checks. */
+export function validateMeshFieldReferences(mesh: ResultMesh, fields: Array<Pick<ResultField, 'name' | 'location' | 'unit' | 'entity_ids' | 'values'>>) {
+  const nodeIds = new Set(mesh.nodes.map((node) => node.id));
+  const elementIds = new Set(mesh.elements.map((element) => element.id));
+  const signatures = new Set<string>();
+  for (const field of fields) {
+    const name = /^u[xyz]_m$/.test(field.name) && field.unit === 'm' ? field.name.slice(0, -2) : field.name;
+    const signature = JSON.stringify([name, field.location, field.unit]);
+    if (signatures.has(signature)) throw new Error(`Duplicate scalar field: ${name}.`);
+    signatures.add(signature);
+    if (!['node', 'element', 'cell'].includes(field.location)) throw new Error(`Unsupported mesh field location: ${field.location}.`);
+    const ids = field.location === 'node' ? nodeIds : elementIds;
+    if (field.entity_ids.length !== field.values.length || field.values.length === 0
+      || new Set(field.entity_ids).size !== field.entity_ids.length || field.entity_ids.some((entityId) => !ids.has(entityId))) {
+      throw new Error(`Field ${field.name} contains invalid or duplicate mesh entity IDs.`);
+    }
+  }
+}
+
 /** Parse explicit solver IDs; never reconstruct node correspondence from array order. */
 export function parseResultPackage(value: unknown): { mesh: ResultMesh; fields: ResultField[]; manifest: Record<string, unknown> } {
   const parsed = resultPackageSchema.parse(value);
@@ -57,19 +76,9 @@ export function parseResultPackage(value: unknown): { mesh: ResultMesh; fields: 
     || parsed.manifest.input_fingerprint !== parsed.mesh.source.input_fingerprint) {
     throw new Error('Mesh and result manifest provenance do not match.');
   }
-  const nodeIds = new Set(parsed.mesh.nodes.map((node) => node.id));
-  const elementIds = new Set(parsed.mesh.elements.map((element) => element.id));
-  const signatures = new Set<string>();
+  validateMeshFieldReferences(parsed.mesh, parsed.fields);
   const fields = parsed.fields.map((field) => {
     const name = /^u[xyz]_m$/.test(field.name) && field.unit === 'm' ? field.name.slice(0, -2) : field.name;
-    const signature = JSON.stringify([name, field.location, field.unit]);
-    if (signatures.has(signature)) throw new Error(`Duplicate scalar field: ${name}.`);
-    signatures.add(signature);
-    const ids = field.location === 'node' ? nodeIds : elementIds;
-    if (field.entity_ids.length !== field.values.length || field.values.length === 0
-      || new Set(field.entity_ids).size !== field.entity_ids.length || field.entity_ids.some((entityId) => !ids.has(entityId))) {
-      throw new Error(`Field ${field.name} contains invalid or duplicate mesh entity IDs.`);
-    }
     let minimum = Infinity, maximum = -Infinity;
     for (const v of field.values) { minimum = Math.min(minimum, v); maximum = Math.max(maximum, v); }
     return { ...field, name, id: generateId('result_field'), component_names: [name], minimum, maximum };

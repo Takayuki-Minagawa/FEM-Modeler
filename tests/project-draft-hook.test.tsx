@@ -93,6 +93,108 @@ describe('draft startup and scheduling', () => {
 });
 
 describe('project transitions and conflicts', () => {
+  it('saves edits made while deletion of the current draft is pending', async () => {
+    await mount(); await act(async () => { await hook.restoreDraft(); }); await settle();
+    let finish!: () => void;
+    mocks.clear.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+    mocks.list.mockResolvedValue([]);
+    let deleting!: ReturnType<typeof hook.discardDraft>;
+    await act(async () => { deleting = hook.discardDraft(saved.projectId); });
+    await act(async () => useAppStore.getState().setProjectName('Edit during deletion'));
+    await act(async () => { finish(); await deleting; });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1300); });
+    expect(mocks.save).toHaveBeenCalledOnce();
+    expect(mocks.save.mock.calls[0][0].meta.project_name).toBe('Edit during deletion');
+    expect(mocks.save.mock.calls[0][2].expectedVersion).toBeNull();
+  });
+
+  it('releases a temporary restore pause when a newer transition cancels that restore', async () => {
+    await mount(); await act(async () => { await hook.restoreDraft(); }); await settle();
+    let finish!: (value: typeof savedIr) => void;
+    mocks.load.mockImplementationOnce(() => new Promise<typeof savedIr>((resolve) => { finish = resolve; }));
+    let restoring!: ReturnType<typeof hook.restoreDraft>;
+    await act(async () => { restoring = hook.restoreDraft(); });
+    await act(async () => useAppStore.getState().setProjectName('Keep editing during restore'));
+    const replace = vi.fn();
+    await act(async () => { expect((await hook.transitionProject(replace)).success).toBe(false); });
+    expect(replace).not.toHaveBeenCalled();
+    await act(async () => { finish(savedIr); await restoring; });
+    expect(await restoring).toBe(false);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1300); });
+    expect(mocks.save.mock.calls.at(-1)?.[0].meta.project_name).toBe('Keep editing during restore');
+  });
+
+  it('saves the in-memory project before switching even after its saved drafts were explicitly deleted', async () => {
+    await mount(); await act(async () => { await hook.restoreDraft(); }); await settle();
+    await act(async () => { await hook.discardDraft(saved.projectId); });
+    mocks.save.mockRejectedValueOnce(new Error('Storage failed'));
+    const replace = vi.fn();
+    await act(async () => { expect((await hook.transitionProject(replace)).success).toBe(false); });
+    expect(mocks.save).toHaveBeenCalledOnce(); expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('keeps the current IR and history when saving before a UI replacement fails, then permits a retry', async () => {
+    await mount(); await act(async () => { await hook.restoreDraft(); }); await settle();
+    await act(async () => useAppStore.getState().setProjectName('Unsaved work'));
+    const original = useAppStore.getState();
+    const replace = vi.fn(() => useAppStore.getState().createProject('Replacement'));
+    mocks.save.mockRejectedValueOnce(new DOMException('Storage full', 'QuotaExceededError'));
+    let result!: Awaited<ReturnType<typeof hook.transitionProject>>;
+    await act(async () => { result = await hook.transitionProject(replace); });
+    expect(result).toMatchObject({ success: false, error: expect.stringContaining('current edits have been kept') });
+    expect(replace).not.toHaveBeenCalled();
+    expect(useAppStore.getState().ir).toBe(original.ir);
+    expect(useAppStore.getState().projectSession).toBe(original.projectSession);
+    expect(useAppStore.getState().canUndo).toBe(original.canUndo);
+    await act(async () => { result = await hook.transitionProject(replace); });
+    expect(result.success).toBe(true);
+    expect(mocks.save.mock.calls.at(-1)?.[0]).toBe(original.ir);
+    expect(useAppStore.getState().ir.meta.project_name).toBe('Replacement');
+  });
+
+  it('waits for a committed backup and cancels replacement when another edit arrives during saving', async () => {
+    await mount(); await act(async () => { await hook.restoreDraft(); }); await settle();
+    await act(async () => useAppStore.getState().setProjectName('Before wait'));
+    let finish!: (summary: DraftSummary) => void;
+    mocks.save.mockImplementationOnce(() => new Promise<DraftSummary>((resolve) => { finish = resolve; }));
+    const replace = vi.fn(); let pending!: ReturnType<typeof hook.transitionProject>;
+    await act(async () => { pending = hook.transitionProject(replace); });
+    expect(replace).not.toHaveBeenCalled();
+    await act(async () => useAppStore.getState().setProjectName('Arrived while saving'));
+    await act(async () => { finish({ ...saved, versionId: 'new-head' }); await pending; });
+    expect((await pending).success).toBe(false);
+    expect(replace).not.toHaveBeenCalled();
+    expect(useAppStore.getState().ir.meta.project_name).toBe('Arrived while saving');
+  });
+
+  it('requires a current backup during conflicts and permits switching after explicit file download', async () => {
+    const { DraftConflictError } = await import('@/lib/project-draft-storage');
+    await mount(); await act(async () => { await hook.restoreDraft(); }); await settle();
+    await act(async () => useAppStore.getState().setProjectName('Conflict edit'));
+    mocks.save.mockRejectedValueOnce(new DraftConflictError());
+    await act(async () => { await vi.advanceTimersByTimeAsync(1300); });
+    const replace = vi.fn(); let result!: Awaited<ReturnType<typeof hook.transitionProject>>;
+    await act(async () => { result = await hook.transitionProject(replace); });
+    expect(result.success).toBe(false); expect(replace).not.toHaveBeenCalled();
+    await act(async () => { hook.saveProjectFile(); result = await hook.transitionProject(replace); });
+    expect(result.success).toBe(true); expect(replace).toHaveBeenCalledOnce();
+    await act(async () => useAppStore.getState().setProjectName('Edit after download'));
+    await act(async () => { result = await hook.transitionProject(replace); });
+    expect(result.success).toBe(false); expect(replace).toHaveBeenCalledOnce();
+  });
+
+  it('keeps conflicted edits when a different recent project is requested', async () => {
+    const { DraftConflictError } = await import('@/lib/project-draft-storage');
+    await mount(); await act(async () => { await hook.restoreDraft(); }); await settle();
+    await act(async () => useAppStore.getState().setProjectName('Local edits'));
+    mocks.save.mockRejectedValueOnce(new DraftConflictError());
+    await act(async () => { await vi.advanceTimersByTimeAsync(1300); });
+    mocks.load.mockClear();
+    await act(async () => { expect(await hook.restoreDraft('different-project')).toBe(false); });
+    expect(mocks.load).not.toHaveBeenCalled();
+    expect(useAppStore.getState().ir.meta.project_name).toBe('Local edits');
+  });
+
   it('flushes a pending edit before switching and auto-saves the newly created empty project', async () => {
     await mount(); await act(async () => { await hook.restoreDraft(); }); await settle();
     await act(async () => { useAppStore.getState().setProjectName('Last edit before switch'); });

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { unzipSync, strFromU8 } from 'fflate';
 
 interface Head { projectId: string; projectName: string; versionId: string; irJson: string }
 async function heads(page: Page): Promise<Head[]> {
@@ -95,12 +96,17 @@ test('creates, resizes, deletes and undoes geometry, with a real JSON download',
 
 test('keeps modal focus stable through autosave and exports a template solver ZIP', async ({ page }) => {
   await createTemplate(page, '2D Frame');
+  const original = (await downloadProject(page)).geometry;
+  await page.getByText(original.bodies[0].name, { exact: true }).last().click();
   const help = page.getByRole('button', { name: 'Help', exact: true });
   await help.click();
   const dialog = page.getByRole('dialog', { name: 'Operation Manual' });
   await expect(dialog).toBeVisible();
   const close = dialog.getByRole('button', { name: 'Close', exact: true });
   await expect(close).toBeFocused();
+  await page.keyboard.press('Delete');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Control+z');
   await page.waitForTimeout(1500);
   await expect(close).toBeFocused();
   await page.keyboard.press('Tab');
@@ -108,12 +114,53 @@ test('keeps modal focus stable through autosave and exports a template solver ZI
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(help).toBeFocused();
+  expect((await downloadProject(page)).geometry).toEqual(original);
   await page.getByRole('button', { name: /Solver Targets/ }).click();
   const pending = page.waitForEvent('download');
   await page.getByRole('button', { name: /OpenSeesPy Structural/ }).click();
   const zip = await pending;
   expect(zip.suggestedFilename()).toMatch(/\.zip$/);
-  expect((await readFile((await zip.path())!)).subarray(0, 2).toString()).toBe('PK');
+  const files = unzipSync(await readFile((await zip.path())!));
+  expect(strFromU8(files['uv.lock'])).toBe(await readFile('solver-tests/openseespy/uv.lock', 'utf8'));
+  expect(strFromU8(files['run.sh'])).toContain('source runtime/lifecycle.sh');
+});
+
+test('keeps edits after failed saves when creating or opening another project, and allows a file backup', async ({ page }) => {
+  await createTemplate(page, '2D Frame');
+  await expect.poll(async () => (await heads(page)).length).toBe(1);
+  const original = (await heads(page))[0];
+  await page.evaluate(() => {
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (...args: Parameters<IDBObjectStore['put']>) {
+      if (this.name === 'project-drafts') throw new DOMException('Injected quota failure', 'QuotaExceededError');
+      return put.apply(this, args);
+    };
+  });
+  await page.getByRole('combobox', { name: 'Display unit system' }).selectOption('mm-N-s');
+  await page.getByRole('button', { name: 'New', exact: true }).click();
+  const start = page.getByRole('dialog', { name: 'FEM Modeler' });
+  await start.getByRole('button', { name: /Empty Project/ }).click();
+  await expect(start.getByRole('alert')).toContainText('current edits have been kept');
+  expect((await heads(page))[0].versionId).toBe(original.versionId);
+  await page.keyboard.press('Escape');
+  await expect(start).toBeHidden();
+  await expect(page.getByRole('combobox', { name: 'Display unit system' })).toHaveValue('mm-N-s');
+
+  const other = JSON.parse(original.irJson);
+  other.meta.project_id = 'file-replacement'; other.meta.project_name = 'Other file project';
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Load', exact: true }).click();
+  await (await chooser).setFiles({ name: 'other.fem.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(other)) });
+  await expect(page.getByRole('alert')).toContainText('current edits have been kept');
+  await expect(page.getByRole('combobox', { name: 'Display unit system' })).toHaveValue('mm-N-s');
+  await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await page.getByRole('button', { name: 'New', exact: true }).click();
+  const backupDownload = page.waitForEvent('download');
+  await start.getByRole('button', { name: 'Save current project to a file', exact: true }).click();
+  const backup = JSON.parse(await readFile((await (await backupDownload).path())!, 'utf8'));
+  expect(backup.meta.project_id).toBe(original.projectId);
+  expect(backup.units.system_name).toBe('mm-N-s');
+  await createTemplate(page, 'Empty Project');
 });
 
 test('reloads the cached app offline and restores its IndexedDB project', async ({ page, context }) => {

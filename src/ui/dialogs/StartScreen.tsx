@@ -1,4 +1,5 @@
 import { RecentProjects } from './RecentProjects';
+import { useState } from 'react';
 import { Modal } from './Modal';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
@@ -29,7 +30,9 @@ const TEMPLATES: { i18nKey: string; domain: DomainType }[] = [
 
 export function StartScreen() {
   const { t, i18n } = useTranslation();
-  const { draftSummary, restoreDraft, discardDraft, addActivity } = useAppContext();
+  const { draftSummary, restoreDraft, discardDraft, addActivity, transitionProject, saveProjectFile, autosaveState } = useAppContext();
+  const [transitionError, setTransitionError] = useState<string | null>(null);
+  const [transitioning, setTransitioning] = useState(false);
   const { openFilePicker } = useProjectFileLoader();
   const isOpen = useAppStore((s) => s.isStartScreenOpen);
   const createProject = useAppStore((s) => s.createProject);
@@ -43,15 +46,19 @@ export function StartScreen() {
   ): string => t(`startScreen.templates.${template.i18nKey}.${field}`);
 
   const handleLoadFile = () => {
-    openFilePicker('.json,.fem.json,.fem.zip');
+    setTransitionError(null);
+    openFilePicker('.json,.fem.json,.fem.zip', (result) => setTransitionError(result.success ? null : result.error ?? 'Failed to load project.'));
   };
 
-  const handleCreate = (tmpl: typeof TEMPLATES[number]) => {
+  const handleCreate = async (tmpl: typeof TEMPLATES[number]) => {
+    setTransitionError(null); setTransitioning(true);
     const name = templateText(tmpl, 'name');
-    createProject(name, tmpl.domain);
-    if (tmpl.i18nKey !== 'empty') {
-      applyTemplate(tmpl.domain, i18n.language);
-    }
+    const result = await transitionProject(() => {
+      createProject(name, tmpl.domain);
+      if (tmpl.i18nKey !== 'empty') applyTemplate(tmpl.domain, i18n.language);
+    });
+    setTransitioning(false);
+    if (!result.success) { setTransitionError(result.error ?? 'Project switch cancelled.'); return; }
     addActivity(
       'info',
       i18n.language === 'ja'
@@ -88,6 +95,10 @@ export function StartScreen() {
 
         {/* Content */}
         <div className="p-6">
+          {(transitionError || autosaveState.status === 'error' || autosaveState.status === 'conflict') && <div className="mb-4 text-sm" style={{ color: 'var(--color-error)' }}>
+            <p role="alert">{transitionError ?? autosaveState.errorMessage}</p>
+            <button type="button" className="mt-2 underline" onClick={saveProjectFile}>{i18n.language === 'ja' ? '現在のプロジェクトをファイルに保存' : 'Save current project to a file'}</button>
+          </div>}
           {draftSummary && (
             <div
               className="mb-6 p-4 rounded border"
@@ -164,7 +175,8 @@ export function StartScreen() {
             {TEMPLATES.map((tmpl) => (
               <button
                 key={tmpl.i18nKey}
-                onClick={() => handleCreate(tmpl)}
+                onClick={() => void handleCreate(tmpl)}
+                disabled={transitioning}
                 className="p-4 rounded border text-left transition-colors cursor-pointer"
                 style={{
                   borderColor: 'var(--color-border)',

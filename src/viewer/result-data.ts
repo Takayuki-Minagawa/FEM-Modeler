@@ -36,9 +36,9 @@ const FACES: Record<ResultMesh['elements'][number]['type'], number[][]> = {
   tetra4: [[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]],
   hexa8: [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]],
 };
-/** Exterior faces only: shared volume faces are suppressed using node IDs. */
-export function exteriorTriangles(mesh: ResultMesh, allowedIds?: Set<string>) {
-  const faces = new Map<string, { nodes: string[]; elementId: string; volumes: number; surface: boolean }>();
+/** Preserve both owners when an explicit boundary element coincides with a volume face. */
+export function exteriorTriangles(mesh: ResultMesh, allowedIds?: Set<string>, field?: ResultField) {
+  const faces = new Map<string, { nodes: string[]; volumeIds: string[]; boundaryIds: string[] }>();
   for (const element of mesh.elements) {
     if (allowedIds && !allowedIds.has(element.id)) continue;
     const volume = element.type === 'tetra4' || element.type === 'hexa8';
@@ -47,16 +47,23 @@ export function exteriorTriangles(mesh: ResultMesh, allowedIds?: Set<string>) {
       const key = [...nodes].sort().join('\0');
       const existing = faces.get(key);
       if (existing) {
-        if (volume) { existing.volumes += 1; existing.elementId = element.id; existing.nodes = nodes; }
-        else existing.surface = true;
-      } else faces.set(key, { nodes, elementId: element.id, volumes: volume ? 1 : 0, surface: !volume });
+        if (volume) { existing.volumeIds.push(element.id); existing.nodes = nodes; }
+        else existing.boundaryIds.push(element.id);
+      } else faces.set(key, { nodes, volumeIds: volume ? [element.id] : [], boundaryIds: volume ? [] : [element.id] });
     }
   }
-  const triangles: { nodes: string[]; elementId: string }[] = [];
+  const fieldIds = field && field.location !== 'node' ? new Set(field.entity_ids) : undefined;
+  const triangles: { nodes: string[]; elementId: string; volumeIds: string[]; boundaryIds: string[] }[] = [];
   for (const face of faces.values()) {
-    if (face.volumes > 1) continue;
-    triangles.push({ nodes: face.nodes.slice(0, 3), elementId: face.elementId });
-    if (face.nodes.length === 4) triangles.push({ nodes: [face.nodes[0], face.nodes[2], face.nodes[3]], elementId: face.elementId });
+    if (face.volumeIds.length > 1) continue;
+    // Cell fields prefer the containing volume; boundary/element fields prefer
+    // the explicit surface. A field can also cover just one of these owners.
+    const candidates = field?.location === 'element' || field?.location === 'facet'
+      ? [...face.boundaryIds, ...face.volumeIds] : [...face.volumeIds, ...face.boundaryIds];
+    const elementId = candidates.find((id) => fieldIds?.has(id)) ?? candidates[0];
+    const owner = { elementId, volumeIds: face.volumeIds, boundaryIds: face.boundaryIds };
+    triangles.push({ nodes: face.nodes.slice(0, 3), ...owner });
+    if (face.nodes.length === 4) triangles.push({ nodes: [face.nodes[0], face.nodes[2], face.nodes[3]], ...owner });
   }
   return triangles;
 }

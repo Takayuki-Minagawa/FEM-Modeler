@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { parseResultPackage, resultMeshSchema, summarizeMesh } from '@/results/package';
-import { deformedNodes, exteriorTriangles } from '@/viewer/result-data';
+import { deformedNodes, exteriorTriangles, scalarColor } from '@/viewer/result-data';
+import { buildResultGeometry } from '@/viewer/result-geometry';
 import { convergenceStudyMarkdown, studyFromResults } from '@/results/studies';
-import type { ResultIR } from '@/core/ir/types';
+import type { ResultField, ResultIR } from '@/core/ir/types';
 
 function mesh() {
   return resultMeshSchema.parse({ length_unit: 'm', source: { solver: 'OpenSeesPy', generator: 'test', input_fingerprint: 'hash' }, representative_size: 1,
@@ -57,6 +58,47 @@ describe('mesh packages and explicit node mapping', () => {
     ];
     expect(exteriorTriangles(m)).toHaveLength(6);
     expect(exteriorTriangles(m, new Set(['t1']))).toHaveLength(4);
+  });
+  it('keeps node colors and probes missing when a cell field reuses a node ID', () => {
+    const r = result();
+    r.mesh!.elements[0].id = '10';
+    const field: ResultField = { id: 'pressure', name: 'pressure', location: 'cell', component_names: ['pressure'], unit: 'Pa', entity_ids: ['10'], values: [100], minimum: 0, maximum: 100 };
+    const data = buildResultGeometry(r, field, 0, false)!;
+    expect([...data.nodes.getAttribute('color').array]).toEqual([0.5, 0.5, 0.5, 0.5, 0.5, 0.5]);
+    expect(data.nodeValues.get('10')).toBeUndefined();
+    expect(data.values.get('10')).toBe(100);
+    data.surface.dispose(); data.wire.dispose(); data.nodes.dispose();
+    const nodal = buildResultGeometry(r, { ...field, location: 'node' }, 0, false)!;
+    expect(nodal.nodeValues.get('10')).toBe(100);
+    expect([...nodal.nodes.getAttribute('color').array].slice(3)).toEqual(scalarColor(100, 0, 100).map(Math.fround));
+    nodal.surface.dispose(); nodal.wire.dispose(); nodal.nodes.dispose();
+  });
+  it.each([false, true])('colors and probes explicit boundary owners regardless of element order (boundary first: %s)', (boundaryFirst) => {
+    const r = result(); const m = r.mesh!;
+    m.nodes = [
+      { id: 'a', position: [0, 0, 0] }, { id: 'b', position: [1, 0, 0] },
+      { id: 'c', position: [0, 1, 0] }, { id: 'd', position: [0, 0, 1] },
+    ];
+    m.elements = [
+      { id: 'volume', type: 'tetra4', node_ids: ['a', 'b', 'c', 'd'], boundary_tags: [] },
+      { id: 'boundary', type: 'triangle3', node_ids: ['a', 'b', 'd'], boundary_tags: ['wall'] },
+    ];
+    if (boundaryFirst) m.elements.reverse();
+    const field: ResultField = { id: 'heat_flux', name: 'heat_flux', location: 'element', component_names: ['heat_flux'], unit: 'W/m²', entity_ids: ['boundary'], values: [70], minimum: 0, maximum: 100 };
+    const boundaryData = buildResultGeometry(r, field, 0, false)!;
+    expect(boundaryData.triangles).toHaveLength(4);
+    const index = boundaryData.triangles.findIndex((face) => face.boundaryIds.includes('boundary'));
+    const face = boundaryData.triangles[index];
+    expect(face.volumeIds).toEqual(['volume']); expect(face.boundaryIds).toEqual(['boundary']);
+    expect(face.elementId).toBe('boundary'); expect(boundaryData.values.get(face.elementId)).toBe(70);
+    const colors = [...boundaryData.surface.getAttribute('color').array].slice(index * 9, (index + 1) * 9);
+    expect(colors).toEqual(Array.from({ length: 3 }, () => scalarColor(70, 0, 100).map(Math.fround)).flat());
+    boundaryData.surface.dispose(); boundaryData.wire.dispose(); boundaryData.nodes.dispose();
+    const volumeField = { ...field, location: 'cell' as const, entity_ids: ['volume'], values: [25] };
+    const volumeData = buildResultGeometry(r, volumeField, 0, false)!;
+    expect(volumeData.triangles.every((triangle) => triangle.elementId === 'volume')).toBe(true);
+    expect(volumeData.values.get(volumeData.triangles[index].elementId)).toBe(25);
+    volumeData.surface.dispose(); volumeData.wire.dispose(); volumeData.nodes.dispose();
   });
 });
 

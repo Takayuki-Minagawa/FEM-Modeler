@@ -20,7 +20,10 @@ def read_table(directory, expected_iteration=None):
         rows = [row for row in rows if row[0] == expected_iteration]
         if not rows:
             raise ValueError(f"No patch values at solver iteration {expected_iteration}: {directory}")
-    return max(rows, key=lambda row: row[0])
+    latest = max(rows, key=lambda row: row[0])
+    if any(row != latest for row in rows if row[0] == latest[0]):
+        raise ValueError(f"Conflicting patch samples at iteration {latest[0]}: {directory}")
+    return latest
 
 
 def clean_text(path):
@@ -54,7 +57,19 @@ def internal_field(path, count, vector=False):
     return values
 
 
-def mesh_package(manifest, latest):
+def subtract(left, right):
+    return [a - b for a, b in zip(left, right)]
+
+
+def cross(left, right):
+    return [left[1]*right[2] - left[2]*right[1], left[2]*right[0] - left[0]*right[2], left[0]*right[1] - left[1]*right[0]]
+
+
+def face_triangles(face, points):
+    return [(points[face[0]], points[face[index]], points[face[index + 1]]) for index in range(1, len(face) - 1)]
+
+
+def mesh_package(manifest, latest, exported):
     count, body = list_body("constant/polyMesh/points")
     points = [[float(value) for value in row.split()] for row in re.findall(r"\(([^)]+)\)", body)]
     if len(points) != count:
@@ -81,6 +96,7 @@ def mesh_package(manifest, latest):
                 tags[face_index] = match[1]
     elements = []
     aspect_ratios = []
+    total_volume = 0.0
     for cell_index, face_ids in enumerate(cells):
         base = faces[face_ids[0]]
         adjacency = {}
@@ -99,21 +115,55 @@ def mesh_package(manifest, latest):
             opposite.append(outside.pop())
         edge_lengths = [math.dist(points[left], points[right]) for left, adjacent in adjacency.items() for right in adjacent if left < right]
         aspect_ratios.append(max(edge_lengths) / min(edge_lengths))
+        center = [sum(points[node][axis] for node in adjacency) / len(adjacency) for axis in range(3)]
+        # Convex blockMesh cells are partitioned into tetrahedra from the cell
+        # center and each triangulated face, independent of owner orientation.
+        for face_id in face_ids:
+            for a, b, c in face_triangles(faces[face_id], points):
+                normal = cross(subtract(b, a), subtract(c, a))
+                total_volume += abs(sum(x*y for x, y in zip(subtract(a, center), normal))) / 6
         elements.append({"id": str(cell_index), "type": "hexa8", "node_ids": [str(node) for node in base + opposite], "boundary_tags": sorted({tags[face] for face in face_ids if face in tags})})
+    if not math.isfinite(total_volume) or total_volume <= 0:
+        raise ValueError("Positive finite mesh volume required")
+    if exported["dimensionality"] == "2D":
+        front_back = exported["patches"]["frontAndBack"]
+        area = sum(math.sqrt(sum(x*x for x in cross(subtract(b, a), subtract(c, a)))) / 2
+                   for index, tag in tags.items() if tag == front_back
+                   for a, b, c in face_triangles(faces[index], points)) / 2
+        if not math.isfinite(area) or area <= 0:
+            raise ValueError("Positive finite front/back area required for 2D representative size")
+        representative_size = math.sqrt(area / cell_count)
+        definition = "sqrt(A/Ncells), where A is half the actual frontAndBack patch area in m^2; excludes the artificial 2D extrusion thickness"
+        manifest["mesh_planar_area_m2"] = area
+    else:
+        representative_size = (total_volume / cell_count) ** (1/3)
+        definition = "cbrt(V/Ncells), where V is the sum of actual convex polyMesh cell volumes in m^3"
+    manifest.update({"representative_mesh_size": representative_size, "representative_mesh_size_definition": definition, "mesh_volume_m3": total_volume})
     pressure = internal_field(latest / "p", cell_count)
     velocity = internal_field(latest / "U", cell_count, vector=True)
     ids = [str(index) for index in range(cell_count)]
     density = manifest["density_kg_m3"]
     fields = [{"name": "pressure", "location": "cell", "unit": "Pa", "entity_ids": ids, "values": [value * density for value in pressure]}, {"name": "velocity_magnitude", "location": "cell", "unit": "m/s", "entity_ids": ids, "values": [math.sqrt(sum(x*x for x in row)) for row in velocity]}]
     mesh = {"length_unit": "m", "nodes": [{"id": str(index), "position": point} for index, point in enumerate(points)], "elements": elements, "source": {"solver": "OpenFOAM", "generator": "OpenFOAM 10 blockMesh ASCII polyMesh", "input_fingerprint": manifest["input_fingerprint"]}, "quality": [{"name": "cell_edge_aspect_ratio", "definition": "Maximum divided by minimum unique edge length in each actual blockMesh hexahedron; 1 for a cube", "unit": "1", "element_ids": ids, "values": aspect_ratios, "bad_above": 10}]}
+    mesh["representative_size"] = representative_size
     return {"format": "fem-modeler-result-package-v1", "manifest": manifest, "mesh": mesh, "fields": fields}
 
 
-def collect():
+def write_json(path, data):
+    # Serialization must succeed before replacing an existing artifact.
+    content = json.dumps(data, indent=2, allow_nan=False)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(content)
+    temporary.replace(path)
+
+
+def collect(execution_return_code=0):
+    Path("result_package.json").unlink(missing_ok=True)
+    Path("result_manifest.json").unlink(missing_ok=True)
     exported = json.loads(Path("export_manifest.json").read_text())
     provenance_keys = ("project_id", "analysis_case_id", "export_target", "input_fingerprint", "comparison_fingerprint", "run_id", "model_revision")
     manifest = {key: exported[key] for key in provenance_keys}
-    manifest.update({"solver": "OpenFOAM 10 simpleFoam", "python_version": platform.python_version(), "execution_return_code": int(sys.argv[1]) if len(sys.argv) > 1 else 0})
+    manifest.update({"solver": "OpenFOAM 10 simpleFoam", "python_version": platform.python_version(), "execution_return_code": execution_return_code})
     text = Path("solver.log").read_text() if Path("solver.log").exists() else ""
     history = {}
     iteration = 0
@@ -128,8 +178,9 @@ def collect():
     manifest["residual_history"] = [{"iteration": iteration, "values": values} for iteration, values in sorted(history.items())]
     manifest["residual_tolerances"] = {field: 1e-4 for field in ("p", "Ux", "Uy") + (("Uz",) if exported["dimensionality"] == "3D" else ())}
     manifest["residual_definition"] = "maximum initial normalized equation residual for each field in each SIMPLE iteration"
-    errors = []
     try:
+        if execution_return_code != 0:
+            raise ValueError(f"Solver failed with return code {execution_return_code}")
         if not history:
             raise ValueError("No measured solver residual history")
         last_iteration = max(history)
@@ -148,18 +199,20 @@ def collect():
         inlet_p = read_table(Path("postProcessing") / "pressure_inlet", last_iteration)[1]
         outlet_p = read_table(Path("postProcessing") / "pressure_outlet", last_iteration)[1]
         manifest["pressure_drop_Pa"] = (inlet_p - outlet_p) * density
-    except (ValueError, KeyError, IndexError) as error:
-        errors.append(str(error))
-    manifest["collection_errors"] = errors
-    Path("result_manifest.json").write_text(json.dumps(manifest, indent=2, allow_nan=False))
-    if errors:
-        raise ValueError("; ".join(errors))
-    latest = Path(str(last_iteration))
-    if not latest.is_dir():
-        raise ValueError(f"No field output at final solver iteration {last_iteration}; older checkpoints cannot be mixed with the final manifest")
-    Path("result_package.json").write_text(json.dumps(mesh_package(manifest, latest), allow_nan=False))
+        latest = Path(str(last_iteration))
+        if not latest.is_dir():
+            raise ValueError(f"No field output at final solver iteration {last_iteration}; older checkpoints cannot be mixed with the final manifest")
+        package = mesh_package(manifest, latest, exported)
+        manifest["collection_errors"] = []
+        write_json(Path("result_manifest.json"), manifest)
+        write_json(Path("result_package.json"), package)
+    except (ValueError, KeyError, IndexError, OSError, ZeroDivisionError) as error:
+        Path("result_package.json").unlink(missing_ok=True)
+        manifest.update({"collection_errors": [str(error)], "execution_return_code": execution_return_code or 1, "execution_status": "collection_failed"})
+        write_json(Path("result_manifest.json"), manifest)
+        raise
     return manifest
 
 
 if __name__ == "__main__":
-    collect()
+    collect(int(sys.argv[1]) if len(sys.argv) > 1 else 0)

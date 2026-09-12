@@ -36,6 +36,15 @@ describe('native dimension regeneration', () => {
 });
 
 describe('case scoped condition geometry', () => {
+  it.each(['kinematic', 'dynamic'] as const)('labels a %s pressure outlet with its actual unit', (basis) => {
+    useAppStore.getState().createProject('fluid', 'fluid'); applyTemplate('fluid', 'en');
+    const ir = structuredClone(useAppStore.getState().ir);
+    const outlet = ir.boundary_conditions.find((bc) => bc.bc_type === 'pressure_outlet')!;
+    outlet.values.pressure_basis = basis; outlet.values.scalar = 25;
+    const overlay = conditionOverlays(ir).find((item) => item.id === outlet.id)!;
+    expect(overlay.detail).toMatch(basis === 'kinematic' ? /m²\/s²$/ : /Pa$/);
+    expect(overlay.detail).toContain('25');
+  });
   it('only includes participating conditions and uses transformed target geometry and normal', () => {
     useAppStore.getState().createProject('solid', 'solid'); applyTemplate('solid', 'en');
     const ir = structuredClone(useAppStore.getState().ir);

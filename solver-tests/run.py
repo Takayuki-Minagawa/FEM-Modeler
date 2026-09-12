@@ -39,6 +39,8 @@ def main():
             if processes == 2:
                 folder.mkdir(exist_ok=True)
                 for path in (output / case).iterdir():
+                    if path.is_dir() and path.name == "runtime":
+                        shutil.copytree(path, folder / path.name, dirs_exist_ok=True)
                     if path.is_file() and path.suffix in (".py", ".geo", ".toml", ".lock", ".sh") or path.name in (".python-version", "export_manifest.json", "input_project.json"):
                         shutil.copy2(path, folder / path.name)
             image = "fem-modeler-openfoam:10" if case.startswith("fluid_") else "fem-modeler-dolfinx:0.10.0-amd64"

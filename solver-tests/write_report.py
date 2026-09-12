@@ -27,6 +27,9 @@ def main():
         if manifest.get("residual_history"):
             row["final_residuals"] = manifest["residual_history"][-1]
             row["residual_tolerances"] = manifest["residual_tolerances"]
+        for key in ("representative_mesh_size", "representative_mesh_size_definition", "mesh_planar_area_m2", "mesh_volume_m3"):
+            if key in manifest:
+                row[key] = manifest[key]
         cases.append(row)
     metrics = {key: value for key, value in verification["metrics"].items() if any(token in key for token in ("top_node", "analytic_field", "profile_relative", "pressure_gradient", "total_generation"))}
     report = {"validated_at_utc": datetime.now(timezone.utc).isoformat(), "scope": "Five templates, independent analytic references, SI/mm display invariance, DOLFINx MPI 1/2, conservation and measured residuals", "native_platform": "linux/amd64 (Docker Desktop on Apple Silicon)", "uv_version": "0.9.7", "native_images": {"dolfinx_and_opensees": "ghcr.io/fenics/dolfinx/dolfinx@sha256:f7cce2a2271bf838c080751348c471064acb41fef0330e2c08178a688f71890d", "openfoam": "openfoam/openfoam10-paraview510@sha256:d6ff1f9a2e7bc3c9177f373bebbdeb542fd8b49144afc24d5e3a3cd9bfae253d"}, "test_status": status, "solver_run_count": len(executions), "analytic_metrics": metrics, "cases": cases, "references_file": "solver-tests/references.json", "reproduction": "solver-tests/README.md", "limits": ["Validation covers the current strict exporter profiles and these fixtures; it does not validate arbitrary imported CAD or general CFD/VTK/XDMF formats.", "OpenFOAM benchmark checks the developed central channel region. The error tolerance is 3%; template process success is independently checked against measured residuals.", "DOLFINx visualization uses a P1 output mesh while the native XDMF result retains its original order."]}

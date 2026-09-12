@@ -57,9 +57,9 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     saveProjectFile, exportHistory, recordExportResult, clearExportHistory]);
   const uiValue = useMemo(() => ({ theme, toggleTheme, helpOpen, openHelp, closeHelp, importOpen, openImport, closeImport }),
     [theme, toggleTheme, helpOpen, openHelp, closeHelp, importOpen, openImport, closeImport]);
-  const { addActivity, clearActivityLog } = draftPersistence;
-  const actionsValue = useMemo(() => ({ addActivity, clearActivityLog, saveProjectFile, recordExportResult, clearExportHistory }),
-    [addActivity, clearActivityLog, saveProjectFile, recordExportResult, clearExportHistory]);
+  const { addActivity, clearActivityLog, transitionProject } = draftPersistence;
+  const actionsValue = useMemo(() => ({ addActivity, clearActivityLog, saveProjectFile, transitionProject, recordExportResult, clearExportHistory }),
+    [addActivity, clearActivityLog, saveProjectFile, transitionProject, recordExportResult, clearExportHistory]);
   return <AppUiContext.Provider value={uiValue}><AppActionsContext.Provider value={actionsValue}>
     <AppContext.Provider value={value}>{children}</AppContext.Provider>
   </AppActionsContext.Provider></AppUiContext.Provider>;

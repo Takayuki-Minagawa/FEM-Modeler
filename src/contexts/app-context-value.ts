@@ -47,6 +47,7 @@ export interface AppContextValue {
   addActivity: (level: ActivityLogLevel, message: string) => void;
   clearActivityLog: () => void;
   saveProjectFile: () => void;
+  transitionProject: (replace: () => void) => Promise<{ success: boolean; error?: string }>;
   readiness: 'initializing' | 'awaiting_restore' | 'editing';
   recentProjects: DraftSummary[];
   listDraftVersions: (projectId: string) => Promise<DraftSummary[]>;
@@ -60,6 +61,6 @@ export interface AppContextValue {
 export const AppContext = createContext<AppContextValue | null>(null);
 
 export type AppUiContextValue = Pick<AppContextValue, 'theme' | 'toggleTheme' | 'helpOpen' | 'openHelp' | 'closeHelp' | 'importOpen' | 'openImport' | 'closeImport'>;
-export type AppActionsContextValue = Pick<AppContextValue, 'addActivity' | 'clearActivityLog' | 'saveProjectFile' | 'recordExportResult' | 'clearExportHistory'>;
+export type AppActionsContextValue = Pick<AppContextValue, 'addActivity' | 'clearActivityLog' | 'saveProjectFile' | 'transitionProject' | 'recordExportResult' | 'clearExportHistory'>;
 export const AppUiContext = createContext<AppUiContextValue | null>(null);
 export const AppActionsContext = createContext<AppActionsContextValue | null>(null);

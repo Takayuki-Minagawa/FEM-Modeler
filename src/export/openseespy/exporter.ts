@@ -52,7 +52,7 @@ export function exportOpenSeesPy(ir: ProjectIR): OpenSeesPyExportResult {
       '.python-version',
       'result_package.json (runtime)',
       'run.sh',
-      'README.txt',
+      'README.txt', 'runtime/lifecycle.sh', 'runtime/failure_manifest.json',
     ],
     warnings,
     errors,

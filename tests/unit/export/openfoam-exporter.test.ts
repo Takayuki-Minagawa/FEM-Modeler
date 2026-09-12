@@ -231,6 +231,14 @@ describe('OpenFOAM exporter contract', () => {
     expect(result.errors.some((error) => error.includes('transformed channel inlet-to-outlet axis'))).toBe(true);
   });
 
+  it.each([30, 90, -15])('rejects unsupported 2D out-of-plane rotation of %s degrees', (angle) => {
+    const project = validProject('2D');
+    project.geometry.bodies[0].transform.rotation = [angle, 0, 0];
+    const result = exportOpenFOAM(project);
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain('OpenFOAM 2D channel out-of-plane rotation is unsupported; keep the extrusion parallel to the global Z axis or select 3D.');
+  });
+
   it('maps boundary patches by exact topology face ID, independent of BC order or labels', () => {
     const project = validProject('2D');
     project.named_selections.find((selection) => selection.id === IDS.topWallSelection)!.name = 'ceiling';

@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import type { DomainType } from '@/core/ir/types';
 import { useAppStore } from '@/state/store';
 import { applyTemplate } from '@/lib/project-templates';
@@ -24,6 +28,67 @@ function normalizedFiles(files: Record<string, string>) {
 }
 
 describe('solver package contracts', () => {
+  function withPackage(domain: DomainType, check: (folder: string, bin: string) => void) {
+    useAppStore.getState().createProject('runtime failure', domain);
+    applyTemplate(domain, 'en');
+    const folder = mkdtempSync(join(tmpdir(), 'fem-run-'));
+    try {
+      for (const [path, content] of Object.entries(exported(domain))) {
+        mkdirSync(dirname(join(folder, path)), { recursive: true });
+        writeFileSync(join(folder, path), content);
+      }
+      const bin = join(folder, 'bin');
+      mkdirSync(bin);
+      check(folder, bin);
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
+  }
+
+  function stub(bin: string, name: string, commands: string) {
+    writeFileSync(join(bin, name), `#!/bin/bash\n${commands}\n`, { mode: 0o755 });
+  }
+
+  it.each(['frame', 'solid', 'fluid'] as DomainType[])('invalidates previous %s success when environment setup fails', (domain) => {
+    withPackage(domain, (folder, bin) => {
+      for (const name of ['result_package.json', 'results.csv', 'result.xdmf', 'result.h5']) writeFileSync(join(folder, name), 'old success');
+      writeFileSync(join(folder, 'result_manifest.json'), '{"execution_return_code":0}');
+      stub(bin, 'uv', 'exit 17');
+      stub(bin, 'python3', 'echo /native/bindings');
+      const result = spawnSync('bash', ['run.sh'], { cwd: folder, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` }, encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(17);
+      for (const name of ['result_package.json', 'results.csv', 'result.xdmf', 'result.h5']) expect(existsSync(join(folder, name))).toBe(false);
+      const failure = JSON.parse(readFileSync(join(folder, 'result_manifest.json'), 'utf8'));
+      expect(failure.execution_return_code).toBe(17);
+      expect(failure.input_fingerprint).toBe(JSON.parse(readFileSync(join(folder, 'export_manifest.json'), 'utf8')).input_fingerprint);
+    });
+  });
+
+  it('stops OpenFOAM when checkMesh reports failed checks with a zero exit code', () => {
+    withPackage('fluid', (folder, bin) => {
+      stub(bin, 'uv', 'exit 0');
+      stub(bin, 'blockMesh', 'exit 0');
+      stub(bin, 'checkMesh', 'echo "Failed 1 mesh checks."; exit 0');
+      stub(bin, 'simpleFoam', 'touch solver-was-run');
+      writeFileSync(join(folder, 'result_package.json'), 'old success');
+      const result = spawnSync('bash', ['run.sh'], { cwd: folder, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` }, encoding: 'utf8' });
+      expect(result.status).toBe(1);
+      expect(existsSync(join(folder, 'solver-was-run'))).toBe(false);
+      expect(existsSync(join(folder, 'result_package.json'))).toBe(false);
+      expect(JSON.parse(readFileSync(join(folder, 'result_manifest.json'), 'utf8')).execution_return_code).toBe(1);
+    });
+  });
+
+  it('removes partially written success when the final solver command fails', () => {
+    withPackage('frame', (folder, bin) => {
+      stub(bin, 'uv', 'if [[ "$*" == *"python model.py"* ]]; then echo success > result_package.json; exit 19; fi');
+      const result = spawnSync('bash', ['run.sh'], { cwd: folder, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` }, encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(19);
+      expect(existsSync(join(folder, 'result_package.json'))).toBe(false);
+      expect(JSON.parse(readFileSync(join(folder, 'result_manifest.json'), 'utf8')).execution_return_code).toBe(19);
+    });
+  });
+
   it.each(['frame', 'truss', 'solid', 'thermal', 'fluid'] as DomainType[])('keeps %s reproducible apart from run identity and timestamps', (domain) => {
     useAppStore.getState().createProject('package contract', domain);
     applyTemplate(domain, 'en');

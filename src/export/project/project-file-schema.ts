@@ -25,6 +25,7 @@ import {
 } from '@/core/ir/defaults';
 import { migrateLegacyUnits } from './migrations/v0_1';
 import { migrateV02Artifacts } from './migrations/v0_2';
+import { validateMeshFieldReferences } from '@/results/package';
 
 const REQUIRED_SOLVER_TARGETS = ['OpenSeesPy', 'DOLFINx', 'OpenFOAM'] as const;
 
@@ -62,6 +63,18 @@ const projectFileSchema = z.strictObject({
     }
   }
   project.results.forEach((result, resultIndex) => {
+    if (result.mesh) {
+      if (result.mesh.source.solver !== result.solver_target
+        || result.metadata.export_target !== result.solver_target
+        || result.mesh.source.input_fingerprint !== result.metadata.input_fingerprint
+        || (result.metadata.analysis_case_id !== undefined && result.metadata.analysis_case_id !== result.analysis_case_id)) {
+        context.addIssue({ code: 'custom', path: ['results', resultIndex, 'mesh'], message: 'Mesh and stored result provenance do not match.' });
+      }
+      try { validateMeshFieldReferences(result.mesh, result.fields); }
+      catch (error) {
+        context.addIssue({ code: 'custom', path: ['results', resultIndex, 'fields'], message: error instanceof Error ? error.message : 'Invalid mesh field references.' });
+      }
+    }
     result.fields.forEach((field, fieldIndex) => {
       const path = ['results', resultIndex, 'fields', fieldIndex];
       if (field.values.length === 0 || field.entity_ids.length !== field.values.length) {

@@ -113,7 +113,16 @@ export function resolveSimulationMode(
     errors.push('OpenFOAM dimensionality must be explicit in solver_options or channel metadata; no 2D/3D default was applied.');
   }
 
-  if (mode === '2D') return { mode, frontBackType: 'empty' };
+  if (mode === '2D') {
+    // OpenFOAM's empty-direction checks require the extrusion to remain on a
+    // Cartesian axis. This exporter supports the XY plane for its 2D channel.
+    const direction = applyTransformToPoint([0, 0, 1], { ...body.transform, position: [0, 0, 0] });
+    const magnitude = Math.hypot(...direction);
+    if (magnitude > 0 && Math.hypot(direction[0], direction[1]) / magnitude > 1e-9) {
+      errors.push('OpenFOAM 2D channel out-of-plane rotation is unsupported; keep the extrusion parallel to the global Z axis or select 3D.');
+    }
+    return { mode, frontBackType: 'empty' };
+  }
   return { mode, frontBackType: requestedFrontBackType ?? 'wall' };
 }
 

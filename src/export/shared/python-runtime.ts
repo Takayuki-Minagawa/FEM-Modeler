@@ -1,9 +1,9 @@
 import openseesProject from '../../../solver-tests/openseespy/pyproject.toml?raw';
-import openseesLock from '../../../solver-tests/openseespy/uv.lock?raw';
+import openseesLock from '../../../solver-tests/openseespy/uv.lock?compressed';
 import dolfinxProject from '../../../solver-tests/dolfinx/pyproject.toml?raw';
-import dolfinxLock from '../../../solver-tests/dolfinx/uv.lock?raw';
+import dolfinxLock from '../../../solver-tests/dolfinx/uv.lock?compressed';
 import openfoamProject from '../../../solver-tests/openfoam/pyproject.toml?raw';
-import openfoamLock from '../../../solver-tests/openfoam/uv.lock?raw';
+import openfoamLock from '../../../solver-tests/openfoam/uv.lock?compressed';
 import type { ArtifactFiles } from './packaging';
 
 export function pythonRuntimeFiles(solver: 'openseespy' | 'dolfinx' | 'openfoam'): ArtifactFiles {
