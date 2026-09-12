@@ -1,11 +1,11 @@
 import { useHotkeys } from 'react-hotkeys-hook';
 import { useAppStore } from '@/state/store';
-import { useAppContext } from '@/hooks/useAppContext';
+import { useAppActionsContext } from '@/hooks/useAppActionsContext';
 
 export function useKeyboardShortcuts() {
   const undo = useAppStore((s) => s.undo);
   const redo = useAppStore((s) => s.redo);
-  const { saveProjectFile } = useAppContext();
+  const { saveProjectFile } = useAppActionsContext();
 
   // Undo
   useHotkeys('ctrl+z, meta+z', (e) => {
@@ -30,12 +30,7 @@ export function useKeyboardShortcuts() {
     const state = useAppStore.getState();
     const selected = state.selectedEntityIds;
     if (selected.length > 0) {
-      selected.forEach((id) => {
-        if (state.ir.geometry.bodies.some((b) => b.id === id)) {
-          state.removeBody(id);
-        }
-      });
-      state.setSelectedEntities([]);
+      state.removeBodies(selected);
     }
   }, { enableOnFormTags: false });
 

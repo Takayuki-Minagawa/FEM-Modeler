@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'fem-modeler-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v2`;
+const CACHE_NAME = `${CACHE_PREFIX}v3`;
 const SHELL_URLS = ['./', './manifest.webmanifest', './favicon.svg'];
 const MAX_CACHE_ENTRIES = 80;
 
@@ -68,7 +68,10 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(event.request);
+    // Precache requests omit Origin while module/CSS requests include it. These
+    // content-hashed, same-origin build assets are identical for both variants.
+    const isBuildAsset = requestUrl.pathname.startsWith(new URL('./assets/', self.registration.scope).pathname);
+    const cached = await cache.match(event.request, { ignoreVary: isBuildAsset });
     if (cached) return cached;
     const response = await fetch(event.request);
     if (response.ok) await putBounded(cache, event.request, response.clone());

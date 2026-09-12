@@ -1,9 +1,11 @@
+import { importSTLAsync } from '@/geometry/import/stl-async';
+import { Modal } from './Modal';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
-import { importSTL, STL_SOURCE_UNIT_TO_METERS, type STLSourceUnit } from '@/geometry/import/stl-loader';
+import { STL_SOURCE_UNIT_TO_METERS, type STLSourceUnit } from '@/geometry/import/stl-loader';
 import { cacheSTLGeometry } from '@/geometry/import/stl-geometry-cache';
-import { useAppContext } from '@/hooks/useAppContext';
+import { useAppActionsContext } from '@/hooks/useAppActionsContext';
 import { useProjectFileLoader } from '@/hooks/useProjectFileLoader';
 
 interface ImportDialogProps {
@@ -16,32 +18,25 @@ const MAX_STL_FILE_BYTES = 50 * 1024 * 1024;
 export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
   const { i18n } = useTranslation();
   const isJa = i18n.language === 'ja';
-  const { addActivity } = useAppContext();
+  const { addActivity } = useAppActionsContext();
   const { loadFromFile } = useProjectFileLoader();
   const addBodyWithTopology = useAppStore((s) => s.addBodyWithTopology);
 
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [stlSourceUnit, setStlSourceUnit] = useState<STLSourceUnit>('mm');
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-
+  const activeImport = useRef<AbortController | null>(null);
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (!isOpen) return;
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    closeButtonRef.current?.focus();
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      previous?.focus();
-    };
-  }, [isOpen, onClose]);
+    if (!isOpen) activeImport.current?.abort();
+    return () => activeImport.current?.abort();
+  }, [isOpen]);
+  const [stlSourceUnit, setStlSourceUnit] = useState<STLSourceUnit>('mm');
 
   if (!isOpen) return null;
 
   const handleFile = async (file: File) => {
+    activeImport.current?.abort(); activeImport.current = null;
+    setBusy(false);
     setStatus(null);
     const ext = file.name.split('.').pop()?.toLowerCase();
 
@@ -63,12 +58,15 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
         setStatus({ type: 'error', message });
       }
     } else if (ext === 'stl') {
+      const controller = new AbortController(); activeImport.current = controller;
+      setBusy(true);
       try {
         if (file.size > MAX_STL_FILE_BYTES) {
           throw new Error('STL exceeds the 50 MB file-size safety limit.');
         }
         const buffer = await file.arrayBuffer();
-        const result = importSTL(buffer, file.name, STL_SOURCE_UNIT_TO_METERS[stlSourceUnit], stlSourceUnit);
+        const result = await importSTLAsync(buffer, file.name, STL_SOURCE_UNIT_TO_METERS[stlSourceUnit], stlSourceUnit, controller.signal);
+        if (controller.signal.aborted) { result.geometry?.dispose(); return; }
         if (result.success && result.body && result.asset) {
           addBodyWithTopology(result.body, { faces: result.faces, assets: [result.asset] });
           if (result.geometry) {
@@ -86,9 +84,12 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
           setStatus({ type: 'error', message: result.error ?? 'STL import failed.' });
         }
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
         const message = error instanceof Error ? error.message : String(error);
         addActivity('error', message);
         setStatus({ type: 'error', message });
+      } finally {
+        if (activeImport.current === controller) setBusy(false);
       }
     } else {
       addActivity(
@@ -118,24 +119,12 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
   };
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      role="presentation"
-    >
-      <div
-        className="rounded-lg shadow-2xl w-full max-w-lg mx-4"
-        style={{ backgroundColor: 'var(--color-bg-secondary)' }}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="import-dialog-title"
-      >
+    <Modal isOpen={isOpen} onClose={onClose} labelledBy="import-dialog-title" className="max-w-lg">
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <h2 id="import-dialog-title" className="text-lg font-bold" style={{ color: 'var(--color-accent)' }}>
             {isJa ? 'インポート' : 'Import'}
           </h2>
-          <button ref={closeButtonRef} onClick={onClose} className="px-3 py-1 text-sm rounded cursor-pointer" style={{ backgroundColor: 'var(--color-bg-input)', color: 'var(--color-text-secondary)' }}>
+          <button onClick={onClose} className="px-3 py-1 text-sm rounded cursor-pointer" style={{ backgroundColor: 'var(--color-bg-input)', color: 'var(--color-text-secondary)' }}>
             {isJa ? '閉じる' : 'Close'}
           </button>
         </div>
@@ -180,6 +169,7 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
             </p>
           </button>
 
+          {busy && <p role="status" className="mt-4 text-sm">{isJa ? 'STLを解析しています…' : 'Parsing STL…'}</p>}
           {/* Status */}
           {status && (
             <div role="status" aria-live="polite" className="mt-4 p-3 rounded text-sm" style={{
@@ -190,7 +180,6 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { MAX_PROJECT_FILE_BYTES, readFileAsText, parseProjectFile } from '@/export/project/load';
-import { useAppContext } from '@/hooks/useAppContext';
+import { useAppActionsContext } from '@/hooks/useAppActionsContext';
 
 export interface ProjectFileLoadResult {
   success: boolean;
@@ -14,7 +14,7 @@ export interface ProjectFileLoadResult {
 export function useProjectFileLoader() {
   const { i18n } = useTranslation();
   const isJa = i18n.language === 'ja';
-  const { addActivity } = useAppContext();
+  const { addActivity } = useAppActionsContext();
   const loadProject = useAppStore((s) => s.loadProject);
 
   const loadFromFile = useCallback(

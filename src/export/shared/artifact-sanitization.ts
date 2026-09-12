@@ -97,7 +97,7 @@ function replaceUnsafeFilenameCharacters(value: string): string {
 function sanitizeFilenameCandidate(value: string, maxLength: number): string {
   let candidate = replaceUnsafeFilenameCharacters(
     value.normalize('NFKC')
-    .replace(INVISIBLE_FILENAME_CONTROLS, '')
+      .replace(INVISIBLE_FILENAME_CONTROLS, '')
   )
     .replace(/\s+/g, '_')
     .replace(/_+/g, '_')
@@ -181,7 +181,7 @@ export function uniqueSolverIdentifier(
     return base;
   }
 
-  for (let index = 2; ; index += 1) {
+  for (let index = 2;;index += 1) {
     const suffix = `_${index}`;
     const prefixLength = Math.max(1, boundedLength - suffix.length);
     const candidate = `${base.slice(0, prefixLength).replace(/_+$/g, '')}${suffix}`;

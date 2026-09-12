@@ -1,3 +1,4 @@
+import { Modal } from './Modal';
 import { useTranslation } from 'react-i18next';
 
 interface HelpDialogProps {
@@ -86,23 +87,13 @@ export function HelpDialog({ isOpen, onClose }: HelpDialogProps) {
   ];
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        className="rounded-lg shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col"
-        style={{ backgroundColor: 'var(--color-bg-secondary)' }}
-      >
+    <Modal isOpen={isOpen} onClose={onClose} labelledBy="help-dialog-title">
         {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 border-b shrink-0"
           style={{ borderColor: 'var(--color-border)' }}
         >
-          <h2 className="text-lg font-bold" style={{ color: 'var(--color-accent)' }}>
+          <h2 id="help-dialog-title" className="text-lg font-bold" style={{ color: 'var(--color-accent)' }}>
             {t('help.title')}
           </h2>
           <button
@@ -136,7 +127,6 @@ export function HelpDialog({ isOpen, onClose }: HelpDialogProps) {
             </div>
           ))}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

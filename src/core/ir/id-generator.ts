@@ -26,6 +26,9 @@ const PREFIX_MAP = {
   asset: 'asset_',
   result: 'result_',
   result_field: 'field_',
+  run: 'run_',
+  study: 'study_',
+  draft: 'draft_',
 } as const;
 
 export type IdPrefix = keyof typeof PREFIX_MAP;

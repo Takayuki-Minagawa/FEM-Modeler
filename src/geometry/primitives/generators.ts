@@ -1,3 +1,4 @@
+import { nativeShapeSchema } from '@/core/ir/schema/shapes';
 import * as THREE from 'three';
 import { generateId } from '@/core/ir/id-generator';
 import type { GeometryBody, GeometryFace, GeometryEdge, GeometryVertex, BodyCategory } from '@/core/ir/types';
@@ -27,18 +28,19 @@ function nextColor(): string {
   return COLORS[colorIndex++ % COLORS.length];
 }
 
-export function generateShape(params: AnyShapeParams, name?: string): GeneratedTopology {
+export function generateShape(input: AnyShapeParams, name?: string): GeneratedTopology {
+  const params = nativeShapeSchema.parse(input);
   switch (params.shapeType) {
-    case 'box': return generateBox(params as BoxParams, name);
-    case 'cylinder': return generateCylinder(params as CylinderParams, name);
-    case 'plate': return generatePlate(params as PlateParams, name);
-    case 'plateWithHole': return generatePlateWithHole(params as PlateWithHoleParams, name);
-    case 'pipe': return generatePipe(params as PipeParams, name);
-    case 'lBracket': return generateLBracket(params as LBracketParams, name);
-    case 'frame2d': return generateFrame2D(params as FrameParams, name);
-    case 'truss2d': return generateTruss2D(params as TrussParams, name);
-    case 'channel': return generateChannel(params as ChannelParams, name);
-    default: return generateBox({ shapeType: 'box', width: 1, height: 1, depth: 1 }, name);
+    case 'box': return generateBox(params, name);
+    case 'cylinder': return generateCylinder(params, name);
+    case 'plate': return generatePlate(params, name);
+    case 'plateWithHole': return generatePlateWithHole(params, name);
+    case 'pipe': return generatePipe(params, name);
+    case 'lBracket': return generateLBracket(params, name);
+    case 'frame2d': return generateFrame2D(params, name);
+    case 'truss2d': return generateTruss2D(params, name);
+    case 'channel': return generateChannel(params, name);
+
   }
 }
 

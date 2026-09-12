@@ -1,4 +1,5 @@
 import { generateId } from '@/core/ir/id-generator';
+import { parseResultPackage } from './package';
 import type {
   ConservationCheck,
   ResultField,
@@ -24,6 +25,11 @@ export interface ResultImportResponse {
 
 export interface ResultImportExpectations {
   expectedModelRevision?: number;
+  expectedProjectId?: string;
+  expectedInputFingerprint?: string;
+  expectedComparisonFingerprint?: string;
+  /** Explicit opt-in for archiving another mesh from the same physics problem. */
+  allowMeshVariation?: boolean;
 }
 
 export function solverTargetForProfile(profile: SolverProfileHint): SolverTargetName {
@@ -181,20 +187,27 @@ function importCsv(text: string, sourceFileName: string, analysisCaseId: string,
   };
 }
 
-function finiteConservationVector(value: unknown): number[] | null {
+function finiteConservationVector(value: unknown, label = 'force_imbalance_N'): number[] | null {
   if (value === undefined) return null;
   if (!Array.isArray(value)
       || value.length === 0
       || value.length > MAX_CONSERVATION_COMPONENTS
       || !value.every((item) => typeof item === 'number' && Number.isFinite(item))) {
-    throw new Error(`force_imbalance_N must be a non-empty finite vector with at most ${MAX_CONSERVATION_COMPONENTS} components.`);
+    throw new Error(`${label} must be a non-empty finite vector with at most ${MAX_CONSERVATION_COMPONENTS} components.`);
   }
   return value;
 }
 
 function checksFromManifest(manifest: Record<string, unknown>): ConservationCheck[] {
   const checks: ConservationCheck[] = [];
-  const imbalance = finiteConservationVector(manifest.force_imbalance_N);
+  const applied = finiteConservationVector(manifest.applied_force_N, 'applied_force_N');
+  const reaction = finiteConservationVector(manifest.reaction_force_N, 'reaction_force_N');
+  if (Boolean(applied) !== Boolean(reaction) || (applied && reaction && applied.length !== reaction.length)) {
+    throw new Error('Applied forces and reactions must have matching components.');
+  }
+  const imbalance = applied && reaction
+    ? applied.map((value, index) => value + reaction[index])
+    : finiteConservationVector(manifest.force_imbalance_N);
   const rawTolerance = manifest.balance_tolerance_N;
   if (rawTolerance !== undefined
       && (typeof rawTolerance !== 'number' || !Number.isFinite(rawTolerance) || rawTolerance < 0)) {
@@ -204,6 +217,7 @@ function checksFromManifest(manifest: Record<string, unknown>): ConservationChec
   if (imbalance) {
     let value = 0;
     for (const component of imbalance) value = Math.max(value, Math.abs(component));
+    if (!Number.isFinite(value)) throw new Error('Force balance overflows the finite numeric range.');
     const status = tolerance === null ? 'warning' : value <= tolerance ? 'pass' : 'fail';
     checks.push({
       kind: 'force_balance',
@@ -216,11 +230,44 @@ function checksFromManifest(manifest: Record<string, unknown>): ConservationChec
         : `Maximum force imbalance is ${value} N (recomputed against tolerance ${tolerance} N).`,
     });
   }
+  const momentApplied = finiteConservationVector(manifest.applied_moment_Nm, 'applied_moment_Nm');
+  const momentReaction = finiteConservationVector(manifest.reaction_moment_Nm, 'reaction_moment_Nm');
+  if (Boolean(momentApplied) !== Boolean(momentReaction)
+      || (momentApplied && momentReaction && momentApplied.length !== momentReaction.length)) {
+    throw new Error('Applied moments and reaction moments must have matching components.');
+  }
+  if (momentApplied && momentReaction) {
+    const value = Math.max(...momentApplied.map((moment, index) => Math.abs(moment + momentReaction[index])));
+    checks.push(balanceCheck('moment_balance', value, manifest.moment_balance_tolerance_Nm, 'N·m'));
+  }
+  for (const [kind, boundaryKey, sourceKey, toleranceKey, unit] of [
+    ['heat_balance', 'heat_boundary_outward_W', 'heat_source_W', 'heat_balance_tolerance_W', 'W'],
+    ['mass_balance', 'mass_boundary_outward_kg_s', 'mass_source_kg_s', 'mass_balance_tolerance_kg_s', 'kg/s'],
+  ] as const) {
+    if (manifest[boundaryKey] === undefined && manifest[sourceKey] === undefined) continue;
+    const boundary = finiteConservationVector(manifest[boundaryKey], boundaryKey);
+    const source = manifest[sourceKey];
+    if (!boundary || typeof source !== 'number' || !Number.isFinite(source)) {
+      throw new Error(`${boundaryKey} and a finite ${sourceKey} are required.`);
+    }
+    const value = Math.abs(boundary.reduce((sum, flux) => sum + flux, 0) - source);
+    checks.push(balanceCheck(kind, value, manifest[toleranceKey], unit));
+  }
+  const residuals = residualCheck(manifest);
+  if (residuals) checks.push(residuals);
   const convergedReason = manifest.converged_reason;
   const returnCode = manifest.analysis_return_code;
+  for (const code of [convergedReason, returnCode, manifest.execution_return_code]) {
+    if (code !== undefined && (typeof code !== 'number' || !Number.isSafeInteger(code))) {
+      throw new Error('Solver status codes must be finite integers.');
+    }
+  }
   if (typeof convergedReason === 'number' || typeof returnCode === 'number') {
-    const value = typeof convergedReason === 'number' ? convergedReason : returnCode as number;
-    const pass = typeof convergedReason === 'number' ? convergedReason > 0 : returnCode === 0;
+    const pass = (convergedReason === undefined || (convergedReason as number) > 0)
+      && (returnCode === undefined || returnCode === 0);
+    const value = typeof convergedReason === 'number' && convergedReason <= 0 ? convergedReason
+      : typeof returnCode === 'number' && returnCode !== 0 ? returnCode
+      : typeof convergedReason === 'number' ? convergedReason : returnCode as number;
     checks.push({
       kind: 'solver_convergence',
       status: pass ? 'pass' : 'fail',
@@ -246,41 +293,110 @@ function checksFromManifest(manifest: Record<string, unknown>): ConservationChec
   return checks;
 }
 
+function balanceCheck(kind: ConservationCheck['kind'], value: number, rawTolerance: unknown, unit: string): ConservationCheck {
+  if (!Number.isFinite(value)) throw new Error(`${kind} overflows the finite numeric range.`);
+  if (rawTolerance !== undefined && (typeof rawTolerance !== 'number' || !Number.isFinite(rawTolerance) || rawTolerance < 0)) {
+    throw new Error(`${kind} tolerance must be a finite, non-negative number.`);
+  }
+  const tolerance = typeof rawTolerance === 'number' ? rawTolerance : null;
+  return {
+    kind, value, tolerance, unit,
+    status: tolerance === null ? 'not_available' : value <= tolerance ? 'pass' : 'fail',
+    message: `Recomputed ${kind}: ${value} ${unit}; tolerance ${tolerance ?? 'not supplied'}.`,
+  };
+}
+
+function residualCheck(manifest: Record<string, unknown>): ConservationCheck | null {
+  if (manifest.residual_history === undefined) return null;
+  const rows = manifest.residual_history;
+  const tolerances = manifest.residual_tolerances;
+  if (!Array.isArray(rows) || rows.length === 0 || rows.length > 100_000
+    || typeof tolerances !== 'object' || tolerances === null || Array.isArray(tolerances)) {
+    throw new Error('Residual history and per-field tolerances must be provided together.');
+  }
+  const limits = Object.entries(tolerances);
+  if (!limits.length || limits.length > 64 || limits.some(([, value]) => typeof value !== 'number' || !Number.isFinite(value) || value <= 0)) {
+    throw new Error('Residual tolerances must be finite and positive.');
+  }
+  let previous = -Infinity;
+  let maximumRatio = Infinity;
+  for (const row of rows) {
+    if (typeof row !== 'object' || row === null || !Number.isInteger(row.iteration) || row.iteration < 0
+      || row.iteration <= previous || typeof row.values !== 'object' || row.values === null || Array.isArray(row.values)) {
+      throw new Error('Residual iterations must be ordered with finite per-field values.');
+    }
+    previous = row.iteration;
+    maximumRatio = 0;
+    for (const [field, limit] of limits) {
+      const value = row.values[field];
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw new Error(`Missing or invalid residual for ${field}.`);
+      maximumRatio = Math.max(maximumRatio, value / (limit as number));
+      if (!Number.isFinite(maximumRatio)) throw new Error('Residual ratio overflows the finite numeric range.');
+    }
+  }
+  return {
+    kind: 'solver_convergence', status: maximumRatio <= 1 ? 'pass' : 'fail',
+    value: maximumRatio, tolerance: 1, unit: '',
+    message: `Final residual/tolerance maximum ratio: ${maximumRatio} (${rows.length} recorded iterations).`,
+  };
+}
+
 function importManifest(text: string, sourceFileName: string, analysisCaseId: string, solverTarget: SolverTargetName): ResultIR {
   const parsed: unknown = JSON.parse(text);
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Result manifest root must be an object.');
-  const metadata = parsed as Record<string, unknown>;
+  const packet = (parsed as Record<string, unknown>).format === 'fem-modeler-result-package-v1'
+    ? parseResultPackage(parsed) : undefined;
+  const metadata = packet?.manifest ?? parsed as Record<string, unknown>;
   const checks = checksFromManifest(metadata);
-  if (checks.length === 0) throw new Error('JSON does not contain a supported result or conservation manifest.');
+  if (checks.length === 0 && !packet) throw new Error('JSON does not contain a supported result or conservation manifest.');
   return {
     id: generateId('result'),
     analysis_case_id: analysisCaseId,
     solver_target: solverTarget,
     source_file_name: sourceFileName,
     imported_at: new Date().toISOString(),
-    status: checks.some((check) => check.status === 'fail') ? 'failed' : 'partial',
-    fields: [],
+    status: checks.some((check) => check.status === 'fail') ? 'failed' : packet?.fields.length ? 'complete' : 'partial',
+    fields: packet?.fields ?? [],
+    ...(packet ? { mesh: packet.mesh } : {}),
     checks,
     metadata,
   };
 }
 
-export function importResultText(
+/** Parse numeric fields and checks without trusting or verifying serialized identity claims. */
+export function parseResultText(
   text: string,
   sourceFileName: string,
+  analysisCaseId: string,
+  solverTarget: SolverTargetName,
+): ResultImportResponse {
+  try {
+    if (!analysisCaseId) throw new Error('Select an analysis case before importing results.');
+    if (new TextEncoder().encode(text).byteLength > MAX_RESULT_TEXT_BYTES) throw new Error('Result file exceeds the 20 MB text import limit.');
+    const result = sourceFileName.toLowerCase().endsWith('.json')
+      ? importManifest(text, sourceFileName, analysisCaseId, solverTarget)
+      : importCsv(text, sourceFileName, analysisCaseId, solverTarget);
+    return { success: true, result, warnings: [] };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error), warnings: [] };
+  }
+}
+
+/** Apply the latest input identity after parsing, including after a Worker response. */
+export function verifyResultImport(
+  parsed: ResultIR,
   analysisCaseId: string,
   solverTarget: SolverTargetName,
   expectations: ResultImportExpectations = {},
 ): ResultImportResponse {
   const warnings: string[] = [];
+  // Reverification updates metadata only; large field/mesh arrays remain shared.
+  const result: ResultIR = { ...parsed, metadata: { ...parsed.metadata } };
   try {
-    if (!analysisCaseId) throw new Error('Select an analysis case before importing results.');
-    if (new TextEncoder().encode(text).byteLength > MAX_RESULT_TEXT_BYTES) throw new Error('Result file exceeds the 20 MB text import limit.');
-    const isManifest = sourceFileName.toLowerCase().endsWith('.json');
-    const result = isManifest
-      ? importManifest(text, sourceFileName, analysisCaseId, solverTarget)
-      : importCsv(text, sourceFileName, analysisCaseId, solverTarget);
-    const sourceLabel = isManifest ? 'manifest' : 'CSV';
+    if (!analysisCaseId || parsed.analysis_case_id !== analysisCaseId || parsed.solver_target !== solverTarget) {
+      throw new Error('Parsed result context does not match the requested analysis case and solver.');
+    }
+    const sourceLabel = result.source_file_name.toLowerCase().endsWith('.json') ? 'manifest' : 'CSV';
     const declaredTarget = declaredResultTarget(result.metadata);
     if (declaredTarget && declaredTarget !== solverTarget) {
       throw new Error(`Result ${sourceLabel} was produced by ${declaredTarget}, but the selected analysis case uses ${solverTarget}.`);
@@ -296,7 +412,7 @@ export function importResultText(
       warnings.push(`The ${sourceLabel} does not declare analysis_case_id; case provenance could not be verified.`);
     }
     const declaredRevision = result.metadata.model_revision;
-    if (expectations.expectedModelRevision !== undefined
+    if (!expectations.expectedInputFingerprint && expectations.expectedModelRevision !== undefined
       && typeof declaredRevision === 'number'
       && declaredRevision !== expectations.expectedModelRevision) {
       throw new Error(`Result ${sourceLabel} model revision ${declaredRevision} does not match current revision ${expectations.expectedModelRevision}.`);
@@ -305,16 +421,36 @@ export function importResultText(
       warnings.push(`The ${sourceLabel} does not declare model_revision; model provenance could not be verified.`);
     }
 
-    const provenanceVerified = declaredTarget === solverTarget
-      && declaredCaseId === analysisCaseId
-      && expectations.expectedModelRevision !== undefined
-      && declaredRevision === expectations.expectedModelRevision;
-    result.metadata.provenance_verified = provenanceVerified;
-    if (provenanceVerified) {
-      result.metadata.imported_for_model_revision = expectations.expectedModelRevision;
-    } else if (result.status === 'complete') {
-      result.status = 'partial';
+    const projectId = result.metadata.project_id;
+    const fingerprint = result.metadata.input_fingerprint;
+    const comparison = result.metadata.comparison_fingerprint;
+    const runId = result.metadata.run_id;
+    if (expectations.expectedProjectId && typeof projectId === 'string' && projectId !== expectations.expectedProjectId) {
+      throw new Error('Result belongs to another project.');
     }
+    const hashPattern = /^sha256:[a-f0-9]{64}$/;
+    if (fingerprint !== undefined && (typeof fingerprint !== 'string' || !hashPattern.test(fingerprint))) {
+      throw new Error('Result input_fingerprint must be a SHA-256 input fingerprint.');
+    }
+    const currentMatch = fingerprint === expectations.expectedInputFingerprint && typeof fingerprint === 'string';
+    const comparisonMatch = comparison === expectations.expectedComparisonFingerprint && typeof comparison === 'string' && hashPattern.test(comparison);
+    const meshVariant = expectations.allowMeshVariation === true && comparisonMatch && !currentMatch
+      && typeof fingerprint === 'string' && hashPattern.test(fingerprint);
+    if (expectations.expectedInputFingerprint && fingerprint !== undefined && !currentMatch && !meshVariant) {
+      throw new Error('Result input fingerprint does not match the current solver inputs (including Undo branches).');
+    }
+    const provenanceVerified = declaredTarget === solverTarget && declaredCaseId === analysisCaseId
+      && projectId === expectations.expectedProjectId && typeof projectId === 'string' && projectId.length > 0
+      && (currentMatch || meshVariant) && typeof runId === 'string' && runId.length > 0 && runId.length <= 256;
+    // Discard serialized claims. Verification is derived from this import's expectations.
+    delete result.metadata.imported_for_model_revision;
+    result.metadata.provenance_verified = provenanceVerified;
+    result.metadata.input_match = provenanceVerified ? meshVariant ? 'mesh_variant' : 'current' : 'unverified';
+    if (!provenanceVerified) {
+      warnings.push('Input identity is unverified: project ID, SHA-256 input fingerprint and run ID are required; revision numbers alone are insufficient.');
+      if (result.status === 'complete') result.status = 'partial';
+    }
+    if (meshVariant) warnings.push('Imported a different mesh for convergence comparison; it is not a result for the current mesh.');
     const skippedColumns = result.metadata.skipped_columns;
     if (Array.isArray(skippedColumns) && skippedColumns.length > 0) {
       warnings.push(`Skipped nonnumeric CSV column(s): ${skippedColumns.join(', ')}.`);
@@ -325,4 +461,18 @@ export function importResultText(
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error), warnings };
   }
+}
+
+
+export function importResultText(
+  text: string,
+  sourceFileName: string,
+  analysisCaseId: string,
+  solverTarget: SolverTargetName,
+  expectations: ResultImportExpectations = {},
+): ResultImportResponse {
+  const parsed = parseResultText(text, sourceFileName, analysisCaseId, solverTarget);
+  return parsed.success && parsed.result
+    ? verifyResultImport(parsed.result, analysisCaseId, solverTarget, expectations)
+    : parsed;
 }

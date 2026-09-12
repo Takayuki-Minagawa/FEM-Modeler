@@ -1,0 +1,63 @@
+# v0.3 実装・検証記録
+
+確認日: 2026-09-13。既存の共通IRとstrict exporterの設計を維持し、入力照合・保存・編集・結果確認を拡張した。
+
+## 実装範囲
+
+| 当初計画 | 実装と検証 |
+|---|---|
+| B-01 | SI入力のSHA-256、プロジェクト・ケース・ソルバー・run ID、読込完了時の再照合。Undo分岐・名前/色/単位のみ変更・別プロジェクト・読込中編集の回帰 |
+| B-02 / R-05 / F-06 | 復元待ち状態、保存queue、プロジェクトごとの世代、資産重複排除、別タブ競合検知。StrictMode・失敗・破棄・起動待ち・複数projectを検証 |
+| B-03 | 入力・ケース・ソルバーを持つ検証キー。ケース別チェックリスト、予定coverageと出力manifestの実消費IDを別表示 |
+| B-04 | 未使用フォーム依存を削除し、互換範囲で依存更新。監査の閾値は維持 |
+| R-01 / R-02 | 操作recipeから直接patchを記録、履歴予算64 MiB/100操作、機能slice、複数ボディ削除の原子的なUndo |
+| R-03 | 3 exporterをケース解決・型付きモデル・レンダー・manifest・ZIP包装へ分割。公開APIとstrict拒否を維持 |
+| R-04 | ドメイン別Zod schema、判別unionの導出型、双方向型assert、0.1単位migrationと0.2成果物migrationを分離 |
+| R-06 | context購読の分離、共通Modal・入力部品、診断コードの日英表示、フォーカス維持・復帰 |
+| T-01 | uv lockとPython版、digest固定Linuxネイティブ環境。5テンプレート、独立解析解、SI/mm、MPI1/2、保存則と残差の実行検証 |
+| T-02 | state/hooks/lib/results/meshをcoverage対象に追加。データ保持の単体試験と本番ブラウザー操作・PWA回帰 |
+| F-01 | ケース別の条件・材料、荷重/圧力矢印、対象へのズーム |
+| F-02 / F-04 | 明示IDのメッシュパッケージ、変形図・スカラーコンター・probe、品質分布・境界tag・不良要素 |
+| F-03 | 力・モーメント・熱・質量収支を生値から再計算、残差とプロセス状態を別評価 |
+| F-05 | メッシュ以外の入力互換を確認した3結果比較、同じ座標のQoI、保存・Markdown出力、手入力は未検証と表示 |
+| F-07 | box/plate/cylinderの寸法再編集、面役割で参照を維持、対応不能な選択はstale、Undo対応 |
+
+## 実施したチェック
+
+検証用コマンド、バージョン、許容差は以下を正本とする。実ソルバーを必要とする重い検証はローカルで行い、通常push/PRのActionsは無効化した。最終公開時にだけ手動workflowで型・lint・coverage・audit・buildを再確認する。
+
+- 単体・hook/UI: `npm run test:coverage`。性能計測2件は通常実行時に意図的にskipし、別のopt-in実行で検証する。
+- 本番ブラウザー: `npm run test:e2e`。復元待ちと日英切替、複数プロジェクト・世代、寸法再生成、一括削除Undo、JSON/solver ZIP保存、Modalのfocus、オフライン復元、別タブ競合。
+- 実ソルバー: [実行手順](../solver-tests/README.md)、[数値結果](solver-validation.json)。実行成功と数値許容差内を区別する。
+- 性能: [計測方法](../tests/performance/README.md)、[編集・保存結果](../tests/performance/latest-results.json)、[大容量読込の測定](../tests/performance/import-results.json)。10 MiB STL読込約1.28秒、10万行CSV約54 msを根拠に1 MiB以上の読込をWorkerへ移した。Workerは共通chunkを共有し、同じライブラリの二重配信を避けた。Node/fake IndexedDBの測定であり、ブラウザーのディスク遅延は含まない。
+- 依存監査とbundle制限: `npm run audit`、`npm run build && npm run bundle:check`。既存の監査基準・バンドル上限を緩和しない。
+
+### 統合実測値
+
+| 項目 | 結果 |
+|---|---|
+| 型 / ESLint | 成功 |
+| 単体・hook/UI | 290件成功、通常実行から性能計測2件のみ除外 |
+| Coverage | statements 79.94%、branches 71.27%、functions 81.54%、lines 82.34% |
+| Chromium E2E | 8件成功 |
+| 実ソルバー | 21実行成功、数値pytest 41件成功 |
+| 全依存audit | vulnerabilities 0 |
+| 本番JS | 16チャンク、1,893,643 / 1,900,000 bytes、最大895,422 bytes |
+| lock整合 / CycloneDX SBOM | npm ci dry-run とSBOM生成成功 |
+
+## レビューで修正した主な問題
+
+- 流体のbody forceを編集・保存できる既存UIに対し、schemaが再読込を拒否する問題。保存可能な入力とstrict solver対応範囲を区別した。
+- 局所メッシュだけが参照する選択が比較指紋に混入する問題。物理条件のscopeから比較用指紋を作るよう修正した。
+- 矛盾したソルバーコードから成功だけを採用する問題。明示的な失敗が残るよう変更した。
+- 形状metadata中の既存solver hintをstrict生成パラメータと混同する問題。描画時に必要なパラメータを抽出し、元のmetadataを維持した。
+- PWAキャッシュの `Vary: Origin` によるオフライン白画面。静的アセットの同一URL照合を修正し、実ブラウザーで確認した。
+
+- 画面のパネル寸法がpixelとして解釈される問題と、Tailwindの余白を打ち消すCSS resetを修正し、実コンター画面で確認した。
+- 解析ケース削除時の収束検討も同じUndo操作に含め、ケース別の参照検査に対応した。
+
+## 対応範囲と制約
+
+大規模な非線形・動解析、連成、STEP/CAD、任意の複数ボディ、クラウド実行は当初計画どおり対象外。結果表示は[共通結果JSON](result-package.md)を対象とし、汎用VTK/XDMF importerではない。3メッシュGCIは離散化誤差の推定で、物理モデルの正しさや真の漸近域到達を保証しない。
+
+Undo・自動保存容量、未検証結果の扱い、ソルバー対応範囲は[README](../README.md)にまとめた。

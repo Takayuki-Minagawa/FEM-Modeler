@@ -5,6 +5,7 @@ import { validateCommon } from './rules/common';
 import { validateOpenSeesPy } from './rules/openseespy';
 import { validateDOLFINx } from './rules/dolfinx';
 import { validateOpenFOAM } from './rules/openfoam';
+import { validationContextFor } from './context';
 
 export function runValidation(ir: ProjectIR, requestedTarget?: SolverTargetName, analysisCaseId?: string): ValidationState {
   let validationIr = ir;
@@ -47,6 +48,7 @@ export function runValidation(ir: ProjectIR, requestedTarget?: SolverTargetName,
     last_run_at: new Date().toISOString(),
     model_revision: ir.validation.model_revision,
     validated_revision: ir.validation.model_revision,
+    ...(requestedTarget ? { context: validationContextFor(ir, requestedTarget, analysisCaseId) } : {}),
     summary: {
       error_count: errorCount,
       warning_count: warningCount,

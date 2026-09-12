@@ -1,22 +1,14 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { analyzeThreeMeshConvergence, importResultText, MAX_RESULT_TEXT_BYTES, solverTargetForProfile } from '@/results';
-import type { ConvergenceResult } from '@/results';
+import { solverTargetForProfile, verifyResultImport } from '@/results';
+import { parseResultFileAsync } from '@/results/async-import';
+import { resultImportExpectations, resultMatchesInput } from '@/core/ir/provenance';
+import { ConvergenceStudyForm } from './ConvergenceStudyForm';
+import { MeshResultSummary } from './MeshResultSummary';
+import { useViewerState } from '@/viewer/view-state';
 import { useAppStore } from '@/state/store';
 import { buildPhysicsAdvisorReport } from '@/validation/physics-advisor';
 import { SelectInput } from './common/SelectInput';
-import { UnitInput } from './common/UnitInput';
-
-interface ConvergenceDraft {
-  meshSize: number | null;
-  qoi: number | null;
-}
-
-const INITIAL_CONVERGENCE_DRAFT: ConvergenceDraft[] = [
-  { meshSize: null, qoi: null },
-  { meshSize: null, qoi: null },
-  { meshSize: null, qoi: null },
-];
 
 export function ResultsForm() {
   const { i18n } = useTranslation();
@@ -24,14 +16,16 @@ export function ResultsForm() {
   const ir = useAppStore((state) => state.ir);
   const results = ir.results;
   const analysisCases = ir.analysis_cases;
-  const addResult = useAppStore((state) => state.addResult);
   const removeResult = useAppStore((state) => state.removeResult);
   const fileInput = useRef<HTMLInputElement>(null);
+  const pendingImport = useRef<AbortController | null>(null);
+  const [importing, setImporting] = useState(false);
+  useEffect(() => () => {
+    const pending = pendingImport.current; pendingImport.current = null; pending?.abort();
+  }, []);
   const [requestedAnalysisCaseId, setRequestedAnalysisCaseId] = useState(() => analysisCases.find((item) => item.active)?.id ?? analysisCases[0]?.id ?? '');
+  const [allowMeshVariation, setAllowMeshVariation] = useState(false);
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
-  const [convergenceDraft, setConvergenceDraft] = useState<ConvergenceDraft[]>(INITIAL_CONVERGENCE_DRAFT);
-  const [convergenceResult, setConvergenceResult] = useState<ConvergenceResult | null>(null);
-  const [convergenceError, setConvergenceError] = useState<string | null>(null);
   const analysisCaseId = analysisCases.some((item) => item.id === requestedAnalysisCaseId)
     ? requestedAnalysisCaseId
     : analysisCases.find((item) => item.active)?.id ?? analysisCases[0]?.id ?? '';
@@ -41,57 +35,43 @@ export function ResultsForm() {
     ? solverTargetForProfile(selectedAnalysisCase.solver_profile_hint)
     : 'OpenSeesPy';
 
+  const cancelImport = () => {
+    const pending = pendingImport.current; pendingImport.current = null; pending?.abort();
+    setImporting(false);
+    setMessage({ error: false, text: isJa ? '結果取込をキャンセルしました。' : 'Result import cancelled.' });
+    if (fileInput.current) fileInput.current.value = '';
+  };
+
   const importFile = async (file: File) => {
+    pendingImport.current?.abort();
+    const controller = new AbortController();
+    pendingImport.current = controller;
+    const projectId = useAppStore.getState().ir.meta.project_id;
+    setImporting(true); setMessage(null);
     try {
-      if (file.size > MAX_RESULT_TEXT_BYTES) {
-        throw new Error(isJa ? '結果ファイルは20 MB以下にしてください。' : 'Result file exceeds the 20 MB safety limit.');
+      const parsed = await parseResultFileAsync(file, analysisCaseId, solverTarget, controller.signal);
+      if (controller.signal.aborted || pendingImport.current !== controller) return;
+      if (!parsed.success || !parsed.result) throw new Error(parsed.error ?? 'Result import failed.');
+      // The model can change while a File is read or a Worker is running.
+      // Recheck on the main thread immediately before the synchronous store write.
+      const latestStore = useAppStore.getState();
+      const latest = latestStore.ir;
+      if (latest.meta.project_id !== projectId || !latest.analysis_cases.some((item) => item.id === analysisCaseId && solverTargetForProfile(item.solver_profile_hint) === solverTarget)) {
+        throw new Error(isJa ? '取込中にプロジェクトまたは解析ケースが変わりました。再度取り込んでください。' : 'The project or analysis case changed during import. Please import again.');
       }
-      const response = importResultText(await file.text(), file.name, analysisCaseId, solverTarget, {
-        expectedModelRevision: ir.validation.model_revision,
-      });
-      if (!response.success || !response.result) {
-        setMessage({ error: true, text: response.error ?? 'Result import failed.' });
-        return;
-      }
-      addResult(response.result);
-      setMessage({
-        error: false,
-        text: response.warnings[0] ?? (isJa ? '結果を取り込みました。' : 'Result imported.'),
-      });
+      const response = verifyResultImport(parsed.result, analysisCaseId, solverTarget, { ...resultImportExpectations(latest, solverTarget, analysisCaseId), allowMeshVariation });
+      if (!response.success || !response.result) throw new Error(response.error ?? 'Result verification failed.');
+      latestStore.addResult(response.result);
+      setMessage({ error: false, text: response.warnings[0] ?? (isJa ? '結果を取り込みました。' : 'Result imported.') });
     } catch (error) {
-      setMessage({ error: true, text: error instanceof Error ? error.message : String(error) });
+      if (!controller.signal.aborted && pendingImport.current === controller) {
+        setMessage({ error: true, text: error instanceof Error ? error.message : String(error) });
+      }
     } finally {
-      if (fileInput.current) fileInput.current.value = '';
-    }
-  };
-
-  const updateConvergenceDraft = (
-    index: number,
-    field: keyof ConvergenceDraft,
-    value: number | null,
-  ) => {
-    setConvergenceDraft((current) => current.map((sample, sampleIndex) => (
-      sampleIndex === index ? { ...sample, [field]: value } : sample
-    )));
-  };
-
-  const calculateConvergence = () => {
-    try {
-      const samples = convergenceDraft.map((sample, index) => {
-        if (sample.meshSize === null || sample.qoi === null) {
-          throw new Error(isJa ? '3段階すべての h と QoI を入力してください。' : 'Enter h and QoI for all three levels.');
-        }
-        return {
-          label: ['coarse', 'medium', 'fine'][index],
-          meshSize: sample.meshSize,
-          qoi: sample.qoi,
-        };
-      });
-      setConvergenceResult(analyzeThreeMeshConvergence(samples));
-      setConvergenceError(null);
-    } catch (error) {
-      setConvergenceResult(null);
-      setConvergenceError(error instanceof Error ? error.message : String(error));
+      if (pendingImport.current === controller) {
+        pendingImport.current = null; setImporting(false);
+        if (fileInput.current) fileInput.current.value = '';
+      }
     }
   };
 
@@ -101,6 +81,7 @@ export function ResultsForm() {
         <SelectInput
           label={isJa ? '解析ケース' : 'Analysis case'}
           value={analysisCaseId}
+          disabled={importing}
           options={[{ value: '', label: '—' }, ...analysisCases.map((item) => ({ value: item.id, label: item.name }))]}
           onChange={setRequestedAnalysisCaseId}
         />
@@ -108,10 +89,12 @@ export function ResultsForm() {
           <span style={{ color: 'var(--color-text-muted)' }}>{isJa ? 'ソルバー（ケースから決定）' : 'Solver (from case)'}</span>
           <strong>{solverTarget}</strong>
         </div>
+        <label className="block text-xs"><input type="checkbox" disabled={importing} checked={allowMeshVariation} onChange={(event) => setAllowMeshVariation(event.target.checked)} /> {isJa ? "収束比較用にメッシュだけ異なる結果を許可" : "Allow mesh variants for convergence comparison"}</label>
         <input
           ref={fileInput}
           type="file"
           accept=".csv,.json"
+          disabled={importing}
           className="sr-only"
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -120,13 +103,14 @@ export function ResultsForm() {
         />
         <button
           type="button"
-          disabled={!analysisCaseId}
+          disabled={!analysisCaseId || importing}
           onClick={() => fileInput.current?.click()}
           className="w-full py-2 rounded text-sm cursor-pointer disabled:opacity-40"
           style={{ backgroundColor: 'var(--color-accent)', color: '#fff' }}
         >
-          {isJa ? '結果CSV / manifestを取り込む' : 'Import result CSV / manifest'}
+          {isJa ? '結果CSV / manifest / メッシュJSONを取り込む' : 'Import result CSV / manifest / mesh JSON'}
         </button>
+        {importing && <div className="text-xs flex justify-between gap-2"><span role="status">{isJa ? "結果を読み込み・解析中…" : "Reading and processing results…"}</span><button type="button" onClick={cancelImport}>{isJa ? "キャンセル" : "Cancel import"}</button></div>}
         <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
           {isJa ? 'CSVの数値列をResultIRへ変換し、result_manifest.jsonの収束・保存則チェックも取り込みます。' : 'Numeric CSV columns become ResultIR fields; result_manifest.json convergence/conservation checks are also supported.'}
         </p>
@@ -139,9 +123,7 @@ export function ResultsForm() {
       )}
 
       {results.map((result) => {
-        const importedRevision = result.metadata.imported_for_model_revision;
-        const stale = typeof importedRevision === 'number'
-          && importedRevision !== ir.validation.model_revision;
+        const stale = !resultMatchesInput(ir, result);
         const provenanceVerified = result.metadata.provenance_verified === true;
         return (
         <section key={result.id} className="p-3 rounded space-y-2" style={{ backgroundColor: 'var(--color-bg-input)' }}>
@@ -156,9 +138,10 @@ export function ResultsForm() {
             </div>
             <button type="button" onClick={() => removeResult(result.id)} aria-label={isJa ? '結果を削除' : 'Delete result'} style={{ color: 'var(--color-error)' }}>&times;</button>
           </div>
+          <MeshResultSummary result={result} ja={isJa} />
           {result.fields.map((field) => (
             <div key={field.id} className="text-xs flex justify-between gap-2">
-              <span>{field.name} ({field.location})</span>
+              <span>{field.name} ({field.location}) {result.mesh && <button type="button" onClick={() => { useViewerState.getState().set({ resultId: result.id, fieldId: field.id, badElementsOnly: false, probe: null }); useViewerState.getState().focusPoints(result.mesh!.nodes.map((node) => node.position)); }}>{isJa ? "表示" : "View"}</button>}</span>
               <span>{field.minimum.toPrecision(5)} – {field.maximum.toPrecision(5)} {field.unit}</span>
             </div>
           ))}
@@ -171,53 +154,7 @@ export function ResultsForm() {
         );
       })}
 
-      <section className="p-3 rounded space-y-3" style={{ backgroundColor: 'var(--color-bg-input)' }} aria-labelledby="convergence-heading">
-        <div>
-          <h3 id="convergence-heading" className="text-sm font-bold">
-            {isJa ? '3メッシュ収束性' : 'Three-mesh convergence'}
-          </h3>
-          <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-            {isJa ? '粗→中→細の代表寸法 h と同じQoIを入力し、observed order・Richardson外挿・GCIを評価します。' : 'Enter coarse-to-fine h and one consistent QoI to evaluate observed order, Richardson extrapolation, and GCI.'}
-          </p>
-        </div>
-        {convergenceDraft.map((sample, index) => (
-          <div key={index} className="grid grid-cols-2 gap-2 p-2 rounded" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
-            <div className="col-span-2 text-xs font-bold" style={{ color: 'var(--color-text-secondary)' }}>
-              {[isJa ? '粗' : 'Coarse', isJa ? '中' : 'Medium', isJa ? '細' : 'Fine'][index]}
-            </div>
-            <UnitInput
-              label="h"
-              value={sample.meshSize}
-              unit="m"
-              min={0}
-              onChange={(value) => updateConvergenceDraft(index, 'meshSize', value)}
-            />
-            <UnitInput
-              label="QoI"
-              value={sample.qoi}
-              unit="—"
-              onChange={(value) => updateConvergenceDraft(index, 'qoi', value)}
-            />
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={calculateConvergence}
-          className="w-full py-2 rounded text-sm cursor-pointer"
-          style={{ backgroundColor: 'var(--color-accent)', color: '#fff' }}
-        >
-          {isJa ? '収束性を計算' : 'Calculate convergence'}
-        </button>
-        {convergenceError && <div role="alert" className="text-xs" style={{ color: 'var(--color-error)' }}>{convergenceError}</div>}
-        {convergenceResult && (
-          <div role="status" className="space-y-1 text-xs p-2 rounded" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
-            <div className="flex justify-between gap-2"><span>observed p</span><strong>{convergenceResult.observedOrder.toPrecision(5)}</strong></div>
-            <div className="flex justify-between gap-2"><span>Richardson QoI</span><strong>{convergenceResult.richardsonExtrapolatedQoi.toPrecision(6)}</strong></div>
-            <div className="flex justify-between gap-2"><span>fine GCI</span><strong>{convergenceResult.gci.finePercent?.toPrecision(4) ?? '—'} %</strong></div>
-            <div className="flex justify-between gap-2"><span>{isJa ? '漸近域判定' : 'Asymptotic check'}</span><strong>{convergenceResult.regime}</strong></div>
-          </div>
-        )}
-      </section>
+      <ConvergenceStudyForm analysisCaseId={analysisCaseId} />
 
       <section className="p-3 rounded space-y-2" style={{ backgroundColor: 'var(--color-bg-input)' }} aria-labelledby="advisor-heading">
         <div>

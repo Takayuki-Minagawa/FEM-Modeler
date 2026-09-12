@@ -11,7 +11,7 @@ export interface ActivityLogEntry {
   timestamp: string;
 }
 
-export type DraftSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+export type DraftSaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
 
 export interface DraftPersistenceState {
   status: DraftSaveStatus;
@@ -47,11 +47,19 @@ export interface AppContextValue {
   addActivity: (level: ActivityLogLevel, message: string) => void;
   clearActivityLog: () => void;
   saveProjectFile: () => void;
-  restoreDraft: () => Promise<boolean>;
-  discardDraft: () => Promise<void>;
+  readiness: 'initializing' | 'awaiting_restore' | 'editing';
+  recentProjects: DraftSummary[];
+  listDraftVersions: (projectId: string) => Promise<DraftSummary[]>;
+  restoreDraft: (projectId?: string, versionId?: string) => Promise<boolean>;
+  discardDraft: (projectId?: string) => Promise<void>;
   exportHistory: ExportHistoryEntry[];
   recordExportResult: (target: string, errors: string[], warnings: string[]) => void;
   clearExportHistory: () => void;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);
+
+export type AppUiContextValue = Pick<AppContextValue, 'theme' | 'toggleTheme' | 'helpOpen' | 'openHelp' | 'closeHelp' | 'importOpen' | 'openImport' | 'closeImport'>;
+export type AppActionsContextValue = Pick<AppContextValue, 'addActivity' | 'clearActivityLog' | 'saveProjectFile' | 'recordExportResult' | 'clearExportHistory'>;
+export const AppUiContext = createContext<AppUiContextValue | null>(null);
+export const AppActionsContext = createContext<AppActionsContextValue | null>(null);

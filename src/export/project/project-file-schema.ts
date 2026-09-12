@@ -1,3 +1,8 @@
+import { metaSchema, unitsSchema, solverTargetsSchema } from '@/core/ir/schema/identity';
+import { geometrySchema, assetsSchema, namedSelectionsSchema } from '@/core/ir/schema/geometry';
+import { materialsSchema, materialAssignmentsSchema, sectionsSchema, sectionAssignmentsSchema, meshControlsSchema } from '@/core/ir/schema/properties';
+import { boundaryConditionsSchema, loadsSchema, initialConditionsSchema, analysisCasesSchema } from '@/core/ir/schema/conditions';
+import { resultsSchema, convergenceStudiesSchema, validationSchema, uiStateSchema, aiAnnotationsSchema, auditTrailSchema } from '@/core/ir/schema/artifacts';
 /**
  * Zod validation schema for .fem.json project files.
  *
@@ -18,379 +23,33 @@ import {
   SCHEMA_VERSION,
   createDefaultProject,
 } from '@/core/ir/defaults';
-import { toSI, type QuantityKind } from '@/core/units';
+import { migrateLegacyUnits } from './migrations/v0_1';
+import { migrateV02Artifacts } from './migrations/v0_2';
 
-const tuple3NumberSchema = z.tuple([z.number(), z.number(), z.number()]);
-const unknownRecordSchema = z.record(z.string(), z.unknown());
-const stringRecordSchema = z.record(z.string(), z.string());
-const booleanRecordSchema = z.record(z.string(), z.boolean());
-const dofMapSchema = z.strictObject({
-  ux: z.enum(['fixed', 'free', 'prescribed']),
-  uy: z.enum(['fixed', 'free', 'prescribed']),
-  uz: z.enum(['fixed', 'free', 'prescribed']),
-  rx: z.enum(['fixed', 'free', 'prescribed']),
-  ry: z.enum(['fixed', 'free', 'prescribed']),
-  rz: z.enum(['fixed', 'free', 'prescribed']),
-});
 const REQUIRED_SOLVER_TARGETS = ['OpenSeesPy', 'DOLFINx', 'OpenFOAM'] as const;
 
 const projectFileSchema = z.strictObject({
-  meta: z.strictObject({
-    schema_name: z.literal(SCHEMA_NAME),
-    schema_version: z.literal(SCHEMA_VERSION),
-    app_version: z.string(),
-    project_id: z.string(),
-    project_name: z.string(),
-    description: z.string(),
-    author: z.string(),
-    organization: z.string(),
-    created_at: z.string(),
-    updated_at: z.string(),
-    tags: z.array(z.string()),
-    status: z.enum(['draft', 'review', 'approved', 'archived']),
-    default_solver_target: z.string(),
-    domain_type: z.enum(['frame', 'truss', 'solid', 'thermal', 'fluid', 'coupled']),
-  }),
-  units: z.strictObject({
-    value_basis: z.literal('SI'),
-    system_name: z.enum(['SI', 'mm-N-s', 'mm-t-s', 'custom']),
-    base_length: z.string(),
-    base_mass: z.string(),
-    base_time: z.string(),
-    base_temperature: z.string(),
-    base_force: z.string(),
-    angle_unit: z.literal('deg'),
-    display_precision: z.number().int().min(0).max(15),
-    preferred_stress_unit: z.string(),
-    preferred_pressure_unit: z.string(),
-    preferred_energy_unit: z.string(),
-  }),
-  geometry: z.strictObject({
-    model_type: z.enum(['cad_brep', 'mesh_only', 'frame_graph', 'hybrid']),
-    source: z.enum(['native', 'imported_step', 'imported_stl', 'imported_obj', 'imported_msh', 'generated_by_ai']),
-    bodies: z.array(z.strictObject({
-      id: z.string(),
-      name: z.string(),
-      category: z.enum(['solid', 'shell', 'beam_region', 'fluid_region', 'void']),
-      visible: z.boolean(),
-      locked: z.boolean(),
-      color: z.string(),
-      transform: z.strictObject({
-        position: tuple3NumberSchema,
-        rotation: tuple3NumberSchema,
-        scale: tuple3NumberSchema,
-      }),
-      topology_ref: z.string(),
-      asset_ref: z.string().optional(),
-      metadata: unknownRecordSchema,
-    })),
-    faces: z.array(z.strictObject({
-      id: z.string(),
-      name: z.string(),
-      body_id: z.string(),
-      normal: tuple3NumberSchema.optional(),
-      area: z.number().optional(),
-      triangle_indices: z.array(z.number()),
-    })),
-    edges: z.array(z.strictObject({
-      id: z.string(),
-      name: z.string(),
-      body_id: z.string(),
-      vertex_ids: z.tuple([z.string(), z.string()]),
-      length: z.number().optional(),
-    })),
-    vertices: z.array(z.strictObject({
-      id: z.string(),
-      name: z.string(),
-      body_id: z.string(),
-      position: tuple3NumberSchema,
-    })),
-    reference_frames: z.array(z.strictObject({
-      id: z.string(),
-      name: z.string(),
-      origin: tuple3NumberSchema,
-      axis_x: tuple3NumberSchema,
-      axis_y: tuple3NumberSchema,
-      axis_z: tuple3NumberSchema,
-      type: z.enum(['cartesian', 'cylindrical', 'local_beam']),
-      attached_to: z.string().optional(),
-    })),
-    geometry_parameters: z.array(z.strictObject({
-      id: z.string(),
-      name: z.string(),
-      value: z.number(),
-      description: z.string(),
-    })),
-  }),
-  assets: z.array(z.strictObject({
-    id: z.string().min(1),
-    kind: z.literal('stl_mesh'),
-    file_name: z.string(),
-    media_type: z.literal('model/stl'),
-    encoding: z.literal('base64'),
-    data: z.string(),
-    content_hash: z.string().min(1),
-    byte_length: z.number().int().nonnegative(),
-    source_unit: z.enum(['m', 'mm', 'cm', 'in', 'ft']),
-    scale_to_meters: z.number().finite().positive(),
-    triangle_count: z.number().int().positive(),
-    bounds: z.strictObject({ min: tuple3NumberSchema, max: tuple3NumberSchema }),
-    diagnostics: z.strictObject({
-      degenerate_triangles: z.number().int().nonnegative(),
-      finite_coordinates: z.boolean(),
-      watertight: z.boolean().nullable(),
-      manifold: z.boolean().nullable(),
-    }),
-  })),
-  named_selections: z.array(z.strictObject({
-    id: z.string(),
-    name: z.string(),
-    display_name: z.string().optional(),
-    target_dimension: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]),
-    entity_type: z.enum(['vertex', 'edge', 'face', 'body', 'node', 'element', 'cell', 'patch']),
-    member_refs: z.array(z.string()),
-    color: z.string(),
-    description: z.string(),
-    created_by: z.enum(['user', 'import', 'ai']),
-    status: z.enum(['active', 'stale', 'unresolved']),
-    usages: z.array(z.enum(['material_assignment', 'section_assignment', 'boundary_condition', 'load', 'initial_condition', 'mesh_control', 'export_tag'])),
-  })),
-  materials: z.array(z.strictObject({
-    id: z.string(),
-    name: z.string(),
-    class: z.enum(['elastic', 'thermo_elastic', 'fluid_newtonian', 'user_defined']),
-    physical_model: z.enum(['isotropic_linear', 'orthotropic_linear', 'incompressible_newtonian', 'constant_property']),
-    parameter_set: z.strictObject({
-      density: z.strictObject({ value: z.number().finite().nullable(), status: z.enum(['confirmed', 'inferred', 'imported', 'library', 'missing', 'needs_review']), source: z.string().optional() }),
-      young_modulus: z.strictObject({ value: z.number().finite().nullable(), status: z.enum(['confirmed', 'inferred', 'imported', 'library', 'missing', 'needs_review']), source: z.string().optional() }),
-      poisson_ratio: z.strictObject({ value: z.number().finite().nullable(), status: z.enum(['confirmed', 'inferred', 'imported', 'library', 'missing', 'needs_review']), source: z.string().optional() }),
-      thermal_conductivity: z.strictObject({ value: z.number().finite().nullable(), status: z.enum(['confirmed', 'inferred', 'imported', 'library', 'missing', 'needs_review']), source: z.string().optional() }),
-      specific_heat: z.strictObject({ value: z.number().finite().nullable(), status: z.enum(['confirmed', 'inferred', 'imported', 'library', 'missing', 'needs_review']), source: z.string().optional() }),
-      dynamic_viscosity: z.strictObject({ value: z.number().finite().nullable(), status: z.enum(['confirmed', 'inferred', 'imported', 'library', 'missing', 'needs_review']), source: z.string().optional() }),
-      kinematic_viscosity: z.strictObject({ value: z.number().finite().nullable(), status: z.enum(['confirmed', 'inferred', 'imported', 'library', 'missing', 'needs_review']), source: z.string().optional() }),
-    }),
-    source: z.string(),
-    notes: z.string(),
-  })),
-  material_assignments: z.array(z.strictObject({
-    id: z.string(),
-    material_id: z.string(),
-    target_named_selection_id: z.string(),
-    override_allowed: z.boolean(),
-  })),
-  sections: z.array(z.strictObject({
-    id: z.string(),
-    name: z.string(),
-    section_type: z.enum(['beam_rect', 'beam_circle', 'beam_h', 'shell_thickness', 'generic_frame_section']),
-    dimensions: z.record(z.string(), z.number()),
-    material_id: z.string(),
-    orientation_ref: z.string().optional(),
-    area: z.number().nullable(),
-    inertia_y: z.number().nullable(),
-    inertia_z: z.number().nullable(),
-    torsion_constant: z.number().nullable(),
-    thickness: z.number().nullable(),
-    metadata: unknownRecordSchema,
-  })),
-  section_assignments: z.array(z.strictObject({
-    id: z.string(),
-    section_id: z.string(),
-    target_named_selection_id: z.string(),
-  })),
-  mesh_controls: z.strictObject({
-    global: z.strictObject({
-      algorithm_preference: z.enum(['auto', 'delaunay', 'frontal', 'structured']),
-      global_size: z.number().nullable(),
-      growth_rate: z.number(),
-      element_order: z.union([z.literal(1), z.literal(2)]),
-      recombine_preference: z.enum(['none', 'all', 'structured_only']),
-      curvature_based_refinement: z.boolean(),
-    }),
-    local: z.array(z.strictObject({
-      id: z.string(),
-      target_named_selection_id: z.string(),
-      control_type: z.enum(['local_size', 'edge_division', 'face_refinement', 'boundary_layer', 'structured_hint']),
-      size: z.number().nullable(),
-      layers: z.number().nullable(),
-      bias: z.number().nullable(),
-      transfinite_hint: z.boolean(),
-      boundary_layer_hint: z.boolean(),
-      priority: z.number(),
-    })),
-    quality_targets: z.strictObject({
-      min_jacobian: z.number(),
-      max_aspect_ratio: z.number(),
-      min_skewness: z.number(),
-      preferred_quality_level: z.enum(['preview', 'balanced', 'high_quality']),
-    }),
-  }),
-  boundary_conditions: z.array(z.strictObject({
-    id: z.string(),
-    name: z.string(),
-    physics_domain: z.enum(['structural', 'thermal', 'fluid']),
-    bc_type: z.enum(['fixed', 'prescribed_displacement', 'symmetry', 'temperature', 'heat_flux', 'convection', 'insulation', 'velocity_inlet', 'pressure_outlet', 'wall', 'slip', 'no_slip']),
-    target_named_selection_id: z.string(),
-    coordinate_system: z.string(),
-    values: z.strictObject({
-      scalar: z.number().optional(),
-      vector: tuple3NumberSchema.optional(),
-      dof_map: dofMapSchema.optional(),
-      function_ref: z.string().optional(),
-      pressure_basis: z.enum(['dynamic', 'kinematic']).optional(),
-      heat_transfer_coefficient: z.number().finite().positive().optional(),
-      ambient_temperature: z.number().finite().optional(),
-    }),
-    temporal_profile: z.enum(['constant', 'ramp', 'table', 'expression', 'time_series_ref']),
-    status: z.enum(['confirmed', 'inferred', 'imported', 'library', 'missing', 'needs_review']),
-    notes: z.string(),
-  })),
-  loads: z.array(z.strictObject({
-    id: z.string(),
-    name: z.string(),
-    physics_domain: z.enum(['structural', 'thermal', 'fluid']),
-    load_type: z.enum(['nodal_force', 'surface_traction', 'body_force', 'gravity', 'line_load', 'pressure', 'heat_source', 'volumetric_heat', 'mass_flow_rate']),
-    target_named_selection_id: z.string(),
-    application_mode: z.enum(['total', 'per_area', 'per_length', 'per_volume']),
-    direction: tuple3NumberSchema,
-    magnitude: z.number(),
-    distribution: z.enum(['uniform', 'linear', 'table', 'field_ref']),
-    temporal_profile: z.enum(['constant', 'ramp', 'table', 'expression', 'time_series_ref']),
-    load_case: z.string(),
-    coordinate_system: z.string(),
-    status: z.enum(['confirmed', 'inferred', 'imported', 'library', 'missing', 'needs_review']),
-  })),
-  initial_conditions: z.array(z.strictObject({
-    id: z.string(),
-    name: z.string(),
-    physics_domain: z.enum(['structural', 'thermal', 'fluid']),
-    ic_type: z.enum(['initial_temperature', 'initial_velocity', 'initial_pressure', 'initial_displacement']),
-    target_named_selection_id: z.string(),
-    values: z.strictObject({
-      scalar: z.number().optional(),
-      vector: tuple3NumberSchema.optional(),
-      dof_map: dofMapSchema.optional(),
-      function_ref: z.string().optional(),
-      pressure_basis: z.enum(['dynamic', 'kinematic']).optional(),
-      heat_transfer_coefficient: z.number().finite().positive().optional(),
-      ambient_temperature: z.number().finite().optional(),
-    }),
-    status: z.enum(['confirmed', 'inferred', 'imported', 'library', 'missing', 'needs_review']),
-  })),
-  analysis_cases: z.array(z.strictObject({
-    id: z.string(),
-    name: z.string(),
-    active: z.boolean(),
-    domain_type: z.enum(['frame', 'truss', 'solid', 'thermal', 'fluid', 'coupled']),
-    analysis_type: z.enum(['static_linear', 'static_nonlinear', 'modal', 'transient_structural', 'steady_thermal', 'transient_thermal', 'incompressible_flow_steady', 'incompressible_flow_transient']),
-    nonlinear: z.boolean(),
-    transient: z.boolean(),
-    participating_material_ids: z.array(z.string()),
-    participating_section_ids: z.array(z.string()),
-    participating_bc_ids: z.array(z.string()),
-    participating_load_ids: z.array(z.string()),
-    participating_ic_ids: z.array(z.string()),
-    mesh_policy_ref: z.string(),
-    solver_profile_hint: z.enum(['openseespy_frame_basic', 'dolfinx_linear_elasticity', 'dolfinx_poisson', 'dolfinx_steady_heat', 'openfoam_simpleFoam', 'openfoam_pisoFoam', 'openfoam_laplacianFoam']),
-    result_requests: z.array(z.enum(['displacement', 'stress', 'temperature', 'velocity', 'pressure', 'reaction_force'])),
-  })),
-  results: z.array(z.strictObject({
-    id: z.string(),
-    analysis_case_id: z.string(),
-    solver_target: z.enum(['OpenSeesPy', 'DOLFINx', 'OpenFOAM']),
-    source_file_name: z.string(),
-    imported_at: z.string(),
-    status: z.enum(['complete', 'partial', 'failed']),
-    fields: z.array(z.strictObject({
-      id: z.string(),
-      name: z.string(),
-      location: z.enum(['node', 'element', 'facet', 'cell', 'global']),
-      component_names: z.array(z.string()),
-      unit: z.string(),
-      entity_ids: z.array(z.string()),
-      values: z.array(z.number().finite()),
-      minimum: z.number().finite(),
-      maximum: z.number().finite(),
-    })),
-    checks: z.array(z.strictObject({
-      kind: z.enum(['force_balance', 'heat_balance', 'mass_balance', 'solver_convergence', 'solver_execution']),
-      status: z.enum(['pass', 'warning', 'fail', 'not_available']),
-      value: z.number().finite().nullable(),
-      tolerance: z.number().finite().nonnegative().nullable(),
-      unit: z.string(),
-      message: z.string(),
-    })),
-    metadata: unknownRecordSchema,
-  })),
-  solver_targets: z.array(z.strictObject({
-    target_name: z.enum(['OpenSeesPy', 'DOLFINx', 'OpenFOAM']),
-    enabled: z.boolean(),
-    export_profile: z.enum(['strict', 'permissive', 'template_based']),
-    solver_options: unknownRecordSchema,
-    path_preferences: stringRecordSchema,
-    packaging: z.enum(['single_file', 'multi_file', 'zip_bundle', 'folder_tree']),
-  })),
-  validation: z.strictObject({
-    last_run_at: z.string(),
-    model_revision: z.number().int().nonnegative(),
-    validated_revision: z.number().int().min(-1),
-    summary: z.strictObject({
-      error_count: z.number(),
-      warning_count: z.number(),
-      info_count: z.number(),
-    }),
-    items: z.array(z.strictObject({
-      id: z.string(),
-      severity: z.enum(['error', 'warning', 'info']),
-      code: z.string(),
-      title: z.string(),
-      message: z.string(),
-      target_ref: z.string(),
-      suggested_fix: z.string(),
-      dismissible: z.boolean(),
-      status: z.enum(['open', 'dismissed', 'resolved']),
-    })),
-  }),
-  ui_state: z.strictObject({
-    active_panel: z.string(),
-    camera_state: z.strictObject({
-      position: tuple3NumberSchema,
-      target: tuple3NumberSchema,
-      up: tuple3NumberSchema,
-      zoom: z.number(),
-      orthographic: z.boolean(),
-    }),
-    visibility_map: booleanRecordSchema,
-    isolate_targets: z.array(z.string()),
-    selection_state: z.array(z.string()),
-    expanded_tree_nodes: z.array(z.string()),
-    color_mode: z.enum(['default', 'by_material', 'by_selection', 'by_condition']),
-    clipping_planes: z.array(z.strictObject({
-      normal: tuple3NumberSchema,
-      constant: z.number(),
-      enabled: z.boolean(),
-    })),
-    last_opened_tabs: z.array(z.string()),
-  }),
-  ai_annotations: z.array(z.strictObject({
-    id: z.string(),
-    source_prompt_summary: z.string(),
-    target_ref: z.string(),
-    proposal_type: z.enum(['naming', 'material_suggestion', 'mesh_hint', 'missing_bc_warning', 'export_gap_notice']),
-    rationale: z.string(),
-    confidence: z.number(),
-    status: z.enum(['proposed', 'accepted', 'rejected', 'expired']),
-    applied_changes: unknownRecordSchema,
-  })),
-  audit_trail: z.array(z.strictObject({
-    id: z.string(),
-    timestamp: z.string(),
-    actor: z.enum(['user', 'ai', 'import', 'migration']),
-    action_type: z.enum(['create', 'update', 'delete', 'assign', 'import', 'export', 'validate', 'unit_conversion', 'ai_proposal_accepted', 'ai_proposal_rejected']),
-    target_ref: z.string(),
-    before_summary: z.string(),
-    after_summary: z.string(),
-    note: z.string(),
-  })),
+  meta: metaSchema,
+  units: unitsSchema,
+  geometry: geometrySchema,
+  assets: assetsSchema,
+  named_selections: namedSelectionsSchema,
+  materials: materialsSchema,
+  material_assignments: materialAssignmentsSchema,
+  sections: sectionsSchema,
+  section_assignments: sectionAssignmentsSchema,
+  mesh_controls: meshControlsSchema,
+  boundary_conditions: boundaryConditionsSchema,
+  loads: loadsSchema,
+  initial_conditions: initialConditionsSchema,
+  analysis_cases: analysisCasesSchema,
+  results: resultsSchema,
+  convergence_studies: convergenceStudiesSchema,
+  solver_targets: solverTargetsSchema,
+  validation: validationSchema,
+  ui_state: uiStateSchema,
+  ai_annotations: aiAnnotationsSchema,
+  audit_trail: auditTrailSchema,
 }).superRefine((project, context) => {
   for (const targetName of REQUIRED_SOLVER_TARGETS) {
     const count = project.solver_targets.filter((target) => target.target_name === targetName).length;
@@ -435,9 +94,10 @@ const projectFileSchema = z.strictObject({
 // If a new field is added to ProjectIR but not the Zod schema, this line will
 // produce a TypeScript error listing the missing key(s).
 type SchemaOutput = z.infer<typeof projectFileSchema>;
-export type AssertSchemaCoversProjectIR = {
-  [K in keyof ProjectIR]: K extends keyof SchemaOutput ? true : never;
-};
+type Assert<T extends true> = T;
+export type AssertSchemaCoversProjectIR = Assert<
+  [SchemaOutput] extends [ProjectIR] ? [ProjectIR] extends [SchemaOutput] ? true : false : false
+>;
 
 interface NormalizeResult {
   success: boolean;
@@ -663,159 +323,6 @@ function isFutureVersion(version: string): boolean {
   return false;
 }
 
-function scaleNumber(record: Record<string, unknown>, key: string, factor: number): void {
-  if (typeof record[key] === 'number') record[key] *= factor;
-}
-
-function scaleTuple(record: Record<string, unknown>, key: string, factor: number): void {
-  const tuple = record[key];
-  if (Array.isArray(tuple)) record[key] = tuple.map((value) => typeof value === 'number' ? value * factor : value);
-}
-
-function factorFor(kind: QuantityKind, system: 'SI' | 'mm-N-s' | 'mm-t-s'): number {
-  return toSI(1, kind, system);
-}
-
-/**
- * Convert pre-0.2 files to canonical SI using the actual 0.1 UI provenance.
- * The legacy UI mixed display-basis geometry/section values with SI-valued
- * library materials and raw solver inputs, so a blanket dimensional scaling
- * would corrupt valid projects.
- */
-function migrateLegacyUnits(raw: Record<string, unknown>): {
-  data: Record<string, unknown>;
-  warnings: string[];
-} {
-  const migrated = structuredClone(raw);
-  const warnings: string[] = [];
-  const units = isRecord(migrated.units) ? migrated.units : {};
-  const geometry = isRecord(migrated.geometry) ? migrated.geometry : {};
-  if (units.angle_unit === 'rad') {
-    for (const body of Array.isArray(geometry.bodies) ? geometry.bodies : []) {
-      if (!isRecord(body) || !isRecord(body.transform)) continue;
-      const rotation = body.transform.rotation;
-      if (Array.isArray(rotation)) {
-        body.transform.rotation = rotation.map((value) => (
-          typeof value === 'number' ? value * 180 / Math.PI : value
-        ));
-      }
-    }
-  } else if (units.angle_unit !== undefined && units.angle_unit !== 'deg') {
-    throw new Error(`Legacy angle unit "${String(units.angle_unit)}" is unsupported.`);
-  }
-  units.angle_unit = 'deg';
-  migrated.units = units;
-  if (units.value_basis === 'SI') return { data: migrated, warnings };
-
-  const systemName = units.system_name;
-  if (systemName === 'custom') {
-    throw new Error('Legacy custom unit projects have no canonical value basis and cannot be migrated safely.');
-  }
-  const system = systemName === 'mm-N-s' || systemName === 'mm-t-s' ? systemName : 'SI';
-  const length = factorFor('length', system);
-  // Geometry inputs in 0.1 had no unit label or conversion, and every exporter
-  // emitted raw coordinates (including OpenFOAM convertToMeters 1). Preserve
-  // those historical solver semantics instead of inferring from the final UI
-  // preset, which users could change without converting existing values.
-  const legacyGeometryFactor = 1;
-
-  for (const body of Array.isArray(geometry.bodies) ? geometry.bodies : []) {
-    if (!isRecord(body)) continue;
-    const transform = isRecord(body.transform) ? body.transform : {};
-    scaleTuple(transform, 'position', legacyGeometryFactor);
-    const metadata = isRecord(body.metadata) ? body.metadata : {};
-    for (const key of ['width', 'height', 'depth', 'radius', 'thickness', 'holeRadius', 'outerRadius', 'innerRadius', 'length', 'span', 'spanX', 'spanY']) {
-      scaleNumber(metadata, key, legacyGeometryFactor);
-    }
-  }
-  for (const face of Array.isArray(geometry.faces) ? geometry.faces : []) if (isRecord(face)) scaleNumber(face, 'area', legacyGeometryFactor ** 2);
-  for (const edge of Array.isArray(geometry.edges) ? geometry.edges : []) if (isRecord(edge)) scaleNumber(edge, 'length', legacyGeometryFactor);
-  for (const vertex of Array.isArray(geometry.vertices) ? geometry.vertices : []) if (isRecord(vertex)) scaleTuple(vertex, 'position', legacyGeometryFactor);
-  for (const frame of Array.isArray(geometry.reference_frames) ? geometry.reference_frames : []) if (isRecord(frame)) scaleTuple(frame, 'origin', legacyGeometryFactor);
-  for (const parameter of Array.isArray(geometry.geometry_parameters) ? geometry.geometry_parameters : []) if (isRecord(parameter)) scaleNumber(parameter, 'value', legacyGeometryFactor);
-
-  for (const material of Array.isArray(migrated.materials) ? migrated.materials : []) {
-    if (!isRecord(material) || !isRecord(material.parameter_set)) continue;
-    const manuallyDisplayedFactors: Record<string, number> = {
-      // The 0.1 Material form used kg/mm3 for both mm presets, MPa, and
-      // W/(mm K). These labels intentionally differ from the 0.2 registry.
-      density: system === 'SI' ? 1 : 1e9,
-      young_modulus: system === 'SI' ? 1 : 1e6,
-      thermal_conductivity: system === 'SI' ? 1 : 1e3,
-    };
-    for (const [key, factor] of Object.entries(manuallyDisplayedFactors)) {
-      const tracked = material.parameter_set[key];
-      if (!isRecord(tracked) || typeof tracked.value !== 'number') continue;
-      // Library/imported/inferred values were already stored in SI in 0.1.
-      if (tracked.status === 'library' || tracked.status === 'imported' || tracked.status === 'inferred') continue;
-      if (tracked.status === 'confirmed') {
-        scaleNumber(tracked, 'value', factor);
-        continue;
-      }
-      if (system !== 'SI') {
-        const reference = `${String(material.id ?? material.name ?? '')}.${key}`;
-        const originalStatus = String(tracked.status);
-        scaleNumber(tracked, 'value', factor);
-        tracked.status = 'needs_review';
-        warnings.push(
-          `Legacy material ${reference} had ambiguous unit provenance (status: ${originalStatus}); its value was interpreted using ${system} display units and marked needs_review.`,
-        );
-      }
-    }
-  }
-
-  for (const section of Array.isArray(migrated.sections) ? migrated.sections : []) {
-    if (!isRecord(section)) continue;
-    if (isRecord(section.dimensions)) for (const key of Object.keys(section.dimensions)) scaleNumber(section.dimensions, key, length);
-    scaleNumber(section, 'area', factorFor('area', system));
-    for (const key of ['inertia_y', 'inertia_z', 'torsion_constant']) scaleNumber(section, key, factorFor('fourth_moment', system));
-    scaleNumber(section, 'thickness', length);
-  }
-
-  if (isRecord(migrated.mesh_controls)) {
-    if (isRecord(migrated.mesh_controls.global)) scaleNumber(migrated.mesh_controls.global, 'global_size', length);
-    for (const control of Array.isArray(migrated.mesh_controls.local) ? migrated.mesh_controls.local : []) if (isRecord(control)) scaleNumber(control, 'size', length);
-  }
-
-  // 0.1 BC inputs had no displayed units. Preserve their historical raw solver
-  // values. OpenFOAM wrote outlet pressure directly to p, so mark it kinematic.
-  for (const bc of Array.isArray(migrated.boundary_conditions) ? migrated.boundary_conditions : []) {
-    if (!isRecord(bc) || !isRecord(bc.values)) continue;
-    if (bc.bc_type === 'pressure_outlet' && bc.values.pressure_basis === undefined) {
-      bc.values.pressure_basis = 'kinematic';
-    }
-    if (bc.values.heat_transfer_coefficient !== undefined || bc.values.ambient_temperature !== undefined) {
-      throw new Error('Legacy convection named fields have ambiguous unit provenance and require an explicit current-schema conversion.');
-    }
-  }
-
-  // The 0.1 Load form displayed MPa only for pressure and N for every other
-  // load type, irrespective of application_mode. Preserve that exact contract.
-  for (const load of Array.isArray(migrated.loads) ? migrated.loads : []) {
-    if (!isRecord(load)) continue;
-    const kind: QuantityKind = load.load_type === 'pressure' ? 'pressure' : 'force';
-    scaleNumber(load, 'magnitude', factorFor(kind, system));
-  }
-  // Initial-condition editing was not exposed by the 0.1 UI; preserve imported
-  // raw values instead of guessing a display basis.
-
-  units.value_basis = 'SI';
-  migrated.units = units;
-  const auditTrail = Array.isArray(migrated.audit_trail) ? migrated.audit_trail : [];
-  auditTrail.push({
-    id: `audit_unit_migration_${Date.now()}`,
-    timestamp: new Date().toISOString(),
-    actor: 'migration',
-    action_type: 'unit_conversion',
-    target_ref: 'units',
-    before_summary: `${String(systemName ?? 'SI')} mixed legacy values`,
-    after_summary: 'canonical SI values',
-    note: 'Field-aware migration: unlabeled raw geometry, SI library materials, and raw solver inputs were preserved; explicitly labelled display-basis fields were converted.',
-  });
-  migrated.audit_trail = auditTrail;
-  return { data: migrated, warnings };
-}
-
 export function normalizeAndValidateProjectData(raw: unknown): NormalizeResult {
   if (!isRecord(raw)) {
     return { success: false, error: 'Invalid project file: root must be an object' };
@@ -858,7 +365,7 @@ export function normalizeAndValidateProjectData(raw: unknown): NormalizeResult {
     if (!current.success) {
       return { success: false, error: formatZodError(current.error) };
     }
-    return { success: true, data: current.data as ProjectIR };
+    return { success: true, data: current.data };
   }
 
   const defaults = createDefaultProject();
@@ -866,11 +373,14 @@ export function normalizeAndValidateProjectData(raw: unknown): NormalizeResult {
 
   let migration: ReturnType<typeof migrateLegacyUnits>;
   try {
-    migration = migrateLegacyUnits(raw);
+    const version = parseVersion(rawVersion)!;
+    migration = version[0] === 0 && version[1] < 2
+      ? migrateLegacyUnits(raw)
+      : { data: structuredClone(raw), warnings: [] };
   } catch (error) {
     return { success: false, error: `Invalid project file: ${String(error)}` };
   }
-  const migratedRaw = migration.data;
+  const migratedRaw = migrateV02Artifacts(migration.data);
 
   const merged = mergeWithDefaults(defaults, migratedRaw);
   const normalized: ProjectIR = {
@@ -894,7 +404,7 @@ export function normalizeAndValidateProjectData(raw: unknown): NormalizeResult {
 
   return {
     success: true,
-    data: parsed.data as ProjectIR,
+    data: parsed.data,
     migratedFromVersion,
     migrationWarnings: migration.warnings,
   };

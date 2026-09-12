@@ -1,0 +1,45 @@
+{
+  "measuredAt": "2026-09-12T21:37:04.907Z",
+  "node": "v22.18.0",
+  "platform": "darwin arm64",
+  "cpu": "Apple M4 Max",
+  "note": "Node/fake-indexeddb microbenchmark; synthetic STL payload; initial import/freeze is outside edit timings. Byte columns are different conservative proxies, not heap measurements. Save includes hashing, serialization, and IndexedDB transaction; browser measurements may differ.",
+  "reports": [
+    {
+      "fixture": "small",
+      "edits": 100,
+      "baselineP95Ms": 0.2761660000000177,
+      "currentP95Ms": 0.05866699999998559,
+      "baselineSerializedPatchBytes": 16716,
+      "currentEstimatedHistoryBytes": 53512,
+      "fullJsonMs": 0.014833000000010088,
+      "estimate100Ms": 0.051916000000005624,
+      "initialSaveMs": 3.2700000000000102,
+      "warmSaveMs": 0.6081660000000113
+    },
+    {
+      "fixture": "10MB STL",
+      "edits": 100,
+      "baselineP95Ms": 5.654374999999959,
+      "currentP95Ms": 0.022583999999937987,
+      "baselineSerializedPatchBytes": 16716,
+      "currentEstimatedHistoryBytes": 53512,
+      "fullJsonMs": 30.50595899999996,
+      "estimate100Ms": 0.05674999999996544,
+      "initialSaveMs": 12.850250000000074,
+      "warmSaveMs": 2.1304999999999836
+    },
+    {
+      "fixture": "100k results",
+      "edits": 100,
+      "baselineP95Ms": 38.26324999999997,
+      "currentP95Ms": 0.019500000000334694,
+      "baselineSerializedPatchBytes": 393222716,
+      "currentEstimatedHistoryBytes": 53512,
+      "fullJsonMs": 7.595166999999492,
+      "estimate100Ms": 0.054874999999810825,
+      "initialSaveMs": 8.921333000000232,
+      "warmSaveMs": 9.418916000000536
+    }
+  ]
+}

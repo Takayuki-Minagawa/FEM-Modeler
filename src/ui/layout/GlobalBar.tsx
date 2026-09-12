@@ -61,7 +61,9 @@ export function GlobalBar() {
   };
 
   const draftStatusLabel =
-    autosaveState.status === 'saving'
+    autosaveState.status === 'conflict'
+      ? (isJa ? '別タブで更新' : 'Changed in another tab')
+      : autosaveState.status === 'saving'
       ? t('globalBar.draftSaving')
       : autosaveState.status === 'error'
         ? t('globalBar.draftError')
@@ -143,13 +145,13 @@ export function GlobalBar() {
             title={autosaveState.errorMessage ?? draftSummary?.savedAt ?? undefined}
             style={{
               backgroundColor:
-                autosaveState.status === 'error'
+                autosaveState.status === 'error' || autosaveState.status === 'conflict'
                   ? 'rgba(244,67,54,0.12)'
                   : autosaveState.status === 'saving'
                     ? 'rgba(74,144,217,0.12)'
                     : 'var(--color-bg-input)',
               color:
-                autosaveState.status === 'error'
+                autosaveState.status === 'error' || autosaveState.status === 'conflict'
                   ? 'var(--color-error)'
                   : autosaveState.status === 'saving'
                     ? 'var(--color-accent)'

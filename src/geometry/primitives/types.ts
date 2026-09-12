@@ -1,3 +1,4 @@
+import type { NativeShapeParams } from '@/core/ir/schema/shapes';
 import type * as THREE from 'three';
 import type { GeometryBody, GeometryFace, GeometryEdge, GeometryVertex } from '@/core/ir/types';
 
@@ -6,72 +7,15 @@ export interface ShapeParams {
   [key: string]: unknown;
 }
 
-export interface BoxParams extends ShapeParams {
-  shapeType: 'box';
-  width: number;
-  height: number;
-  depth: number;
-}
-
-export interface CylinderParams extends ShapeParams {
-  shapeType: 'cylinder';
-  radius: number;
-  height: number;
-  segments: number;
-}
-
-export interface PlateParams extends ShapeParams {
-  shapeType: 'plate';
-  width: number;
-  depth: number;
-  thickness: number;
-}
-
-export interface PlateWithHoleParams extends ShapeParams {
-  shapeType: 'plateWithHole';
-  width: number;
-  depth: number;
-  thickness: number;
-  holeRadius: number;
-}
-
-export interface PipeParams extends ShapeParams {
-  shapeType: 'pipe';
-  outerRadius: number;
-  innerRadius: number;
-  length: number;
-  segments: number;
-}
-
-export interface LBracketParams extends ShapeParams {
-  shapeType: 'lBracket';
-  width: number;
-  height: number;
-  thickness: number;
-  depth: number;
-}
-
-export interface FrameParams extends ShapeParams {
-  shapeType: 'frame2d';
-  spanX: number;
-  spanY: number;
-  columns: number;
-  floors: number;
-}
-
-export interface TrussParams extends ShapeParams {
-  shapeType: 'truss2d';
-  span: number;
-  height: number;
-  divisions: number;
-}
-
-export interface ChannelParams extends ShapeParams {
-  shapeType: 'channel';
-  length: number;
-  height: number;
-  depth: number;
-}
+export type BoxParams = Extract<NativeShapeParams, { shapeType: 'box' }>;
+export type CylinderParams = Extract<NativeShapeParams, { shapeType: 'cylinder' }>;
+export type PlateParams = Extract<NativeShapeParams, { shapeType: 'plate' }>;
+export type PlateWithHoleParams = Extract<NativeShapeParams, { shapeType: 'plateWithHole' }>;
+export type PipeParams = Extract<NativeShapeParams, { shapeType: 'pipe' }>;
+export type LBracketParams = Extract<NativeShapeParams, { shapeType: 'lBracket' }>;
+export type FrameParams = Extract<NativeShapeParams, { shapeType: 'frame2d' }>;
+export type TrussParams = Extract<NativeShapeParams, { shapeType: 'truss2d' }>;
+export type ChannelParams = Extract<NativeShapeParams, { shapeType: 'channel' }>;
 
 export interface ImportedStlParams extends ShapeParams {
   shapeType: 'imported_stl';

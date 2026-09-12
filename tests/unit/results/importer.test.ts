@@ -19,7 +19,7 @@ describe('ResultIR import', () => {
     expect(response.result?.metadata.provenance_verified).toBe(false);
   });
 
-  it('verifies a provenance-bearing solver CSV against the selected case and revision', () => {
+  it('keeps a revision-only solver CSV unverified even when the revision matches', () => {
     const provenance = JSON.stringify({
       export_target: 'OpenSeesPy', analysis_case_id: 'case_1', model_revision: 7,
     });
@@ -27,11 +27,11 @@ describe('ResultIR import', () => {
     const response = importResultText(csv, 'results.csv', 'case_1', 'OpenSeesPy', { expectedModelRevision: 7 });
 
     expect(response.success).toBe(true);
-    expect(response.result?.status).toBe('complete');
+    expect(response.result?.status).toBe('partial');
     expect(response.result?.metadata).toMatchObject({
-      provenance_verified: true,
-      imported_for_model_revision: 7,
+      provenance_verified: false,
     });
+    expect(response.result?.metadata.imported_for_model_revision).toBeUndefined();
   });
 
   it('imports reaction balance and convergence manifests', () => {
@@ -128,7 +128,7 @@ describe('ResultIR import', () => {
     );
     expect(response.success).toBe(true);
     expect(response.warnings.some((warning) => warning.includes('label'))).toBe(true);
-    expect(response.result?.metadata.provenance_verified).toBe(true);
+    expect(response.result?.metadata.provenance_verified).toBe(false);
     expect(response.result?.status).toBe('partial');
   });
 

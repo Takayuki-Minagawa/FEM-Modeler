@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { createDefaultProject, createEmptyParameterSet } from '@/core/ir/defaults';
@@ -249,9 +251,12 @@ describe('DOLFINx strict exporter contract', () => {
     expect(result.geoFile).toContain('resolved_face_0() = Closest {0, 1, 0}');
     expect(result.geoFile).toContain('Physical Surface("selection_101", 101) = {resolved_face_0(0)}');
     expect(result.script).toContain('facet_tags.find(101)');
-    expect(result.script).toContain('"export_target": "DOLFINx"');
-    expect(result.script).toContain('"analysis_case_id": "case_structural"');
-    expect(result.script).toContain(`"model_revision": ${project.validation.model_revision}`);
+    const provenanceLiteral = result.script.match(/result_provenance = json\.loads\((.+)\)/)?.[1];
+    expect(provenanceLiteral).toBeDefined();
+    const provenance = JSON.parse(JSON.parse(provenanceLiteral!));
+    expect(provenance).toMatchObject({ export_target: 'DOLFINx', analysis_case_id: 'case_structural', model_revision: project.validation.model_revision });
+    expect(provenance.input_fingerprint).toBe(JSON.parse(result.manifest).input_fingerprint);
+    expect(provenance.run_id).toBe(JSON.parse(result.manifest).run_id);
     const manifest = JSON.parse(result.manifest);
     expect(manifest.tag_map_key).toBe('named_selection_id');
     expect(manifest.tag_map.ns_top).toBe(101);
@@ -500,9 +505,9 @@ describe('DOLFINx strict exporter contract', () => {
     expect(result.script).not.toContain('io.gmshio');
     expect(result.script).not.toContain('domain, cell_tags, facet_tags =');
     const syntax = spawnSync(
-      'python3',
-      ['-c', 'import sys; compile(sys.stdin.read(), "solve.py", "exec")'],
-      { input: result.script, encoding: 'utf8' },
+      'uv',
+      ['run', '--locked', '--offline', '--quiet', '--no-sync', '--project', 'solver-tests/openfoam', 'python', '-c', 'import sys; compile(sys.stdin.read(), "solve.py", "exec")'],
+      { input: result.script, encoding: 'utf8', env: { ...process.env, UV_CACHE_DIR: process.env.UV_CACHE_DIR ?? join(tmpdir(), 'fem-modeler-uv-cache') } },
     );
     expect(syntax.stderr).toBe('');
     expect(syntax.status).toBe(0);
