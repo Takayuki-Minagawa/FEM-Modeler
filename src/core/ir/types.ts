@@ -1,3 +1,8 @@
+import type { BoundaryConditionData, LoadData } from './schema/conditions';
+import type { ResultMesh } from '@/results/package';
+import type { ConvergenceStudy } from '@/results/studies';
+import type { SCHEMA_NAME, SCHEMA_VERSION } from './defaults';
+
 /**
  * FEM/CAE共通中間表現(IR) TypeScript型定義
  * 指示書 FEM_WebApp_JSON_IR_Spec.md に完全準拠
@@ -44,6 +49,7 @@ export interface ProjectIR {
   initial_conditions: InitialCondition[];
   analysis_cases: AnalysisCase[];
   results: ResultIR[];
+  convergence_studies: ConvergenceStudy[];
   solver_targets: SolverTarget[];
   validation: ValidationState;
   ui_state: UIState;
@@ -66,8 +72,8 @@ export type DomainType =
 export type ProjectStatus = 'draft' | 'review' | 'approved' | 'archived';
 
 export interface ProjectMeta {
-  schema_name: string;
-  schema_version: string;
+  schema_name: typeof SCHEMA_NAME;
+  schema_version: typeof SCHEMA_VERSION;
   app_version: string;
   project_id: string;
   project_name: string;
@@ -453,18 +459,7 @@ export interface BCValues {
   ambient_temperature?: number;
 }
 
-export interface BoundaryCondition {
-  id: string;
-  name: string;
-  physics_domain: PhysicsDomain;
-  bc_type: BoundaryConditionType;
-  target_named_selection_id: string;
-  coordinate_system: string;
-  values: BCValues;
-  temporal_profile: TemporalProfile;
-  status: ValueStatus;
-  notes: string;
-}
+export type BoundaryCondition = BoundaryConditionData;
 
 // ---------------------------------------------------------------------------
 // loads (Section 13)
@@ -489,21 +484,7 @@ export type LoadApplicationMode =
 
 export type LoadDistribution = 'uniform' | 'linear' | 'table' | 'field_ref';
 
-export interface Load {
-  id: string;
-  name: string;
-  physics_domain: PhysicsDomain;
-  load_type: LoadType;
-  target_named_selection_id: string;
-  application_mode: LoadApplicationMode;
-  direction: [number, number, number];
-  magnitude: number;
-  distribution: LoadDistribution;
-  temporal_profile: TemporalProfile;
-  load_case: string;
-  coordinate_system: string;
-  status: ValueStatus;
-}
+export type Load = LoadData;
 
 // ---------------------------------------------------------------------------
 // initial_conditions (Section 14)
@@ -593,7 +574,7 @@ export interface ResultField {
 }
 
 export interface ConservationCheck {
-  kind: 'force_balance' | 'heat_balance' | 'mass_balance' | 'solver_convergence' | 'solver_execution';
+  kind: 'force_balance' | 'moment_balance' | 'heat_balance' | 'mass_balance' | 'solver_convergence' | 'solver_execution';
   status: 'pass' | 'warning' | 'fail' | 'not_available';
   value: number | null;
   tolerance: number | null;
@@ -609,6 +590,7 @@ export interface ResultIR {
   imported_at: string;
   status: 'complete' | 'partial' | 'failed';
   fields: ResultField[];
+  mesh?: ResultMesh;
   checks: ConservationCheck[];
   metadata: Record<string, unknown>;
 }
@@ -666,6 +648,11 @@ export interface ValidationState {
   last_run_at: string;
   model_revision: number;
   validated_revision: number;
+  context?: {
+    analysis_case_id: string;
+    solver_target: SolverTargetName;
+    input_fingerprint: string;
+  };
   summary: ValidationSummary;
   items: ValidationItem[];
 }

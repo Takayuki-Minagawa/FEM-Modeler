@@ -1,3 +1,4 @@
+import { parseNativeShapeMetadata } from '@/core/ir/schema/shapes';
 import { useAppStore } from '@/state/store';
 import * as THREE from 'three';
 import { useMemo } from 'react';
@@ -197,7 +198,7 @@ function SolidMesh({ bodyId, asset, metadata, position, rotation, scale, color, 
         console.error(`Imported STL body ${bodyId} has no persisted asset.`);
         return new THREE.BufferGeometry();
       }
-      const result = generateShape(params);
+      const result = generateShape(parseNativeShapeMetadata(metadata));
       return result.threeGeometry;
     } catch (e) {
       console.error('Failed to generate solid geometry:', e);

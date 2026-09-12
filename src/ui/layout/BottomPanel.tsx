@@ -1,3 +1,4 @@
+import { DiagnosticMessage } from '@/ui/forms/common/DiagnosticMessage';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
@@ -106,20 +107,7 @@ export function BottomPanel() {
                   className="text-sm p-3 rounded mb-1.5"
                   style={{ backgroundColor: 'var(--color-bg-input)' }}
                 >
-                  <span
-                    className="font-bold mr-2"
-                    style={{
-                      color:
-                        item.severity === 'error'
-                          ? 'var(--color-error)'
-                          : item.severity === 'warning'
-                            ? 'var(--color-warning)'
-                            : 'var(--color-info)',
-                    }}
-                  >
-                    [{item.severity.toUpperCase()}]
-                  </span>
-                  {item.title}: {item.message}
+                  <DiagnosticMessage item={item} />
                 </div>
               ))
             )}

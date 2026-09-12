@@ -1,7 +1,7 @@
 {
   "name": "fem-modeler",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "MIT",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
@@ -19,10 +19,14 @@
     "audit": "npm audit --audit-level=high",
     "bundle:check": "node scripts/check-bundle-size.mjs",
     "check": "npm run typecheck && npm run lint && npm run test",
-    "ci": "npm run check && npm run audit && npm run build && npm run bundle:check"
+    "ci": "npm run check && npm run audit && npm run build && npm run bundle:check",
+    "test:e2e": "npm run build && playwright test",
+    "test:performance": "FEM_PERFORMANCE=1 vitest run tests/performance",
+    "test:solvers": "uv run --locked --project solver-tests/openfoam python solver-tests/run.py",
+    "test:solvers:verify": "uv run --locked --project solver-tests/openfoam pytest solver-tests/test_results.py solver-tests/test_collector.py -q"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.2.2",
+    "@noble/hashes": "^2.4.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "fflate": "^0.8.3",
@@ -32,9 +36,8 @@
     "immer": "^11.1.4",
     "jszip": "^3.10.1",
     "nanoid": "^5.1.7",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "react-hook-form": "^7.72.0",
+    "react": "~19.2.4",
+    "react-dom": "~19.2.4",
     "react-hotkeys-hook": "^5.2.4",
     "react-i18next": "^16.6.2",
     "react-resizable-panels": "^4.7.5",
@@ -44,7 +47,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.2.2",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/file-saver": "^2.0.7",
     "@types/node": "^24.12.0",
     "@types/react": "^19.2.14",
@@ -57,6 +63,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "fake-indexeddb": "^6.2.5",
     "globals": "^17.4.0",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.2.2",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.0",

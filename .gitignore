@@ -11,6 +11,11 @@ node_modules
 dist
 dist-ssr
 coverage
+test-results/
+playwright-report/
+.venv/
+__pycache__/
+.pytest_cache/
 *.local
 
 # Internal documents
@@ -26,3 +31,6 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+
+# Local solver execution artifacts
+solver-tests/artifacts/

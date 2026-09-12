@@ -1,13 +1,19 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, GizmoHelper, GizmoViewport, Grid } from '@react-three/drei';
 import { useAppStore } from '@/state/store';
-import { useAppContext } from '@/hooks/useAppContext';
+import { useAppUiContext } from '@/hooks/useAppUiContext';
 import { GeometryRenderer } from './GeometryRenderer';
+import { AnalysisOverlays, FocusController } from './AnalysisOverlays';
+import { ResultOverlay } from './ResultOverlay';
+import { ViewerControls } from './ViewerControls';
+import { useViewerState } from './view-state';
 
 export function ViewerCanvas() {
+  const resultId = useViewerState((s) => s.resultId);
+  const hasResult = useAppStore((s) => s.ir.results.some((r) => r.id === resultId && r.mesh));
   const showGrid = useAppStore((s) => s.showGrid);
   const showAxes = useAppStore((s) => s.showAxes);
-  const { theme } = useAppContext();
+  const { theme } = useAppUiContext();
   const isDark = theme !== 'light';
 
   const bgColor = isDark ? '#1a1a2e' : '#e8ecf0';
@@ -15,7 +21,8 @@ export function ViewerCanvas() {
   const gridSectionColor = isDark ? '#3a3a5a' : '#a0a8b0';
 
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full relative">
+      <ViewerControls />
       <Canvas
         camera={{ position: [10, 10, 10], fov: 50, near: 0.1, far: 10000 }}
         style={{ background: bgColor }}
@@ -41,7 +48,8 @@ export function ViewerCanvas() {
 
         {showAxes && <axesHelper args={[5]} />}
 
-        <GeometryRenderer />
+        {hasResult ? <ResultOverlay /> : <><GeometryRenderer /><AnalysisOverlays /></>}
+        <FocusController />
 
         <GizmoHelper alignment="bottom-right" margin={[60, 60]}>
           <GizmoViewport

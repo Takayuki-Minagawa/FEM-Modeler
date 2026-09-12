@@ -1,8 +1,8 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { useProjectDraftPersistence } from '@/hooks/useProjectDraftPersistence';
 import { generateId } from '@/core/ir/id-generator';
-import { AppContext } from './app-context-value';
+import { AppContext, AppUiContext, AppActionsContext } from './app-context-value';
 import type { ExportHistoryEntry, ExportHistoryStatus } from './app-context-value';
 
 const MAX_EXPORT_HISTORY = 30;
@@ -39,36 +39,28 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     setExportHistory([]);
   }, []);
 
-  const saveProjectFile = useCallback(() => {
-    draftPersistence.saveProjectFile();
-    recordExportResult('JSON', [], []);
-  }, [draftPersistence, recordExportResult]);
+  const openHelp = useCallback(() => setHelpOpen(true), []);
+  const closeHelp = useCallback(() => setHelpOpen(false), []);
+  const openImport = useCallback(() => setImportOpen(true), []);
+  const closeImport = useCallback(() => setImportOpen(false), []);
+  const downloadDraftFile = draftPersistence.saveProjectFile;
 
-  return (
-    <AppContext.Provider
-      value={{
-        theme,
-        toggleTheme,
-        helpOpen,
-        openHelp: () => setHelpOpen(true),
-        closeHelp: () => setHelpOpen(false),
-        importOpen,
-        openImport: () => setImportOpen(true),
-        closeImport: () => setImportOpen(false),
-        draftSummary: draftPersistence.draftSummary,
-        autosaveState: draftPersistence.autosaveState,
-        activityLog: draftPersistence.activityLog,
-        addActivity: draftPersistence.addActivity,
-        clearActivityLog: draftPersistence.clearActivityLog,
-        saveProjectFile,
-        restoreDraft: draftPersistence.restoreDraft,
-        discardDraft: draftPersistence.discardDraft,
-        exportHistory,
-        recordExportResult,
-        clearExportHistory,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
-  );
+  const saveProjectFile = useCallback(() => {
+    downloadDraftFile();
+    recordExportResult('JSON', [], []);
+  }, [downloadDraftFile, recordExportResult]);
+
+  const value = useMemo(() => ({
+    ...draftPersistence, theme, toggleTheme, helpOpen, openHelp, closeHelp, importOpen, openImport, closeImport,
+    saveProjectFile, exportHistory, recordExportResult, clearExportHistory,
+  }), [draftPersistence, theme, toggleTheme, helpOpen, openHelp, closeHelp, importOpen, openImport, closeImport,
+    saveProjectFile, exportHistory, recordExportResult, clearExportHistory]);
+  const uiValue = useMemo(() => ({ theme, toggleTheme, helpOpen, openHelp, closeHelp, importOpen, openImport, closeImport }),
+    [theme, toggleTheme, helpOpen, openHelp, closeHelp, importOpen, openImport, closeImport]);
+  const { addActivity, clearActivityLog, transitionProject } = draftPersistence;
+  const actionsValue = useMemo(() => ({ addActivity, clearActivityLog, saveProjectFile, transitionProject, recordExportResult, clearExportHistory }),
+    [addActivity, clearActivityLog, saveProjectFile, transitionProject, recordExportResult, clearExportHistory]);
+  return <AppUiContext.Provider value={uiValue}><AppActionsContext.Provider value={actionsValue}>
+    <AppContext.Provider value={value}>{children}</AppContext.Provider>
+  </AppActionsContext.Provider></AppUiContext.Provider>;
 }

@@ -20,7 +20,7 @@ export function SelectInput({ label, value, options, onChange, disabled }: Selec
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="flex-1 px-2 py-1.5 rounded text-sm outline-none cursor-pointer disabled:opacity-50"
+        className="flex-1 min-w-0 px-2 py-1.5 rounded text-sm outline-none cursor-pointer disabled:opacity-50"
         style={{
           backgroundColor: 'var(--color-bg-input)',
           color: 'var(--color-text)',

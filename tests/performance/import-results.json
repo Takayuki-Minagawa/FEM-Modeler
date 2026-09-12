@@ -1,0 +1,12 @@
+{
+  "measuredAt": "2026-09-12T21:52:57.820Z",
+  "node": "v22.18.0",
+  "cpu": "Apple M4 Max",
+  "note": "One cold Node run, no worker; synthetic 209,713 separate triangles and 100k three-component result rows. Main-thread tasks over 50 ms warrant offloading; transfer/reconstruction overhead is not measured.",
+  "stlBytes": 10485734,
+  "triangleCount": 209713,
+  "stlMs": 1278.539833,
+  "csvBytes": 2221466,
+  "csvRows": 100000,
+  "csvMs": 53.94841599999995
+}

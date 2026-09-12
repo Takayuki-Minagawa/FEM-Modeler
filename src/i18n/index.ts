@@ -3,6 +3,7 @@ import { initReactI18next } from 'react-i18next';
 import { ja } from './locales/ja';
 import { en } from './locales/en';
 import { phase2Ja, phase2En } from './locales/phase2';
+import { diagnosticTitlesJa, diagnosticUiJa, diagnosticUiEn } from './locales/diagnostics';
 
 const savedLang = typeof window !== 'undefined'
   ? localStorage.getItem('fem-modeler-lang') ?? 'ja'
@@ -10,8 +11,8 @@ const savedLang = typeof window !== 'undefined'
 
 i18n.use(initReactI18next).init({
   resources: {
-    ja: { translation: { ...ja, ...phase2Ja } },
-    en: { translation: { ...en, ...phase2En } },
+    ja: { translation: { ...ja, ...phase2Ja, diagnosticTitles: diagnosticTitlesJa, diagnosticUi: diagnosticUiJa } },
+    en: { translation: { ...en, ...phase2En, diagnosticTitles: {}, diagnosticUi: diagnosticUiEn } },
   },
   lng: savedLang,
   fallbackLng: 'ja',

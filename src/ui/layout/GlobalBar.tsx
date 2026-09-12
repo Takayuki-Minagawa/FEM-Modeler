@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 import { useAppStore } from '@/state/store';
 import { useAppContext } from '@/hooks/useAppContext';
 import { useProjectFileLoader } from '@/hooks/useProjectFileLoader';
@@ -25,6 +26,7 @@ export function GlobalBar() {
     restoreDraft,
   } = useAppContext();
   const isJa = i18n.language === 'ja';
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { openFilePicker } = useProjectFileLoader();
   const projectName = useAppStore((s) => s.ir.meta.project_name);
   const unitSystem = useAppStore((s) => s.ir.units.system_name);
@@ -40,7 +42,8 @@ export function GlobalBar() {
   };
 
   const handleLoad = () => {
-    openFilePicker('.json,.fem.json,.fem.zip');
+    setLoadError(null);
+    openFilePicker('.json,.fem.json,.fem.zip', (result) => setLoadError(result.success ? null : result.error ?? 'Failed to load project.'));
   };
 
   const handleRestoreDraft = async () => {
@@ -61,7 +64,9 @@ export function GlobalBar() {
   };
 
   const draftStatusLabel =
-    autosaveState.status === 'saving'
+    autosaveState.status === 'conflict'
+      ? (isJa ? '別タブで更新' : 'Changed in another tab')
+      : autosaveState.status === 'saving'
       ? t('globalBar.draftSaving')
       : autosaveState.status === 'error'
         ? t('globalBar.draftError')
@@ -71,13 +76,17 @@ export function GlobalBar() {
 
   return (
     <div
-      className="flex items-center justify-between px-4 border-b select-none shrink-0"
+      className="relative flex items-center justify-between px-4 border-b select-none shrink-0"
       style={{
         height: 'var(--global-bar-height)',
         backgroundColor: 'var(--color-bg-secondary)',
         borderColor: 'var(--color-border)',
       }}
     >
+      {loadError && <div className="absolute top-full left-0 right-0 z-30 p-3 text-sm shadow-lg" style={{ backgroundColor: 'var(--color-bg-panel)', color: 'var(--color-error)' }}>
+        <p role="alert">{loadError}</p>
+        <button type="button" className="mt-2 underline" onClick={() => setLoadError(null)}>{isJa ? '閉じる' : 'Dismiss'}</button>
+      </div>}
       {/* Left: project info */}
       <div className="flex items-center gap-4">
         <span className="font-bold text-base" style={{ color: 'var(--color-accent)' }}>
@@ -143,13 +152,13 @@ export function GlobalBar() {
             title={autosaveState.errorMessage ?? draftSummary?.savedAt ?? undefined}
             style={{
               backgroundColor:
-                autosaveState.status === 'error'
+                autosaveState.status === 'error' || autosaveState.status === 'conflict'
                   ? 'rgba(244,67,54,0.12)'
                   : autosaveState.status === 'saving'
                     ? 'rgba(74,144,217,0.12)'
                     : 'var(--color-bg-input)',
               color:
-                autosaveState.status === 'error'
+                autosaveState.status === 'error' || autosaveState.status === 'conflict'
                   ? 'var(--color-error)'
                   : autosaveState.status === 'saving'
                     ? 'var(--color-accent)'

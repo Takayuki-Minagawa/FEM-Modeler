@@ -126,6 +126,7 @@ export function validateReferences(ir: ProjectIR): ReferenceIssue[] {
     ir.initial_conditions,
     ir.analysis_cases,
     ir.results,
+    ir.convergence_studies,
   ]) for (const item of collection) register(item.id);
   for (const id of duplicateIds) issues.push({ code: 'DUPLICATE_ID', sourceId: id, field: 'id', missingId: id });
 
@@ -194,5 +195,6 @@ export function validateReferences(ir: ProjectIR): ReferenceIssue[] {
     for (const ref of item.participating_ic_ids) check(item.id, 'participating_ic_ids', ref, ics);
   }
   for (const result of ir.results) check(result.id, 'analysis_case_id', result.analysis_case_id, analysisCases);
+  for (const study of ir.convergence_studies) check(study.id, 'analysis_case_id', study.analysis_case_id, analysisCases);
   return issues;
 }

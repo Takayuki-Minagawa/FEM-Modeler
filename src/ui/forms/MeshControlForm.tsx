@@ -7,6 +7,8 @@ import { SelectInput } from './common/SelectInput';
 import type { MeshLocalControl, MeshLocalControlType } from '@/core/ir/types';
 import { fromSINullable, quantityUnitLabel, toSINullable } from '@/core/units';
 import { estimateMeshPreview } from '@/mesh/preview';
+import { MeshResultSummary } from './MeshResultSummary';
+import { resultMatchesInput } from '@/core/ir/provenance';
 
 export function MeshControlForm() {
   const { i18n } = useTranslation();
@@ -60,6 +62,8 @@ export function MeshControlForm() {
 
   return (
     <div className="space-y-5">
+      {ir.results.filter((result) => result.mesh).map((result) => <section key={result.id} className="p-3 rounded space-y-2" style={{ backgroundColor: "var(--color-bg-input)" }}><h3 className="text-sm font-bold">{isJa ? "取込済み実メッシュ" : "Imported measured mesh"}: {result.source_file_name}</h3><p className="text-xs" style={{ color: resultMatchesInput(ir, result) ? "var(--color-success)" : "var(--color-warning)" }}>{resultMatchesInput(ir, result) ? (isJa ? "現在の入力と一致" : "Matches current input") : (isJa ? "古い結果または出所未検証" : "Stale or unverified")}</p><MeshResultSummary result={result} ja={isJa} /></section>)}
+      <p className="text-xs">{isJa ? "実メッシュJSONは結果パネルから取り込めます。以下の推定値とは別に表示します。" : "Import mesh JSON from the Results panel. Measured mesh data appears above the estimates."}</p>
       {/* Global settings */}
       <div>
         <label className="block text-sm font-bold mb-2" style={{ color: 'var(--color-text-muted)' }}>

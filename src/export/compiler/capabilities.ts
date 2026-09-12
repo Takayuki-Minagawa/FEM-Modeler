@@ -277,6 +277,7 @@ export function scopeProjectForAnalysisCaseValidation(ir: ProjectIR, analysisCas
     mesh_controls: { ...activated.mesh_controls, local: localMeshControls },
     analysis_cases: [{ ...analysisCase, active: true }],
     results: activated.results.filter((item) => item.analysis_case_id === analysisCaseId),
+    convergence_studies: activated.convergence_studies.filter((item) => item.analysis_case_id === analysisCaseId),
   };
 }
 

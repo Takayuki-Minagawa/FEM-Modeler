@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { downloadConditionsCsv } from '@/export/project/csv-export';
 import { downloadMarkdownSummary } from '@/export/project/markdown-summary';
-import { useAppContext } from '@/hooks/useAppContext';
+import { useAppActionsContext } from '@/hooks/useAppActionsContext';
 import type { SolverTargetName } from '@/core/ir/types';
-import { preflightExport, SOLVER_CAPABILITIES } from '@/export/compiler';
+import { preflightExport, SOLVER_CAPABILITIES, scopeProjectForAnalysisCaseValidation } from '@/export/compiler';
+import { isValidationCurrent } from '@/validation/context';
 
 export function ExportForm() {
   const { i18n } = useTranslation();
   const isJa = i18n.language === 'ja';
-  const { addActivity, saveProjectFile, recordExportResult } = useAppContext();
+  const { addActivity, saveProjectFile, recordExportResult } = useAppActionsContext();
   const ir = useAppStore((s) => s.ir);
   const validation = useAppStore((s) => s.ir.validation);
   const runValidation = useAppStore((s) => s.runValidation);
@@ -18,7 +19,7 @@ export function ExportForm() {
   const setActivePanel = useAppStore((s) => s.setActivePanel);
 
   const [exporting, setExporting] = useState<string | null>(null);
-  const [lastResult, setLastResult] = useState<{ target: string; errors: string[]; warnings: string[] } | null>(null);
+  const [lastResult, setLastResult] = useState<{ target: string; errors: string[]; warnings: string[]; manifest?: string } | null>(null);
   const [requestedAnalysisCaseId, setRequestedAnalysisCaseId] = useState(() => ir.analysis_cases.find((item) => item.active)?.id ?? ir.analysis_cases[0]?.id ?? '');
   const [coverageTarget, setCoverageTarget] = useState<SolverTargetName>(() => (
     ['OpenSeesPy', 'DOLFINx', 'OpenFOAM'].includes(ir.meta.default_solver_target)
@@ -62,7 +63,7 @@ export function ExportForm() {
 
     setExporting(target);
     try {
-      let result: { errors: string[]; warnings: string[] };
+      let result: { errors: string[]; warnings: string[]; manifest?: string };
       switch (target) {
         case 'OpenSeesPy':
           result = await (await import('@/export/openseespy/exporter')).downloadOpenSeesPyZip(ir, analysisCaseId);
@@ -135,30 +136,44 @@ export function ExportForm() {
     { name: 'CSV', desc: isJa ? '条件一覧CSV' : 'Conditions summary CSV', enabled: true },
     { name: 'Markdown', desc: isJa ? '入力サマリーMarkdown' : 'Input summary Markdown', enabled: true },
   ];
-  const coverage = preflightExport(ir, coverageTarget, analysisCaseId || undefined);
-  const validationIsStale = validation.validated_revision !== validation.model_revision;
+  const coverage = useMemo(() => preflightExport(ir, coverageTarget, analysisCaseId || undefined), [ir, coverageTarget, analysisCaseId]);
+  const validationIsStale = !isValidationCurrent(ir, coverageTarget, analysisCaseId);
+  const caseScope = useMemo(() => {
+    try { return scopeProjectForAnalysisCaseValidation(ir, analysisCaseId); }
+    catch { return null; }
+  }, [ir, analysisCaseId]);
+  const actualCoverage = useMemo(() => {
+    if (!lastResult?.manifest) return null;
+    try {
+      const manifest = JSON.parse(lastResult.manifest) as Record<string, unknown>;
+      const consumed = manifest.consumed_ir_ids;
+      const ignored = manifest.ignored_ir_ids;
+      if (!Array.isArray(consumed) || !Array.isArray(ignored)) return null;
+      return { consumed: consumed.map(String), ignored: ignored.map(String) };
+    } catch { return null; }
+  }, [lastResult]);
   const selectedAnalysisCase = ir.analysis_cases.find((item) => item.id === analysisCaseId);
   const guidedSteps = [
-    { panel: 'geometry', done: ir.geometry.bodies.length > 0, ja: '解析形状', en: 'Analysis geometry' },
-    { panel: 'selections', done: ir.named_selections.length > 0 && ir.named_selections.every((item) => item.member_refs.length > 0), ja: '確定Named Selection', en: 'Resolved named selections' },
-    { panel: 'materials', done: ir.material_assignments.length > 0, ja: '材料割当', en: 'Material assignments' },
+    { panel: 'geometry', done: (caseScope?.geometry.bodies.length ?? 0) > 0, ja: '解析形状', en: 'Analysis geometry' },
+    { panel: 'selections', done: Boolean(caseScope?.named_selections.length && caseScope.named_selections.every((item) => item.status === 'active' && item.member_refs.length > 0)), ja: '確定Named Selection', en: 'Resolved named selections' },
+    { panel: 'materials', done: (caseScope?.material_assignments.length ?? 0) > 0, ja: '材料割当', en: 'Material assignments' },
     {
       panel: 'sections',
       done: selectedAnalysisCase?.domain_type !== 'frame' && selectedAnalysisCase?.domain_type !== 'truss'
         ? true
-        : ir.section_assignments.length > 0,
+        : (caseScope?.section_assignments.length ?? 0) > 0,
       ja: '断面割当',
       en: 'Section assignments',
     },
     {
       panel: 'bc',
-      done: ir.boundary_conditions.length > 0,
+      done: (caseScope?.boundary_conditions.length ?? 0) > 0,
       ja: '境界条件',
       en: 'Boundary conditions',
     },
     {
       panel: 'loads',
-      done: selectedAnalysisCase?.domain_type === 'fluid' || ir.loads.length > 0,
+      done: selectedAnalysisCase?.domain_type === 'fluid' || (caseScope?.loads.length ?? 0) > 0,
       ja: '荷重・熱入力',
       en: 'Loads / heat input',
     },
@@ -230,8 +245,11 @@ export function ExportForm() {
           {Object.keys(SOLVER_CAPABILITIES).map((target) => <option key={target}>{target}</option>)}
         </select>
         <div className="mt-2 text-xs space-y-1" style={{ color: 'var(--color-text-muted)' }}>
-          <div>{isJa ? '消費' : 'Consumed'}: {coverage.coverage?.consumedIds.length ?? 0}</div>
-          <div>{isJa ? '除外' : 'Excluded'}: {coverage.coverage?.ignoredIds.length ?? 0}</div>
+          <div>{isJa ? '消費予定' : 'Planned consumption'}: {coverage.coverage?.consumedIds.length ?? 0}</div>
+          <div>{isJa ? '除外予定' : 'Planned exclusion'}: {coverage.coverage?.ignoredIds.length ?? 0}</div>
+          <button type="button" onClick={() => runValidation(coverageTarget, analysisCaseId)} className="px-2 py-1 rounded" disabled={!analysisCaseId}>
+            {isJa ? 'このケース・ソルバを検証' : 'Validate this case and solver'}
+          </button>
           {coverage.errors.map((issue) => <div key={`${issue.code}:${issue.targetRef}`} style={{ color: 'var(--color-error)' }}>{issue.message}</div>)}
           {coverage.warnings.map((issue) => <div key={`${issue.code}:${issue.targetRef}`} style={{ color: 'var(--color-warning)' }}>{issue.message}</div>)}
         </div>
@@ -299,6 +317,11 @@ export function ExportForm() {
           {lastResult.warnings.map((w, i) => (
             <div key={i} className="text-xs" style={{ color: 'var(--color-warning)' }}>{w}</div>
           ))}
+          {actualCoverage && <details className="mt-2 text-xs">
+            <summary>{isJa ? '生成物が実際に消費したID' : 'IDs actually consumed by the export'} ({actualCoverage.consumed.length})</summary>
+            <p className="break-all mt-1">{actualCoverage.consumed.join(', ')}</p>
+            <p className="break-all mt-1">{isJa ? '除外' : 'Excluded'}: {actualCoverage.ignored.join(', ') || '—'}</p>
+          </details>}
         </div>
       )}
     </div>

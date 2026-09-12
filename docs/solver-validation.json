@@ -1,0 +1,633 @@
+{
+  "validated_at_utc": "2026-09-12T22:26:54.137324+00:00",
+  "scope": "Five templates, independent analytic references, SI/mm display invariance, DOLFINx MPI 1/2, conservation and measured residuals",
+  "native_platform": "linux/amd64 (Docker Desktop on Apple Silicon)",
+  "uv_version": "0.9.7",
+  "native_images": {
+    "dolfinx_and_opensees": "ghcr.io/fenics/dolfinx/dolfinx@sha256:f7cce2a2271bf838c080751348c471064acb41fef0330e2c08178a688f71890d",
+    "openfoam": "openfoam/openfoam10-paraview510@sha256:d6ff1f9a2e7bc3c9177f373bebbdeb542fd8b49144afc24d5e3a3cd9bfae253d"
+  },
+  "test_status": {
+    "exit_code": 0,
+    "tests_collected": 49,
+    "tests_failed": 0
+  },
+  "solver_run_count": 21,
+  "analytic_metrics": {
+    "frame.top_node_3_uy_m": {
+      "actual": -7.5e-07,
+      "reference": -7.5e-07,
+      "absolute_tolerance": 1e-12,
+      "relative_tolerance": 1e-08
+    },
+    "frame.top_node_4_uy_m": {
+      "actual": -7.5e-07,
+      "reference": -7.5e-07,
+      "absolute_tolerance": 1e-12,
+      "relative_tolerance": 1e-08
+    },
+    "truss.top_node_4_uy_m": {
+      "actual": -9.57106781186548e-07,
+      "reference": -9.571067811865474e-07,
+      "absolute_tolerance": 1e-12,
+      "relative_tolerance": 1e-08
+    },
+    "solid.analytic_field_max_error": {
+      "actual": 3.4728350837426314e-20,
+      "reference": 0,
+      "absolute_tolerance": 1e-10,
+      "relative_tolerance": 1e-08
+    },
+    "thermal.analytic_field_max_error": {
+      "actual": 5.7411853049416095e-12,
+      "reference": 0,
+      "absolute_tolerance": 1e-07,
+      "relative_tolerance": 1e-08
+    },
+    "thermal.total_generation_W": {
+      "actual": 4.0000000000000036,
+      "reference": 4.0,
+      "absolute_tolerance": 1e-10,
+      "relative_tolerance": 1e-08
+    },
+    "fluid.profile_relative_L2_error": {
+      "actual": 0.0027707906870644066,
+      "reference": 0,
+      "absolute_tolerance": 0.03,
+      "relative_tolerance": 1e-08
+    },
+    "fluid.pressure_gradient_Pa_per_m": {
+      "actual": -0.1193849896825516,
+      "reference": -0.11978400000000003,
+      "absolute_tolerance": 1e-10,
+      "relative_tolerance": 0.03
+    }
+  },
+  "cases": [
+    {
+      "case": "frame_SI",
+      "return_code": 0,
+      "elapsed_seconds": 3.808,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:c9ae7ba8b5a9cf5843300696a8a6db6b6dbd44e4137edf1e78d88478b8bbd875",
+      "node_count": 12,
+      "element_count": 15,
+      "solver_version": "3.7.1",
+      "python_version": "3.12.12",
+      "applied_force_N": [
+        10000,
+        0
+      ],
+      "reaction_force_N": [
+        -10000.0,
+        2.8897511526330796e-13
+      ],
+      "force_imbalance_N": [
+        0.0,
+        2.8897511526330796e-13
+      ],
+      "balance_tolerance_N": 0.01,
+      "moment_imbalance_Nm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "moment_balance_tolerance_Nm": 0.10816653826391968
+    },
+    {
+      "case": "frame_mm",
+      "return_code": 0,
+      "elapsed_seconds": 3.694,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:c9ae7ba8b5a9cf5843300696a8a6db6b6dbd44e4137edf1e78d88478b8bbd875",
+      "node_count": 12,
+      "element_count": 15,
+      "solver_version": "3.7.1",
+      "python_version": "3.12.12",
+      "applied_force_N": [
+        10000,
+        0
+      ],
+      "reaction_force_N": [
+        -10000.0,
+        2.8897511526330796e-13
+      ],
+      "force_imbalance_N": [
+        0.0,
+        2.8897511526330796e-13
+      ],
+      "balance_tolerance_N": 0.01,
+      "moment_imbalance_Nm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "moment_balance_tolerance_Nm": 0.10816653826391968
+    },
+    {
+      "case": "frame_benchmark",
+      "return_code": 0,
+      "elapsed_seconds": 3.627,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:1003ea2c2e00390820d3cd7dd9b2858f059c601a305aa384e7d1ae5515874412",
+      "node_count": 4,
+      "element_count": 3,
+      "solver_version": "3.7.1",
+      "python_version": "3.12.12",
+      "applied_force_N": [
+        0,
+        -1000
+      ],
+      "reaction_force_N": [
+        0.0,
+        1000.0
+      ],
+      "force_imbalance_N": [
+        0.0,
+        0.0
+      ],
+      "balance_tolerance_N": 0.001,
+      "moment_imbalance_Nm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "moment_balance_tolerance_Nm": 0.0036055512754639895
+    },
+    {
+      "case": "truss_SI",
+      "return_code": 0,
+      "elapsed_seconds": 3.597,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:8cce9867c42e0f1d2e492f94b6c6d4e46890cc58f336209fdfa0e4a64a6d75f7",
+      "node_count": 12,
+      "element_count": 21,
+      "solver_version": "3.7.1",
+      "python_version": "3.12.12",
+      "applied_force_N": [
+        0,
+        -50000
+      ],
+      "reaction_force_N": [
+        -1.9387045606711586e-26,
+        50000.0
+      ],
+      "force_imbalance_N": [
+        -1.9387045606711586e-26,
+        0.0
+      ],
+      "balance_tolerance_N": 0.049999999999999996,
+      "moment_imbalance_Nm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "moment_balance_tolerance_Nm": 0.49999999999999994
+    },
+    {
+      "case": "truss_mm",
+      "return_code": 0,
+      "elapsed_seconds": 3.54,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:8cce9867c42e0f1d2e492f94b6c6d4e46890cc58f336209fdfa0e4a64a6d75f7",
+      "node_count": 12,
+      "element_count": 21,
+      "solver_version": "3.7.1",
+      "python_version": "3.12.12",
+      "applied_force_N": [
+        0,
+        -50000
+      ],
+      "reaction_force_N": [
+        -1.9387045606711586e-26,
+        50000.0
+      ],
+      "force_imbalance_N": [
+        -1.9387045606711586e-26,
+        0.0
+      ],
+      "balance_tolerance_N": 0.049999999999999996,
+      "moment_imbalance_Nm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "moment_balance_tolerance_Nm": 0.49999999999999994
+    },
+    {
+      "case": "truss_benchmark",
+      "return_code": 0,
+      "elapsed_seconds": 3.556,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:7a257d0f3c69b0bcffe8dbba1e689622e57ce261c642c67bbc6c56cbfe78e464",
+      "node_count": 4,
+      "element_count": 5,
+      "solver_version": "3.7.1",
+      "python_version": "3.12.12",
+      "applied_force_N": [
+        0,
+        -1000
+      ],
+      "reaction_force_N": [
+        0.0,
+        1000.0
+      ],
+      "force_imbalance_N": [
+        0.0,
+        0.0
+      ],
+      "balance_tolerance_N": 0.001,
+      "moment_imbalance_Nm": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "moment_balance_tolerance_Nm": 0.002
+    },
+    {
+      "case": "solid_SI",
+      "return_code": 0,
+      "elapsed_seconds": 5.58,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:1e9b02fbbd2bceee4391fca43c538aed8113c118f49ad9893e2dee07633c6c59",
+      "node_count": 4371,
+      "element_count": 15689,
+      "solver_version": "0.10.0",
+      "python_version": "3.12.3",
+      "gmsh_version": "4.15.1",
+      "physical_tag_counts": {
+        "101": 2916,
+        "102": 2914
+      },
+      "solution_min": -1.1122491014753859e-06,
+      "solution_max": 5.635070731436934e-07
+    },
+    {
+      "case": "solid_SI_mpi2",
+      "return_code": 0,
+      "elapsed_seconds": 5.361,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 2,
+      "input_fingerprint": "sha256:1e9b02fbbd2bceee4391fca43c538aed8113c118f49ad9893e2dee07633c6c59",
+      "node_count": 4371,
+      "element_count": 15689,
+      "solver_version": "0.10.0",
+      "python_version": "3.12.3",
+      "gmsh_version": "4.15.1",
+      "physical_tag_counts": {
+        "101": 2916,
+        "102": 2914
+      },
+      "solution_min": -1.1122491014753852e-06,
+      "solution_max": 5.635070731436927e-07
+    },
+    {
+      "case": "solid_mm",
+      "return_code": 0,
+      "elapsed_seconds": 5.488,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:1e9b02fbbd2bceee4391fca43c538aed8113c118f49ad9893e2dee07633c6c59",
+      "node_count": 4371,
+      "element_count": 15689,
+      "solver_version": "0.10.0",
+      "python_version": "3.12.3",
+      "gmsh_version": "4.15.1",
+      "physical_tag_counts": {
+        "101": 2916,
+        "102": 2914
+      },
+      "solution_min": -1.1122491014753859e-06,
+      "solution_max": 5.635070731436934e-07
+    },
+    {
+      "case": "solid_mm_mpi2",
+      "return_code": 0,
+      "elapsed_seconds": 5.405,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 2,
+      "input_fingerprint": "sha256:1e9b02fbbd2bceee4391fca43c538aed8113c118f49ad9893e2dee07633c6c59",
+      "node_count": 4371,
+      "element_count": 15689,
+      "solver_version": "0.10.0",
+      "python_version": "3.12.3",
+      "gmsh_version": "4.15.1",
+      "physical_tag_counts": {
+        "101": 2916,
+        "102": 2914
+      },
+      "solution_min": -1.1122491014753852e-06,
+      "solution_max": 5.635070731436927e-07
+    },
+    {
+      "case": "solid_benchmark",
+      "return_code": 0,
+      "elapsed_seconds": 4.554,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:565061fae5ead8e3bc681f29182214e94b41fa0d8c989bff869fe90bf50a9e30",
+      "node_count": 110,
+      "element_count": 254,
+      "solver_version": "0.10.0",
+      "python_version": "3.12.3",
+      "gmsh_version": "4.15.1",
+      "physical_tag_counts": {
+        "101": 14,
+        "102": 14
+      },
+      "solution_min": -5.000000000000034e-06,
+      "solution_max": 2.130779163216031e-19
+    },
+    {
+      "case": "solid_benchmark_mpi2",
+      "return_code": 0,
+      "elapsed_seconds": 5.198,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 2,
+      "input_fingerprint": "sha256:565061fae5ead8e3bc681f29182214e94b41fa0d8c989bff869fe90bf50a9e30",
+      "node_count": 110,
+      "element_count": 254,
+      "solver_version": "0.10.0",
+      "python_version": "3.12.3",
+      "gmsh_version": "4.15.1",
+      "physical_tag_counts": {
+        "101": 14,
+        "102": 14
+      },
+      "solution_min": -5.000000000000049e-06,
+      "solution_max": 2.457613870749479e-19
+    },
+    {
+      "case": "thermal_SI",
+      "return_code": 0,
+      "elapsed_seconds": 5.574,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:1e5cf45b9940166b70afb305876aa0e87a72476d6e13b2acfb28e8cd2b1df74f",
+      "node_count": 1694,
+      "element_count": 4824,
+      "solver_version": "0.10.0",
+      "python_version": "3.12.3",
+      "gmsh_version": "4.15.1",
+      "physical_tag_counts": {
+        "101": 102,
+        "102": 102
+      },
+      "solution_min": 293.15,
+      "solution_max": 372.831274900393,
+      "heat_boundary_outward_W": [
+        -400.0,
+        399.9999999999589
+      ],
+      "heat_source_W": 0.0,
+      "heat_balance_tolerance_W": 0.00039999999999999996
+    },
+    {
+      "case": "thermal_SI_mpi2",
+      "return_code": 0,
+      "elapsed_seconds": 5.762,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 2,
+      "input_fingerprint": "sha256:1e5cf45b9940166b70afb305876aa0e87a72476d6e13b2acfb28e8cd2b1df74f",
+      "node_count": 1694,
+      "element_count": 4824,
+      "solver_version": "0.10.0",
+      "python_version": "3.12.3",
+      "gmsh_version": "4.15.1",
+      "physical_tag_counts": {
+        "101": 102,
+        "102": 102
+      },
+      "solution_min": 293.15,
+      "solution_max": 372.83127490040283,
+      "heat_boundary_outward_W": [
+        -400.0,
+        400.0000000000498
+      ],
+      "heat_source_W": 0.0,
+      "heat_balance_tolerance_W": 0.0004000000000000498
+    },
+    {
+      "case": "thermal_mm",
+      "return_code": 0,
+      "elapsed_seconds": 5.504,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:1e5cf45b9940166b70afb305876aa0e87a72476d6e13b2acfb28e8cd2b1df74f",
+      "node_count": 1694,
+      "element_count": 4824,
+      "solver_version": "0.10.0",
+      "python_version": "3.12.3",
+      "gmsh_version": "4.15.1",
+      "physical_tag_counts": {
+        "101": 102,
+        "102": 102
+      },
+      "solution_min": 293.15,
+      "solution_max": 372.831274900393,
+      "heat_boundary_outward_W": [
+        -400.0,
+        399.9999999999589
+      ],
+      "heat_source_W": 0.0,
+      "heat_balance_tolerance_W": 0.00039999999999999996
+    },
+    {
+      "case": "thermal_mm_mpi2",
+      "return_code": 0,
+      "elapsed_seconds": 5.63,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 2,
+      "input_fingerprint": "sha256:1e5cf45b9940166b70afb305876aa0e87a72476d6e13b2acfb28e8cd2b1df74f",
+      "node_count": 1694,
+      "element_count": 4824,
+      "solver_version": "0.10.0",
+      "python_version": "3.12.3",
+      "gmsh_version": "4.15.1",
+      "physical_tag_counts": {
+        "101": 102,
+        "102": 102
+      },
+      "solution_min": 293.15,
+      "solution_max": 372.83127490040283,
+      "heat_boundary_outward_W": [
+        -400.0,
+        400.0000000000498
+      ],
+      "heat_source_W": 0.0,
+      "heat_balance_tolerance_W": 0.0004000000000000498
+    },
+    {
+      "case": "thermal_benchmark",
+      "return_code": 0,
+      "elapsed_seconds": 5.994,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:188d62618f03d39e4bb723de76187c5aeb087bdc005c42b62f55d73225c2e0b4",
+      "node_count": 111,
+      "element_count": 264,
+      "solver_version": "0.10.0",
+      "python_version": "3.12.3",
+      "gmsh_version": "4.15.1",
+      "physical_tag_counts": {
+        "101": 14,
+        "102": 14
+      },
+      "solution_min": 300.0,
+      "solution_max": 315.00000000000557,
+      "heat_boundary_outward_W": [
+        -4.000000000000009,
+        8.000000000002428
+      ],
+      "heat_source_W": 4.0000000000000036,
+      "heat_balance_tolerance_W": 8.000000000002427e-06
+    },
+    {
+      "case": "thermal_benchmark_mpi2",
+      "return_code": 0,
+      "elapsed_seconds": 6.061,
+      "image": "fem-modeler-dolfinx:0.10.0-amd64",
+      "mpi_processes": 2,
+      "input_fingerprint": "sha256:188d62618f03d39e4bb723de76187c5aeb087bdc005c42b62f55d73225c2e0b4",
+      "node_count": 111,
+      "element_count": 264,
+      "solver_version": "0.10.0",
+      "python_version": "3.12.3",
+      "gmsh_version": "4.15.1",
+      "physical_tag_counts": {
+        "101": 14,
+        "102": 14
+      },
+      "solution_min": 300.0,
+      "solution_max": 315.00000000000387,
+      "heat_boundary_outward_W": [
+        -4.000000000000008,
+        8.000000000002697
+      ],
+      "heat_source_W": 4.0,
+      "heat_balance_tolerance_W": 8.000000000002697e-06
+    },
+    {
+      "case": "fluid_SI",
+      "return_code": 0,
+      "elapsed_seconds": 3.241,
+      "image": "fem-modeler-openfoam:10",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:be3d2b6a8bfafd0afccd4aa34edd214b922c5ccb57109a1d30d07eeba1c988f2",
+      "node_count": 1342,
+      "element_count": 600,
+      "python_version": "3.12.12",
+      "mass_boundary_outward_kg_s": [
+        -0.09982,
+        0.09981995009000001,
+        0.0,
+        0.0
+      ],
+      "mass_balance_tolerance_kg_s": 9.982e-08,
+      "pressure_drop_Pa": 0.00023463759074000002,
+      "final_residuals": {
+        "iteration": 171,
+        "values": {
+          "Ux": 5.06184e-06,
+          "Uy": 6.22856e-05,
+          "p": 9.82035e-05
+        }
+      },
+      "residual_tolerances": {
+        "p": 0.0001,
+        "Ux": 0.0001,
+        "Uy": 0.0001
+      },
+      "representative_mesh_size": 0.1,
+      "representative_mesh_size_definition": "sqrt(A/Ncells), where A is half the actual frontAndBack patch area in m^2; excludes the artificial 2D extrusion thickness",
+      "mesh_planar_area_m2": 6.0,
+      "mesh_volume_m3": 0.5999999999999506
+    },
+    {
+      "case": "fluid_mm",
+      "return_code": 0,
+      "elapsed_seconds": 3.233,
+      "image": "fem-modeler-openfoam:10",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:be3d2b6a8bfafd0afccd4aa34edd214b922c5ccb57109a1d30d07eeba1c988f2",
+      "node_count": 1342,
+      "element_count": 600,
+      "python_version": "3.12.12",
+      "mass_boundary_outward_kg_s": [
+        -0.09982,
+        0.09981995009000001,
+        0.0,
+        0.0
+      ],
+      "mass_balance_tolerance_kg_s": 9.982e-08,
+      "pressure_drop_Pa": 0.00023463759074000002,
+      "final_residuals": {
+        "iteration": 171,
+        "values": {
+          "Ux": 5.06184e-06,
+          "Uy": 6.22856e-05,
+          "p": 9.82035e-05
+        }
+      },
+      "residual_tolerances": {
+        "p": 0.0001,
+        "Ux": 0.0001,
+        "Uy": 0.0001
+      },
+      "representative_mesh_size": 0.1,
+      "representative_mesh_size_definition": "sqrt(A/Ncells), where A is half the actual frontAndBack patch area in m^2; excludes the artificial 2D extrusion thickness",
+      "mesh_planar_area_m2": 6.0,
+      "mesh_volume_m3": 0.5999999999999506
+    },
+    {
+      "case": "fluid_benchmark",
+      "return_code": 0,
+      "elapsed_seconds": 3.415,
+      "image": "fem-modeler-openfoam:10",
+      "mpi_processes": 1,
+      "input_fingerprint": "sha256:d20ee30bcaa499a021946376a282301727513600c9e669097bd110949609a76f",
+      "node_count": 6762,
+      "element_count": 3200,
+      "python_version": "3.12.12",
+      "mass_boundary_outward_kg_s": [
+        -0.09982,
+        0.09982,
+        0.0,
+        0.0
+      ],
+      "mass_balance_tolerance_kg_s": 9.982e-08,
+      "pressure_drop_Pa": 1.0193219119999999,
+      "final_residuals": {
+        "iteration": 59,
+        "values": {
+          "Ux": 7.08918e-05,
+          "Uy": 9.36903e-05,
+          "p": 1.29585e-05
+        }
+      },
+      "residual_tolerances": {
+        "p": 0.0001,
+        "Ux": 0.0001,
+        "Uy": 0.0001
+      },
+      "representative_mesh_size": 0.05,
+      "representative_mesh_size_definition": "sqrt(A/Ncells), where A is half the actual frontAndBack patch area in m^2; excludes the artificial 2D extrusion thickness",
+      "mesh_planar_area_m2": 8.0,
+      "mesh_volume_m3": 0.8000000000006487
+    }
+  ],
+  "references_file": "solver-tests/references.json",
+  "reproduction": "solver-tests/README.md",
+  "limits": [
+    "Validation covers the current strict exporter profiles and these fixtures; it does not validate arbitrary imported CAD or general CFD/VTK/XDMF formats.",
+    "OpenFOAM benchmark checks the developed central channel region. The error tolerance is 3%; template process success is independently checked against measured residuals.",
+    "DOLFINx visualization uses a P1 output mesh while the native XDMF result retains its original order."
+  ]
+}

@@ -27,7 +27,7 @@ export function UnitInput({ label, value, unit, onChange, status, step = 0.01, m
       <label htmlFor={inputId} className="text-sm w-28 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>
         {label}
       </label>
-      <div className="flex-1 flex items-center gap-1">
+      <div className="flex-1 min-w-0 flex items-center gap-1">
         <input
           id={inputId}
           type="number"
@@ -40,7 +40,7 @@ export function UnitInput({ label, value, unit, onChange, status, step = 0.01, m
           min={min}
           disabled={disabled}
           placeholder="—"
-          className="flex-1 px-2 py-1.5 rounded text-sm outline-none disabled:opacity-50"
+          className="flex-1 min-w-0 px-2 py-1.5 rounded text-sm outline-none disabled:opacity-50"
           style={{
             backgroundColor: 'var(--color-bg-input)',
             color: 'var(--color-text)',

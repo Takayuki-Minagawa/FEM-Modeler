@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { regeneratePrimitive, REGENERABLE_PARAMETERS } from '@/geometry/regeneration';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { generateShape, DEFAULT_SHAPE_PARAMS } from '@/geometry/primitives/generators';
@@ -91,12 +92,13 @@ function bodyEditorKey(body: GeometryBody): string {
 export function GeometryForm() {
   const { i18n } = useTranslation();
   const ir = useAppStore((s) => s.ir);
-  const removeBody = useAppStore((s) => s.removeBody);
+  const removeBodies = useAppStore((s) => s.removeBodies);
   const updateBody = useAppStore((s) => s.updateBody);
   const duplicateBodiesLinear = useAppStore((s) => s.duplicateBodiesLinear);
   const setSelectedEntities = useAppStore((s) => s.setSelectedEntities);
   const selectedIds = useAppStore((s) => s.selectedEntityIds);
 
+  const [creationError, setCreationError] = useState('');
   const [selectedShape, setSelectedShape] = useState('box');
   const [params, setParams] = useState<Record<string, unknown>>(
     () => ({ ...DEFAULT_SHAPE_PARAMS['box'] }),
@@ -129,6 +131,7 @@ export function GeometryForm() {
   };
 
   const handleCreate = () => {
+    try {
     const shapeParams = { ...params, shapeType: selectedShape } as AnyShapeParams;
     const result = generateShape(shapeParams, shapeNames[selectedShape]);
     const store = useAppStore.getState();
@@ -137,10 +140,13 @@ export function GeometryForm() {
       edges: result.edges,
       vertices: result.vertices,
     });
+    result.threeGeometry.dispose();
+    setCreationError('');
+    } catch (error) { setCreationError(error instanceof Error ? error.message : String(error)); }
   };
 
   const handleDeleteSelected = () => {
-    selectedBodies.forEach((body) => removeBody(body.id));
+    removeBodies(selectedBodies.map((body) => body.id));
     setSelectedEntities([]);
   };
 
@@ -224,6 +230,7 @@ export function GeometryForm() {
         {isJa ? '形状を作成' : 'Create Shape'}
       </button>
 
+      {creationError && <p role="alert" className="text-xs" style={{ color: "var(--color-error)" }}>{creationError}</p>}
       {/* Existing bodies list */}
       {bodies.length > 0 && (
         <div>
@@ -308,6 +315,8 @@ export function GeometryForm() {
           onApply={(updates) => updateBody(selectedBody.id, updates)}
         />
       )}
+
+      {selectedBody && REGENERABLE_PARAMETERS[String(selectedBody.metadata.shapeType)] && <DimensionEditor key={`${selectedBody.id}:${JSON.stringify(selectedBody.metadata)}:${unitSystem}`} body={selectedBody} isJa={isJa} unitSystem={unitSystem} />}
 
       {selectedBodies.length > 0 && (
         <LinearPatternEditor
@@ -566,4 +575,25 @@ function TupleEditor({
       </div>
     </div>
   );
+}
+
+function DimensionEditor({ body, isJa, unitSystem }: { body: GeometryBody; isJa: boolean; unitSystem: UnitSystemName }) {
+  const keys = REGENERABLE_PARAMETERS[String(body.metadata.shapeType)];
+  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(keys.map((key) => [key, String(key === 'segments' ? body.metadata[key] : fromSI(Number(body.metadata[key]), 'length', unitSystem))])));
+  const [error, setError] = useState('');
+  return <section className="space-y-2 p-3 rounded" style={{ backgroundColor: 'var(--color-bg-input)' }}>
+    <h3 className="text-sm font-bold">{isJa ? '寸法を再編集' : 'Edit primitive dimensions'}</h3>
+    <p className="text-xs">{isJa ? '面の役割から選択と条件を引き継ぎます。対応できない選択はstaleになります。' : 'Selections and conditions follow semantic face roles. Unmatched selections become stale.'}</p>
+    {keys.map((key) => <label key={key} className="flex items-center justify-between text-xs gap-2">{(isJa ? paramLabelsJa : paramLabelsEn)[key] ?? key} [{key === 'segments' ? '—' : quantityUnitLabel('length', unitSystem)}]
+      <input type="number" aria-label={`Dimension ${key}`} className="w-24" value={values[key]} min={key === 'segments' ? 3 : 0} step={key === 'segments' ? 1 : 'any'} onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
+    </label>)}
+    <button type="button" disabled={body.locked} className="w-full py-2 rounded text-sm" style={{ backgroundColor: 'var(--color-accent)', color: '#fff' }} onClick={() => {
+      try {
+        const parameters = Object.fromEntries(keys.map((key) => [key, key === 'segments' ? Number(values[key]) : toSI(Number(values[key]), 'length', unitSystem)]));
+        useAppStore.getState().mutateIR('Regenerate primitive dimensions', (ir) => regeneratePrimitive(ir, body.id, parameters));
+        setError('');
+      } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    }}>{isJa ? '寸法を適用' : 'Apply dimensions'}</button>
+    {error && <p role="alert" className="text-xs" style={{ color: 'var(--color-error)' }}>{error}</p>}
+  </section>;
 }

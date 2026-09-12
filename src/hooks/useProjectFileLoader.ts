@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { MAX_PROJECT_FILE_BYTES, readFileAsText, parseProjectFile } from '@/export/project/load';
-import { useAppContext } from '@/hooks/useAppContext';
+import { useAppActionsContext } from '@/hooks/useAppActionsContext';
 
 export interface ProjectFileLoadResult {
   success: boolean;
@@ -14,7 +14,7 @@ export interface ProjectFileLoadResult {
 export function useProjectFileLoader() {
   const { i18n } = useTranslation();
   const isJa = i18n.language === 'ja';
-  const { addActivity } = useAppContext();
+  const { addActivity, transitionProject } = useAppActionsContext();
   const loadProject = useAppStore((s) => s.loadProject);
 
   const loadFromFile = useCallback(
@@ -34,7 +34,9 @@ export function useProjectFileLoader() {
         return { success: false, error };
       }
 
-      loadProject(result.data);
+      const data = result.data;
+      const transition = await transitionProject(() => loadProject(data));
+      if (!transition.success) return transition;
       addActivity(
         'success',
         isJa
@@ -51,7 +53,7 @@ export function useProjectFileLoader() {
         warning: result.warning,
       };
     },
-    [addActivity, isJa, loadProject],
+    [addActivity, isJa, loadProject, transitionProject],
   );
 
   const openFilePicker = useCallback(

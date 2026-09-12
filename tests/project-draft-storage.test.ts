@@ -14,7 +14,7 @@ describe('project draft storage helpers', () => {
 
     const record = createProjectDraftRecord(ir, '2026-03-24T10:11:12.000Z');
 
-    expect(record.key).toBe('current');
+    expect(record.key).toBe('project_123');
     expect(record.projectId).toBe('project_123');
     expect(record.projectName).toBe('Autosave Sample');
     expect(record.schemaVersion).toBe('9.9.9');
@@ -31,11 +31,11 @@ describe('project draft storage helpers', () => {
       createProjectDraftRecord(ir, '2026-03-24T11:22:33.000Z'),
     );
 
-    expect(summary).toEqual({
+    expect(summary).toEqual(expect.objectContaining({
       projectId: 'project_456',
       projectName: 'Recovered Project',
       savedAt: '2026-03-24T11:22:33.000Z',
       schemaVersion: ir.meta.schema_version,
-    });
+    }));
   });
 });

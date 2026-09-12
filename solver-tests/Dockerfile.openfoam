@@ -1,0 +1,6 @@
+FROM ghcr.io/astral-sh/uv@sha256:ba4857bf2a068e9bc0e64eed8563b065908a4cd6bfb66b531a9c424c8e25e142 AS uv
+FROM openfoam/openfoam10-paraview510@sha256:d6ff1f9a2e7bc3c9177f373bebbdeb542fd8b49144afc24d5e3a3cd9bfae253d
+USER root
+COPY --from=uv /uv /uvx /usr/local/bin/
+RUN uv python install 3.12.12
+ENV PATH="/root/.local/bin:${PATH}"

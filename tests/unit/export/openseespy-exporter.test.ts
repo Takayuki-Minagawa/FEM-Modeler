@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import type {
@@ -505,13 +507,16 @@ describe('OpenSeesPy strict model compiler', () => {
     expect(result.script).toContain(
       'raise RuntimeError(f"OpenSees analysis failed with code {analysis_result}")',
     );
-    expect(result.script).toContain('"export_target": "OpenSeesPy"');
-    expect(result.script).toContain('"analysis_case_id": "case"');
-    expect(result.script).toContain(`"model_revision": ${project.validation.model_revision}`);
+    const provenanceLiteral = result.script.match(/result_provenance = json\.loads\((.+)\)/)?.[1];
+    expect(provenanceLiteral).toBeDefined();
+    const provenance = JSON.parse(JSON.parse(provenanceLiteral!));
+    expect(provenance).toMatchObject({ export_target: 'OpenSeesPy', analysis_case_id: 'case', model_revision: project.validation.model_revision });
+    expect(provenance.input_fingerprint).toBe(JSON.parse(result.manifest).input_fingerprint);
+    expect(provenance.run_id).toBe(JSON.parse(result.manifest).run_id);
     const syntax = spawnSync(
-      'python3',
-      ['-c', 'import sys; compile(sys.stdin.read(), "model.py", "exec")'],
-      { input: result.script, encoding: 'utf8' },
+      'uv',
+      ['run', '--locked', '--offline', '--quiet', '--no-sync', '--project', 'solver-tests/openfoam', 'python', '-c', 'import sys; compile(sys.stdin.read(), "model.py", "exec")'],
+      { input: result.script, encoding: 'utf8', env: { ...process.env, UV_CACHE_DIR: process.env.UV_CACHE_DIR ?? join(tmpdir(), 'fem-modeler-uv-cache') } },
     );
     expect(syntax.stderr).toBe('');
     expect(syntax.status).toBe(0);
