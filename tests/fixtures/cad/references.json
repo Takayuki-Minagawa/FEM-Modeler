@@ -1,0 +1,733 @@
+{
+  "generator": {
+    "package": "cadquery-ocp",
+    "version": "7.9.3.1.1",
+    "coordinate_basis": "OCP geometry in mm; analytic references and readback metrics in SI",
+    "independence": "Native OCCT binding/build independent of OpenCascade.js; shared underlying OCCT kernel family",
+    "license": "Original procedural fixtures generated for this repository; same license as the repository"
+  },
+  "tolerances": {
+    "relative": 1e-06,
+    "length_absolute_m": 1e-08,
+    "area_absolute_m2": 1e-12,
+    "volume_absolute_m3": 1e-12
+  },
+  "cases": [
+    {
+      "file": "cylinder_mm.step",
+      "model": "cylinder",
+      "file_unit": "MM",
+      "format": "STEP",
+      "iges_mode": null,
+      "sha256": "d7ae9fec6ed6d72f9f73dbd47cf00d9c5cc5d9e6d4d525e0e07162fa5dc5292e",
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.0025132741228719585,
+        "volume_m3": 9.42477796076938e-06,
+        "center_of_mass_m": [
+          -1.0132540425213548e-18,
+          2.596058217300377e-19,
+          0.014999999999999998
+        ]
+      }
+    },
+    {
+      "file": "cylinder_mm.iges",
+      "model": "cylinder",
+      "file_unit": "MM",
+      "format": "IGES",
+      "iges_mode": 1,
+      "sha256": "7eaf1ffa93c745b32ea573c80e98e60d275cfc7bf0bda34abc5802fdccd884fd",
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.0025132741228718345,
+        "volume_m3": 9.424777960769379e-06,
+        "center_of_mass_m": [
+          -7.720030800162705e-19,
+          1.3690112243789406e-19,
+          0.014999999999999998
+        ]
+      }
+    },
+    {
+      "file": "cylinder_m.step",
+      "model": "cylinder",
+      "file_unit": "M",
+      "format": "STEP",
+      "iges_mode": null,
+      "sha256": "614657f2a68344d973bc97fad50ffd587879db2a557ae2e2c393cb4f41fe4ee0",
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.0025132741228719585,
+        "volume_m3": 9.42477796076938e-06,
+        "center_of_mass_m": [
+          -1.0132540425213548e-18,
+          2.596058217300377e-19,
+          0.014999999999999998
+        ]
+      }
+    },
+    {
+      "file": "cylinder_m.iges",
+      "model": "cylinder",
+      "file_unit": "M",
+      "format": "IGES",
+      "iges_mode": 1,
+      "sha256": "fef3d13a8949bd9191c51cf84e8f42a7e5d87e0136ba938866a714eeb8ebcee1",
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.0025132741228718345,
+        "volume_m3": 9.424777960769379e-06,
+        "center_of_mass_m": [
+          -7.720030800162705e-19,
+          1.3690112243789406e-19,
+          0.014999999999999998
+        ]
+      }
+    },
+    {
+      "file": "cylinder_inch.step",
+      "model": "cylinder",
+      "file_unit": "INCH",
+      "format": "STEP",
+      "iges_mode": null,
+      "sha256": "9ab28cf13b5f8106e374feb0f36b079df288fa110cb036ebe33f7173677ef22c",
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "bbox_m": [
+          -0.010000000000010799,
+          -0.010000000000010799,
+          0.0,
+          0.010000000000010799,
+          0.010000000000010799,
+          0.030000000000007
+        ],
+        "surface_area_m2": 0.002513274122875791,
+        "volume_m3": 9.424777960791934e-06,
+        "center_of_mass_m": [
+          -1.5440061600288463e-18,
+          -2.191070297165975e-19,
+          0.0150000000000035
+        ]
+      }
+    },
+    {
+      "file": "cylinder_inch.iges",
+      "model": "cylinder",
+      "file_unit": "INCH",
+      "format": "IGES",
+      "iges_mode": 1,
+      "sha256": "a466ff80a2a925ea49cce958719b9aeb97107c9c221836029883672197080764",
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "bbox_m": [
+          -0.0099999999898,
+          -0.0099999999898,
+          0.0,
+          0.0099999999898,
+          0.0099999999898,
+          0.0299999999948
+        ],
+        "surface_area_m2": 0.0025132741196674103,
+        "volume_m3": 9.424777940998288e-06,
+        "center_of_mass_m": [
+          -1.4444447858483671e-13,
+          2.6184346948292187e-19,
+          0.014999999998699996
+        ]
+      }
+    },
+    {
+      "file": "holed_box_mm.step",
+      "model": "holed_box",
+      "file_unit": "MM",
+      "format": "STEP",
+      "iges_mode": null,
+      "sha256": "a28110f1be227436a8feef10e0396f26f8f02bb1619e0c703f1fb22b7456b549",
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": 1.3457522203923061e-05,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.006
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0.0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "surface_area_m2": 0.00429991148575131,
+        "volume_m3": 1.345752220392303e-05,
+        "center_of_mass_m": [
+          -1.0047635854966667e-17,
+          -5.431615908910666e-19,
+          0.006
+        ]
+      }
+    },
+    {
+      "file": "holed_box_mm.iges",
+      "model": "holed_box",
+      "file_unit": "MM",
+      "format": "IGES",
+      "iges_mode": 1,
+      "sha256": "cae8b0fc9032fdeb9b4326f5254a2b6b8a9f7e207badd275a424a325bbe6c30c",
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": 1.3457522203923061e-05,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.006
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0.0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "surface_area_m2": 0.004299911485751285,
+        "volume_m3": 1.3457522203923061e-05,
+        "center_of_mass_m": [
+          -1.9746798790107852e-19,
+          -5.403958018881258e-19,
+          0.005999999999999999
+        ]
+      }
+    },
+    {
+      "file": "holed_box_m.step",
+      "model": "holed_box",
+      "file_unit": "M",
+      "format": "STEP",
+      "iges_mode": null,
+      "sha256": "97537224a55f64c12b0d43c63da252ed0fc6e5419190cf995d1e2969239010ef",
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": 1.3457522203923061e-05,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.006
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0.0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "surface_area_m2": 0.00429991148575131,
+        "volume_m3": 1.345752220392303e-05,
+        "center_of_mass_m": [
+          -1.0047635854966667e-17,
+          -5.431615908910666e-19,
+          0.006
+        ]
+      }
+    },
+    {
+      "file": "holed_box_m.iges",
+      "model": "holed_box",
+      "file_unit": "M",
+      "format": "IGES",
+      "iges_mode": 1,
+      "sha256": "ddc26db4f3096e29c426d531f56e4f8b0d3f388f583922836c82d348b43a9eeb",
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": 1.3457522203923061e-05,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.006
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0.0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "surface_area_m2": 0.004299911485751285,
+        "volume_m3": 1.3457522203923061e-05,
+        "center_of_mass_m": [
+          -1.9746798790107852e-19,
+          -5.403958018881258e-19,
+          0.005999999999999999
+        ]
+      }
+    },
+    {
+      "file": "placed_solids_mm.step",
+      "model": "placed_solids",
+      "file_unit": "MM",
+      "format": "STEP",
+      "iges_mode": null,
+      "sha256": "dcfc910379876a492b97a98f2bf2a71cc5226bd5bbf5d510e683df877eeb8002",
+      "expected": {
+        "description": "10 x 8 x 6 mm box at (-25,5,-4) mm plus radius 5 mm cylinder with local placement: rotate Y 90 degrees then translate (40,-10,5) mm; 2 disconnected solids",
+        "solid_count": 2,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013,
+          0.01
+        ],
+        "volume_m3": 2.0507963267948967e-06,
+        "surface_area_m2": 0.001161398163397448,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.003595667467134081
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 2,
+        "shell_count": 2,
+        "face_count": 9,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013000000000000001,
+          0.010000000000000002
+        ],
+        "surface_area_m2": 0.0011613981633974897,
+        "volume_m3": 2.0507963267948967e-06,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.0035956674671340826
+        ]
+      }
+    },
+    {
+      "file": "placed_solids_mm.iges",
+      "model": "placed_solids",
+      "file_unit": "MM",
+      "format": "IGES",
+      "iges_mode": 1,
+      "sha256": "150bc041eb9cfb131cab87b16381e24639323ee7635a75597dbb547bb863a60e",
+      "expected": {
+        "description": "10 x 8 x 6 mm box at (-25,5,-4) mm plus radius 5 mm cylinder with local placement: rotate Y 90 degrees then translate (40,-10,5) mm; 2 disconnected solids",
+        "solid_count": 2,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013,
+          0.01
+        ],
+        "volume_m3": 2.0507963267948967e-06,
+        "surface_area_m2": 0.001161398163397448,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.003595667467134081
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 2,
+        "shell_count": 2,
+        "face_count": 9,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013000000000000001,
+          0.01
+        ],
+        "surface_area_m2": 0.0011613981633974483,
+        "volume_m3": 2.0507963267948963e-06,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.0035956674671340826
+        ]
+      }
+    },
+    {
+      "file": "placed_solids_m.step",
+      "model": "placed_solids",
+      "file_unit": "M",
+      "format": "STEP",
+      "iges_mode": null,
+      "sha256": "2ff033f6a52451dfc8f3c2878122629a40721e3014b36d8e3e62b1708dcf07ed",
+      "expected": {
+        "description": "10 x 8 x 6 mm box at (-25,5,-4) mm plus radius 5 mm cylinder with local placement: rotate Y 90 degrees then translate (40,-10,5) mm; 2 disconnected solids",
+        "solid_count": 2,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013,
+          0.01
+        ],
+        "volume_m3": 2.0507963267948967e-06,
+        "surface_area_m2": 0.001161398163397448,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.003595667467134081
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 2,
+        "shell_count": 2,
+        "face_count": 9,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013000000000000001,
+          0.010000000000000002
+        ],
+        "surface_area_m2": 0.0011613981633974897,
+        "volume_m3": 2.0507963267948967e-06,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.0035956674671340826
+        ]
+      }
+    },
+    {
+      "file": "placed_solids_m.iges",
+      "model": "placed_solids",
+      "file_unit": "M",
+      "format": "IGES",
+      "iges_mode": 1,
+      "sha256": "4411998170dbf2ff3b6c3af4029396807bf9641e0acc34c3718bee75df84e3e5",
+      "expected": {
+        "description": "10 x 8 x 6 mm box at (-25,5,-4) mm plus radius 5 mm cylinder with local placement: rotate Y 90 degrees then translate (40,-10,5) mm; 2 disconnected solids",
+        "solid_count": 2,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013,
+          0.01
+        ],
+        "volume_m3": 2.0507963267948967e-06,
+        "surface_area_m2": 0.001161398163397448,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.003595667467134081
+        ]
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 2,
+        "shell_count": 2,
+        "face_count": 9,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013000000000000001,
+          0.01
+        ],
+        "surface_area_m2": 0.0011613981633974483,
+        "volume_m3": 2.0507963267948963e-06,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.0035956674671340826
+        ]
+      }
+    },
+    {
+      "file": "holed_box_surfaces_mm.iges",
+      "model": "holed_box_surfaces",
+      "file_unit": "MM",
+      "format": "IGES",
+      "iges_mode": 0,
+      "sha256": "1294e59d3c4096ad940e2c3262abac7a4e199fee18f9bb4bf7b0a4b96fc14fb5",
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z; IGES mode 0 trimmed-surface representation",
+        "solid_count": 0,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": null,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": null
+      },
+      "native_readback": {
+        "valid_brep": true,
+        "solid_count": 0,
+        "shell_count": 0,
+        "face_count": 7,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          -1.000000144823032e-10,
+          0.02,
+          0.015,
+          0.012000000100000003
+        ],
+        "surface_area_m2": 0.00429991148574051,
+        "volume_m3": null,
+        "center_of_mass_m": null
+      }
+    }
+  ],
+  "invalid_files": [
+    "invalid.step",
+    "invalid.iges"
+  ]
+}

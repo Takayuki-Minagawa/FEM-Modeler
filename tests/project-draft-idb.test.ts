@@ -119,7 +119,7 @@ describe('versioned project drafts', () => {
     const { openDB } = await import('idb');
     const ir = createDefaultProject();
     ir.meta.project_name = 'Legacy';
-    const db = await openDB('fem-modeler', 3);
+    const db = await openDB('fem-modeler');
     await db.put('project-drafts', { key: 'current', savedAt: '2020-01-01T00:00:00.000Z', projectId: ir.meta.project_id, projectName: ir.meta.project_name, schemaVersion: ir.meta.schema_version, irJson: JSON.stringify(ir) }, 'current');
     expect((await loadProjectDraft())?.meta.project_name).toBe('Legacy');
     expect(await db.get('project-drafts', 'current')).toBeUndefined();
@@ -139,7 +139,7 @@ describe('draft assets and save ordering', () => {
     await saveProjectDraft(first);
     first.meta.project_name = 'Changed'; await saveProjectDraft(first);
     const second = structuredClone(first); second.meta.project_id = 'second-project'; await saveProjectDraft(second);
-    const db = await openDB('fem-modeler', 3);
+    const db = await openDB('fem-modeler');
     expect(await db.count('draft-assets')).toBe(1);
     expect((await loadProjectDraft(second.meta.project_id))?.assets[0].data).toBe(imported.asset?.data);
     await clearProjectDraft(first.meta.project_id);

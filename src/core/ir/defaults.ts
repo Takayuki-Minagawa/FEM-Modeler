@@ -13,8 +13,8 @@ import { generateId } from './id-generator';
 import { getUnitPreset } from '../units/presets';
 
 export const SCHEMA_NAME = 'fem-modeler-ir';
-export const SCHEMA_VERSION = '0.3.0';
-export const APP_VERSION = '0.3.0';
+export const SCHEMA_VERSION = '0.4.0';
+export const APP_VERSION = '0.4.0';
 
 function now(): string {
   return new Date().toISOString();

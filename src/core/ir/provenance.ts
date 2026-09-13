@@ -58,6 +58,7 @@ export function solverInputProjection(ir: ProjectIR, target: SolverTargetName, c
     assets: byId(scoped.assets).map((asset) => ({
       id: asset.id, kind: asset.kind, content_hash: asset.content_hash,
       scale_to_meters: asset.scale_to_meters, byte_length: asset.byte_length,
+      ...(asset.cad_source ? { cad_source: { format: asset.cad_source.format, content_hash: asset.cad_source.content_hash, byte_length: asset.cad_source.byte_length } } : {}),
     })),
     selections: byId(scoped.named_selections).map((selection) => ({
       id: selection.id, target_dimension: selection.target_dimension,

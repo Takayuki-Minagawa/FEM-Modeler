@@ -1,13 +1,14 @@
-import JSZip from 'jszip';
 import { Unzip, UnzipInflate } from 'fflate';
 import { saveAs } from 'file-saver';
 import type { GeometryAsset, ProjectIR } from '@/core/ir/types';
 import { sanitizeArtifactName } from '@/export/shared/artifact-sanitization';
 import { parseProjectFile, type LoadResult } from './load';
 import { serializeProject } from './save';
+import { MAX_CAD_SOURCE_BYTES, validateCadSource } from '@/geometry/import/cad-source';
+import { createZipBlob } from '@/export/shared/packaging';
 
 const BUNDLE_FORMAT = 'fem-modeler-bundle';
-const BUNDLE_VERSION = 2;
+const BUNDLE_VERSION = 3;
 const PROJECT_PATH = 'project.fem.json';
 const MANIFEST_PATH = 'bundle_manifest.json';
 const MAX_BUNDLE_BYTES = 100 * 1024 * 1024;
@@ -21,11 +22,12 @@ interface BundleAssetManifest {
   content_hash: string;
   sha256: string;
   byte_length: number;
+  cad_source?: { format: 'step' | 'iges'; path: string; content_hash: string; sha256: string; byte_length: number };
 }
 
 interface BundleManifest {
   format: typeof BUNDLE_FORMAT;
-  version: typeof BUNDLE_VERSION;
+  version: 2 | 3;
   project_file: typeof PROJECT_PATH;
   project_sha256: string;
   project_byte_length: number;
@@ -70,7 +72,9 @@ function assetPath(asset: GeometryAsset): string {
 function projectWithoutEmbeddedAssetData(ir: ProjectIR): ProjectIR {
   return {
     ...ir,
-    assets: ir.assets.map((asset) => ({ ...asset, data: '' })),
+    assets: ir.assets.map((asset) => ({ ...asset, data: '',
+      ...(asset.cad_source ? { cad_source: { ...asset.cad_source, data: '' } } : {}),
+    })),
   };
 }
 
@@ -82,7 +86,7 @@ function isSafeBundlePath(path: string): boolean {
 
 function parseManifest(text: string): BundleManifest {
   const value = JSON.parse(text) as Partial<BundleManifest>;
-  if (value.format !== BUNDLE_FORMAT || value.version !== BUNDLE_VERSION || value.project_file !== PROJECT_PATH) {
+  if (value.format !== BUNDLE_FORMAT || (value.version !== BUNDLE_VERSION && value.version !== 2) || value.project_file !== PROJECT_PATH) {
     throw new Error('Unsupported FEM bundle format or version.');
   }
   if (typeof value.project_sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(value.project_sha256)
@@ -105,6 +109,17 @@ function parseManifest(text: string): BundleManifest {
     if (ids.has(asset.id) || paths.has(asset.path)) throw new Error('Bundle manifest contains duplicate asset IDs or paths.');
     ids.add(asset.id);
     paths.add(asset.path);
+    const source = asset.cad_source;
+    if (source !== undefined) {
+      if (value.version !== 3 || !source || (source.format !== 'step' && source.format !== 'iges')
+        || typeof source.path !== 'string' || !isSafeBundlePath(source.path) || !source.path.startsWith('assets/') || !source.path.endsWith(`.${source.format}`)
+        || typeof source.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(source.sha256) || source.content_hash !== `sha256:${source.sha256}`
+        || !Number.isInteger(source.byte_length) || source.byte_length < 1 || source.byte_length > MAX_CAD_SOURCE_BYTES) {
+        throw new Error('Bundle manifest contains an invalid CAD source entry.');
+      }
+      if (paths.has(source.path)) throw new Error('Bundle manifest contains duplicate CAD source paths.');
+      paths.add(source.path);
+    }
   }
   return value as BundleManifest;
 }
@@ -112,7 +127,7 @@ function parseManifest(text: string): BundleManifest {
 function extractionLimit(path: string): number {
   if (path === MANIFEST_PATH) return MAX_MANIFEST_BYTES;
   if (path === PROJECT_PATH) return MAX_PROJECT_JSON_BYTES;
-  if (path.startsWith('assets/')) return MAX_ASSET_BYTES;
+  if (path.startsWith('assets/')) return /\.(step|iges)$/.test(path) ? MAX_CAD_SOURCE_BYTES : MAX_ASSET_BYTES;
   return MAX_MANIFEST_BYTES;
 }
 
@@ -188,9 +203,9 @@ function extractBundleEntries(buffer: ArrayBuffer): Map<string, Uint8Array> {
   return entries;
 }
 
-/** Build a portable project ZIP. STL bytes are stored once, outside ProjectIR. */
+/** Build a portable project ZIP with independent display meshes and original CAD files. */
 export async function createProjectBundle(ir: ProjectIR): Promise<Blob> {
-  const zip = new JSZip();
+  const files: Record<string, Uint8Array> = {};
   const manifestAssets: BundleAssetManifest[] = [];
   let totalAssetBytes = 0;
   const paths = new Set<string>();
@@ -209,14 +224,27 @@ export async function createProjectBundle(ir: ProjectIR): Promise<Blob> {
     const path = assetPath(asset);
     if (paths.has(path)) throw new Error(`Asset path collision after filename sanitization: ${path}.`);
     paths.add(path);
-    zip.file(path, bytes, { binary: true });
-    manifestAssets.push({
+    files[path] = bytes;
+    const entry: BundleAssetManifest = {
       id: asset.id,
       path,
       content_hash: hash,
       sha256: await sha256(bytes),
       byte_length: bytes.byteLength,
-    });
+    };
+    if (asset.cad_source) {
+      const source = asset.cad_source;
+      const sourceBytes = validateCadSource(source);
+      const sourcePath = `assets/${sanitizeArtifactName(asset.id, 'asset', 80)}.source.${source.format}`;
+      if (paths.has(sourcePath)) throw new Error(`CAD source path collision: ${sourcePath}.`);
+      paths.add(sourcePath);
+      files[sourcePath] = sourceBytes;
+      totalAssetBytes += sourceBytes.byteLength;
+      if (totalAssetBytes > MAX_BUNDLE_BYTES) throw new Error('Bundle assets exceed the 100 MB safety limit.');
+      entry.cad_source = { format: source.format, path: sourcePath, content_hash: source.content_hash,
+        sha256: source.content_hash.slice('sha256:'.length), byte_length: sourceBytes.byteLength };
+    }
+    manifestAssets.push(entry);
   }
 
   const projectText = serializeProject(projectWithoutEmbeddedAssetData(ir));
@@ -239,9 +267,9 @@ export async function createProjectBundle(ir: ProjectIR): Promise<Blob> {
   if (projectBytes.byteLength + manifestBytes.byteLength + totalAssetBytes > MAX_BUNDLE_BYTES) {
     throw new Error('Bundle uncompressed content exceeds the 100 MB safety limit.');
   }
-  zip.file(PROJECT_PATH, projectBytes, { binary: true });
-  zip.file(MANIFEST_PATH, manifestBytes, { binary: true });
-  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+  files[PROJECT_PATH] = projectBytes;
+  files[MANIFEST_PATH] = manifestBytes;
+  const blob = await createZipBlob(files);
   if (blob.size > MAX_BUNDLE_BYTES) throw new Error('Generated bundle exceeds the 100 MB safety limit.');
   return blob;
 }
@@ -264,11 +292,11 @@ export async function parseProjectBundle(buffer: ArrayBuffer): Promise<LoadResul
     const manifest = parseManifest(new TextDecoder().decode(manifestBytes));
     const declaredUncompressedBytes = manifest.project_byte_length
       + manifestBytes.byteLength
-      + manifest.assets.reduce((sum, item) => sum + item.byte_length, 0);
+      + manifest.assets.reduce((sum, item) => sum + item.byte_length + (item.cad_source?.byte_length ?? 0), 0);
     if (!Number.isSafeInteger(declaredUncompressedBytes) || declaredUncompressedBytes > MAX_BUNDLE_BYTES) {
       throw new Error('Bundle declares more than 100 MB of uncompressed content.');
     }
-    const allowedPaths = new Set([MANIFEST_PATH, PROJECT_PATH, ...manifest.assets.map((item) => item.path)]);
+    const allowedPaths = new Set([MANIFEST_PATH, PROJECT_PATH, ...manifest.assets.flatMap((item) => [item.path, ...item.cad_source ? [item.cad_source.path] : []])]);
     for (const path of entries.keys()) {
       if (!allowedPaths.has(path)) throw new Error(`Bundle contains undeclared file "${path}".`);
     }
@@ -281,6 +309,7 @@ export async function parseProjectBundle(buffer: ArrayBuffer): Promise<LoadResul
     if (projectRaw.assets.length !== manifest.assets.length) throw new Error('Bundle asset count does not match ProjectIR.');
 
     const projectAssets = new Map(projectRaw.assets.map((asset) => [asset.id, asset]));
+    if (projectAssets.size !== projectRaw.assets.length) throw new Error('ProjectIR contains duplicate asset IDs.');
     let extractedBytes = manifestBytes.byteLength + projectBytes.byteLength;
     for (const item of manifest.assets) {
       const projectAsset = projectAssets.get(item.id);
@@ -299,6 +328,19 @@ export async function parseProjectBundle(buffer: ArrayBuffer): Promise<LoadResul
         throw new Error(`Bundle asset ${item.id} failed SHA-256 verification.`);
       }
       projectAsset.data = encodeBase64(bytes);
+      if (Boolean(item.cad_source) !== Boolean(projectAsset.cad_source)) throw new Error(`Bundle asset ${item.id} has an inconsistent CAD source reference.`);
+      if (item.cad_source && projectAsset.cad_source) {
+        const source = item.cad_source;
+        const sourceBytes = entries.get(source.path);
+        if (!sourceBytes || sourceBytes.byteLength !== source.byte_length || sourceBytes.byteLength > MAX_CAD_SOURCE_BYTES
+          || projectAsset.cad_source.format !== source.format || projectAsset.cad_source.byte_length !== source.byte_length
+          || projectAsset.cad_source.content_hash !== source.content_hash || await sha256(sourceBytes) !== source.sha256) {
+          throw new Error(`Bundle original CAD source for ${item.id} failed integrity verification.`);
+        }
+        extractedBytes += sourceBytes.byteLength;
+        if (extractedBytes > MAX_BUNDLE_BYTES) throw new Error('Bundle CAD sources exceed the 100 MB safety limit.');
+        projectAsset.cad_source.data = encodeBase64(sourceBytes);
+      }
     }
 
     return parseProjectFile(JSON.stringify(projectRaw));

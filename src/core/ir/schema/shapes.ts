@@ -31,6 +31,16 @@ export const nativeShapeSchema = z.discriminatedUnion('shapeType', [
 
 export type NativeShapeParams = z.infer<typeof nativeShapeSchema>;
 
+export const importedCadShapeSchema = z.strictObject({
+  shapeType: z.literal('imported_cad'), importFormat: z.enum(['step', 'iges']),
+  fileName: z.string().min(1).max(1024), triangleCount: z.number().int().positive().max(1_000_000),
+  contentHash: z.string().min(1), sourceUnit: z.literal('m'), scaleToMeters: z.literal(1),
+});
+export type ImportedCadShapeParams = z.infer<typeof importedCadShapeSchema>;
+export function parseImportedCadShapeMetadata(metadata: Record<string, unknown>): ImportedCadShapeParams {
+  return importedCadShapeSchema.parse(Object.fromEntries(Object.keys(importedCadShapeSchema.shape).map((key) => [key, metadata[key]])));
+}
+
 /** Metadata also contains solver hints and annotations; extract only generation parameters. */
 export function parseNativeShapeMetadata(metadata: Record<string, unknown>): NativeShapeParams {
   const variant = nativeShapeSchema.options.find((item) => item.shape.shapeType.value === metadata.shapeType);

@@ -4,6 +4,11 @@ import { validateSTLAsset } from './stl-loader';
 
 const cache = new Map<string, THREE.BufferGeometry>();
 
+/** CAD and STL bodies both persist a triangulated STL preview asset. */
+export function usesImportedPreview(metadata: Record<string, unknown>): boolean {
+  return metadata.shapeType === 'imported_stl' || metadata.shapeType === 'imported_cad';
+}
+
 export function cacheSTLGeometry(bodyId: string, geometry: THREE.BufferGeometry): void {
   const previous = cache.get(bodyId);
   if (previous && previous !== geometry) previous.dispose();
@@ -25,10 +30,10 @@ export function restoreSTLGeometry(bodyId: string, asset: GeometryAsset): THREE.
 export function hydrateSTLGeometryCache(ir: ProjectIR): string[] {
   const errors: string[] = [];
   const assets = new Map(ir.assets.map((asset) => [asset.id, asset]));
-  for (const body of ir.geometry.bodies.filter((item) => item.metadata.shapeType === 'imported_stl')) {
+  for (const body of ir.geometry.bodies.filter((item) => usesImportedPreview(item.metadata))) {
     const asset = body.asset_ref ? assets.get(body.asset_ref) : undefined;
     if (!asset) {
-      errors.push(`STL body ${body.id} references a missing asset.`);
+      errors.push(`Imported body ${body.id} references a missing preview asset.`);
       continue;
     }
     try {

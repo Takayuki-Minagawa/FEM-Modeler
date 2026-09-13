@@ -1,0 +1,28 @@
+FEM Modeler optional CAD runtime
+
+OpenCascade.js 1.1.1, by Sebastian Alff and contributors
+License: GNU Lesser General Public License, version 2.1 only.
+The unmodified license is distributed at:
+assets/cad-occt-1.1.1/LICENSE.txt
+
+Upstream source and build instructions:
+https://github.com/donalffons/opencascade.js
+The exact npm distribution (including binding generator, patches and build scripts):
+https://registry.npmjs.org/opencascade.js/-/opencascade.js-1.1.1.tgz
+
+Underlying Open CASCADE Technology source, V7_4_0p1:
+https://git.dev.opencascade.org/gitweb/?p=occt.git;a=commit;h=33d9a6fa21ca4fa711da7066655aa2ba854545ee
+
+FEM Modeler distributes the package's opencascade.wasm.js and
+opencascade.wasm.wasm unchanged, as separate ES-module and WASM files.
+The application source and integration code are available at:
+https://github.com/Takayuki-Minagawa/FEM-Modeler
+
+To use a modified library, build it with the upstream binding generator and
+Docker/Emscripten instructions, retaining the used API signatures. Replace
+node_modules/opencascade.js/dist/opencascade.wasm.js and
+node_modules/opencascade.js/dist/opencascade.wasm.wasm, then run npm run build.
+The build copies these replaceable files to assets/cad-occt-1.1.1/.
+No signing or integrity enforcement prevents local library replacement.
+Modifications and reverse engineering of this library for debugging such
+modifications are permitted under the LGPL.

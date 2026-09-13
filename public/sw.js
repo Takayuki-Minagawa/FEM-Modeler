@@ -1,17 +1,31 @@
 const CACHE_PREFIX = 'fem-modeler-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v3`;
+const CACHE_NAME = `${CACHE_PREFIX}v4`;
 const SHELL_URLS = ['./', './manifest.webmanifest', './favicon.svg'];
 const MAX_CACHE_ENTRIES = 80;
 
 async function putBounded(cache, request, response) {
-  await cache.put(request, response);
-  const requests = await cache.keys();
-  const protectedUrls = new Set(SHELL_URLS.map((url) => new URL(url, self.registration.scope).href));
-  const removable = requests.filter((candidate) => !protectedUrls.has(candidate.url));
-  while (requests.length > MAX_CACHE_ENTRIES && removable.length > 0) {
-    const oldest = removable.shift();
-    if (oldest) await cache.delete(oldest);
-    requests.shift();
+  if (!cache) return;
+  try {
+    await cache.put(request, response);
+    const requests = await cache.keys();
+    const protectedUrls = new Set(SHELL_URLS.map((url) => new URL(url, self.registration.scope).href));
+    const removable = requests.filter((candidate) => !protectedUrls.has(candidate.url));
+    while (requests.length > MAX_CACHE_ENTRIES && removable.length > 0) {
+      const oldest = removable.shift();
+      if (oldest) await cache.delete(oldest);
+      requests.shift();
+    }
+  } catch {
+    // Runtime caching is best effort: a large optional CAD engine can exceed
+    // storage quota, but its successful network response must still be usable.
+  }
+}
+
+async function matchCached(cache, request, options) {
+  try {
+    return await cache?.match(request, options);
+  } catch {
+    return undefined;
   }
 }
 
@@ -49,14 +63,14 @@ self.addEventListener('fetch', (event) => {
 
   if (event.request.mode === 'navigate') {
     event.respondWith((async () => {
-      const cache = await caches.open(CACHE_NAME);
+      const cache = await caches.open(CACHE_NAME).catch(() => undefined);
       try {
         const response = await fetch(event.request);
         if (response.ok) await putBounded(cache, event.request, response.clone());
         return response;
       } catch {
-        return (await cache.match(event.request))
-          ?? (await cache.match('./'))
+        return (await matchCached(cache, event.request))
+          ?? (await matchCached(cache, './'))
           ?? new Response('FEM Modeler is unavailable offline before its app shell is cached.', {
             status: 503,
             headers: { 'Content-Type': 'text/plain; charset=utf-8' },
@@ -67,11 +81,11 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith((async () => {
-    const cache = await caches.open(CACHE_NAME);
+    const cache = await caches.open(CACHE_NAME).catch(() => undefined);
     // Precache requests omit Origin while module/CSS requests include it. These
     // content-hashed, same-origin build assets are identical for both variants.
     const isBuildAsset = requestUrl.pathname.startsWith(new URL('./assets/', self.registration.scope).pathname);
-    const cached = await cache.match(event.request, { ignoreVary: isBuildAsset });
+    const cached = await matchCached(cache, event.request, { ignoreVary: isBuildAsset });
     if (cached) return cached;
     const response = await fetch(event.request);
     if (response.ok) await putBounded(cache, event.request, response.clone());

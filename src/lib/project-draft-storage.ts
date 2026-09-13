@@ -1,10 +1,13 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { GeometryAsset, ProjectIR } from '@/core/ir/types';
+import type { CadSource, GeometryAsset, ProjectIR } from '@/core/ir/types';
 import { normalizeAndValidateProjectData } from '@/export/project/project-file-schema';
 import { generateId } from '@/core/ir/id-generator';
+import { validateCadSource } from '@/geometry/import/cad-source';
 
 const DB_NAME = 'fem-modeler';
-const DB_VERSION = 3;
+// Version 3 writers do not know cadSourceKeys and would garbage-collect source
+// blobs. Upgrading also retires their connections before storing any CAD data.
+const DB_VERSION = 4;
 const DRAFT_STORE = 'project-drafts';
 const VERSION_STORE = 'draft-versions';
 const ASSET_STORE = 'draft-assets';
@@ -22,6 +25,7 @@ interface StoredDraftRow extends DraftSummary {
   key: string;
   irJson: string;
   assetKeys?: string[];
+  cadSourceKeys?: (string | null)[];
   sequence?: number;
   savedOrder?: number;
 }
@@ -39,6 +43,7 @@ export class DraftConflictError extends Error {
 let dbPromise: Promise<IDBPDatabase<FEMModelerDraftDB>> | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 const assetKeyCache = new WeakMap<GeometryAsset, Promise<string>>();
+const validatedCadSources = new WeakSet<CadSource>();
 
 /** Saves, deletions and migrations share a queue, including work already in flight. */
 function enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -82,18 +87,39 @@ async function assetKey(asset: GeometryAsset): Promise<string> {
   return key;
 }
 async function toRow(record: StoredProjectDraft): Promise<StoredDraftRow> {
+  const cadSourceKeys = record.ir.assets.map((asset) => {
+    const source = asset.cad_source;
+    if (!source) return null;
+    if (!Object.isFrozen(source) || !validatedCadSources.has(source)) {
+      validateCadSource(source);
+      if (Object.isFrozen(source)) validatedCadSources.add(source);
+    }
+    return `cad:${source.content_hash}`;
+  });
   const keys = await Promise.all(record.ir.assets.map(assetKey));
-  return { key: record.key, ...summarizeProjectDraft(record), assetKeys: keys,
-    irJson: JSON.stringify({ ...record.ir, assets: record.ir.assets.map((asset) => ({ ...asset, data: '' })) }) };
+  return { key: record.key, ...summarizeProjectDraft(record), assetKeys: keys, cadSourceKeys,
+    irJson: JSON.stringify({ ...record.ir, assets: record.ir.assets.map((asset) => ({ ...asset, data: '',
+      ...(asset.cad_source ? { cad_source: { ...asset.cad_source, data: '' } } : {}),
+    })) }) };
+}
+function referencedAssetKeys(row: StoredDraftRow): string[] {
+  return [...row.assetKeys ?? [], ...(row.cadSourceKeys ?? []).filter((key): key is string => key !== null)];
 }
 async function fromRow(row: StoredDraftRow): Promise<StoredProjectDraft> {
   const json = JSON.parse(row.irJson);
   if (row.assetKeys) {
     const db = await getDraftDb();
+    if (!Array.isArray(json.assets) || row.assetKeys.length !== json.assets.length
+      || (row.cadSourceKeys && row.cadSourceKeys.length !== json.assets.length)) throw new Error('Stored asset references do not match the project.');
     const assets = await Promise.all(row.assetKeys.map((key) => db.get(ASSET_STORE, key)));
+    const sources = await Promise.all((row.cadSourceKeys ?? []).map((key) => key ? db.get(ASSET_STORE, key) : undefined));
     json.assets = json.assets.map((asset: GeometryAsset, index: number) => {
       if (!assets[index]) throw new Error('A stored geometry asset is missing.');
-      return { ...asset, data: assets[index]!.data };
+      if (row.cadSourceKeys && Boolean(asset.cad_source) !== Boolean(row.cadSourceKeys[index])) throw new Error('A stored CAD source reference is inconsistent.');
+      if (row.cadSourceKeys?.[index] && !sources[index]) throw new Error('A stored original CAD source is missing.');
+      return { ...asset, data: assets[index]!.data,
+        ...(asset.cad_source && row.cadSourceKeys?.[index] ? { cad_source: { ...asset.cad_source, data: sources[index]!.data } } : {}),
+      };
     });
   }
   const normalized = normalizeAndValidateProjectData(json);
@@ -139,6 +165,8 @@ export function saveProjectDraft(ir: ProjectIR, savedAt = new Date().toISOString
       for (let i = 0; i < ir.assets.length; i++) {
         const key = row.assetKeys![i];
         if (!await tx.objectStore(ASSET_STORE).getKey(key)) await tx.objectStore(ASSET_STORE).put({ data: ir.assets[i].data }, key);
+        const sourceKey = row.cadSourceKeys?.[i];
+        if (sourceKey && !await tx.objectStore(ASSET_STORE).getKey(sourceKey)) await tx.objectStore(ASSET_STORE).put({ data: ir.assets[i].cad_source!.data }, sourceKey);
       }
       const versions = await tx.objectStore(VERSION_STORE).getAll();
       const projectVersions = versions.filter((item) => item.projectId === record.projectId).sort((a, b) => (b.sequence ?? 0) - (a.sequence ?? 0) || b.savedAt.localeCompare(a.savedAt));
@@ -146,7 +174,7 @@ export function saveProjectDraft(ir: ProjectIR, savedAt = new Date().toISOString
       for (const id of removed) await tx.objectStore(VERSION_STORE).delete(id);
       const heads = [row, ...existingHeads.filter((head) => head.projectId !== record.projectId)];
       const retained = [...heads, ...versions.filter((item) => !removed.has(item.versionId))];
-      const referenced = new Set(retained.flatMap((item) => item.assetKeys ?? []));
+      const referenced = new Set(retained.flatMap(referencedAssetKeys));
       let bytes = retained.reduce((sum, item) => sum + item.irJson.length * 2, 0);
       let cursor = await tx.objectStore(ASSET_STORE).openCursor();
       while (cursor) {
@@ -206,7 +234,7 @@ export function clearProjectDraft(projectId?: string): Promise<void> {
       await tx.objectStore(DRAFT_STORE).delete(projectId);
       for (const row of await tx.objectStore(VERSION_STORE).getAll()) if (row.projectId === projectId) await tx.objectStore(VERSION_STORE).delete(row.versionId);
       const rows = [...await tx.objectStore(DRAFT_STORE).getAll(), ...await tx.objectStore(VERSION_STORE).getAll()];
-      const referenced = new Set(rows.flatMap((row) => row.assetKeys ?? []));
+      const referenced = new Set(rows.flatMap(referencedAssetKeys));
       for (const key of await tx.objectStore(ASSET_STORE).getAllKeys()) if (!referenced.has(key)) await tx.objectStore(ASSET_STORE).delete(key);
     }
     await tx.done;
@@ -219,5 +247,5 @@ export function estimateProjectDraftBytes(ir: ProjectIR): number {
   const entities = geometry.bodies.length + geometry.faces.length + geometry.edges.length + geometry.vertices.length;
   const resultBytes = ir.results.reduce((sum, result) => sum + result.fields.reduce((fieldSum, field) => fieldSum + field.values.length * 16 + field.entity_ids.length * 32, 0), 0);
   const records = ir.materials.length + ir.sections.length + ir.boundary_conditions.length + ir.loads.length + ir.analysis_cases.length + ir.named_selections.length + ir.audit_trail.length;
-  return 4096 + (entities + records) * 1024 + ir.assets.reduce((sum, asset) => sum + asset.data.length * 2, 0) + resultBytes;
+  return 4096 + (entities + records) * 1024 + ir.assets.reduce((sum, asset) => sum + (asset.data.length + (asset.cad_source?.data.length ?? 0)) * 2, 0) + resultBytes;
 }

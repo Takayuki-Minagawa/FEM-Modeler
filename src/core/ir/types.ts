@@ -124,6 +124,7 @@ export type GeometryModelType =
 export type GeometrySource =
   | 'native'
   | 'imported_step'
+  | 'imported_iges'
   | 'imported_stl'
   | 'imported_obj'
   | 'imported_msh'
@@ -155,6 +156,17 @@ export interface GeometryBody {
   metadata: Record<string, unknown>;
 }
 
+/** Original CAD bytes; the accompanying STL is only an SI display tessellation. */
+export interface CadSource {
+  format: 'step' | 'iges';
+  file_name: string;
+  media_type: 'model/step' | 'model/iges';
+  encoding: 'base64';
+  data: string;
+  content_hash: string;
+  byte_length: number;
+}
+
 export interface GeometryAsset {
   id: string;
   kind: 'stl_mesh';
@@ -164,6 +176,7 @@ export interface GeometryAsset {
   data: string;
   content_hash: string;
   byte_length: number;
+  cad_source?: CadSource;
   /** Unit declared by the user because STL itself is unitless. */
   source_unit: 'm' | 'mm' | 'cm' | 'in' | 'ft';
   /** Uniform scale applied to raw STL coordinates to obtain canonical metres. */

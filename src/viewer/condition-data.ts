@@ -2,7 +2,7 @@ import { scopeProjectForAnalysisCaseValidation } from '@/export/compiler/capabil
 import { parseNativeShapeMetadata } from '@/core/ir/schema/shapes';
 import * as THREE from 'three';
 import type { GeometryAsset, GeometryBody, Load, ProjectIR } from '@/core/ir/types';
-import { getSTLGeometry, restoreSTLGeometry } from '@/geometry/import/stl-geometry-cache';
+import { getSTLGeometry, restoreSTLGeometry, usesImportedPreview } from '@/geometry/import/stl-geometry-cache';
 import { generateShape } from '@/geometry/primitives/generators';
 import { applyTransformToPoint, getTransformMatrix } from '@/geometry/transforms';
 import type { Vector3Tuple } from '@/geometry/transforms';
@@ -11,7 +11,7 @@ export interface TargetGeometry { points: Vector3Tuple[]; triangles: number[]; n
 const tuple = (v: THREE.Vector3): Vector3Tuple => [v.x, v.y, v.z];
 
 function bodySurface(body: GeometryBody, role?: string, triangles?: number[], asset?: GeometryAsset): TargetGeometry {
-  const imported = body.metadata.shapeType === 'imported_stl';
+  const imported = usesImportedPreview(body.metadata);
   let generated: ReturnType<typeof generateShape> | null;
   try { generated = imported ? null : generateShape(parseNativeShapeMetadata(body.metadata)); }
   catch { return { points: [], triangles: [] }; }
