@@ -21,8 +21,9 @@
 - **strictソルバ出力** - OpenSeesPy / DOLFINx / OpenFOAM の解析ケースscopeと能力範囲を事前検査し、exporterが実際に消費したIDをmanifestへ記録してZIP出力
 - **検証エンジン** - 共通ルール + ソルバ別ルールで不足・不整合を自動検出
 - **テンプレート** - 5種を実ソルバーで実行し、別途用意した解析解を持つ小モデル・SI/mm表示系・MPIで回帰検証
-- **インポート** - 元単位を明示するSTLファイル (ASCII/バイナリ)、プロジェクトJSON。1 MiB以上のSTL・結果CSV/JSONはWorkerで処理
-- **可搬プロジェクト** - IR・STL資産・整合性manifestを`.fem.zip`で保存・再読込
+- **CAD入出力** - STEP / IGESを読込・書出。ファイル内の単位を自動解釈し、元のCAD曲面と配置を保持。詳細は[CAD対応範囲](docs/cad-formats.md)
+- **インポート** - 元単位を明示するSTLファイル (ASCII/バイナリ)、プロジェクトJSON。CAD変換および1 MiB以上のSTL・結果CSV/JSONはWorkerで処理
+- **可搬プロジェクト** - IR・CAD原本・STL表示資産・整合性manifestを`.fem.zip`で保存・再読込
 - **ボディ編集** - 移動・回転・スケール・表示/非表示切替をGUIで操作、エクスポートにも反映
 - **線形パターン複製** - 選択ボディをオフセット指定で一括複製 (トポロジ完全クローン + Undo/Redo対応)
 - **Undo / Redo** - Immerの操作patchを直接記録。複数ボディ削除を1操作で復元し、大きな未変更資産を共有
@@ -83,6 +84,7 @@
 | ビルドツール | Vite 8 |
 | 状態管理 | Zustand + Immer |
 | 3Dビューワー | Three.js (@react-three/fiber + drei) |
+| CAD変換 | OpenCascade.js 1.1.1 / OCCT 7.4.0p1 (WebAssembly、初回CAD操作時のみ取得) |
 | UI | Tailwind CSS 4 |
 | フォーム / バリデーション | React共通入力部品 + Zodのドメイン別schema |
 | ローカル永続化 | IndexedDB (idb) |
@@ -144,6 +146,8 @@ npm run build && npm run bundle:check
 | `.fem.json` | FEM Modeler プロジェクトファイル |
 | `.fem.zip` | IR・STL資産・整合性manifestを含むプロジェクトバンドル |
 | `.stl` | STL形状ファイル (ASCII / バイナリ)。STL自体に単位情報がないため、読込時に元単位を選択 |
+| `.step` / `.stp` | STEPのソリッド・曲面。元単位を自動解釈 |
+| `.iges` / `.igs` | IGESのソリッド・曲面。元単位を自動解釈 |
 
 グローバルバーの「インポート」ボタンまたはドラッグ&ドロップで読み込みます。
 
@@ -156,8 +160,11 @@ npm run build && npm run bundle:check
 | OpenFOAM (ZIP) | ケースディレクトリ一式 (0/ constant/ system/) + マニフェスト |
 | `.fem.json` | プロジェクト保存 (再読込可能) |
 | `.fem.zip` | プロジェクトバンドル (STLを分離格納し、読込時にサイズ・ハッシュ・三角形数・bounds・診断情報を再検証) |
+| `.step` / `.iges` | 全ボディのCAD出力。CAD原本の曲面またはnative形状のBRep、移動・回転・スケールを反映 |
 | `.csv` | 条件一覧 (材料・断面・境界条件・荷重) |
 | `.md` | 入力サマリー Markdown |
+
+CAD原本はJSON・ZIP・自動保存でも保持します。CADエンジンは初回利用時に約66 MB取得し、処理はブラウザー内で完結します。STLだけの形状をSTEP/IGESへ変換する機能と、読み込んだCAD形状の解析用メッシュ生成・strictソルバ出力は未対応です。詳細・制限・検証手順は[CAD入出力](docs/cad-formats.md)をご覧ください。
 
 ---
 

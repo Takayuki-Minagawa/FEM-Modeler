@@ -6,6 +6,7 @@ export function sharedWorkers(): Plugin {
   const entries: Record<string, string> = {
     stl: 'src/geometry/import/stl-import.worker.ts',
     results: 'src/results/result-import.worker.ts',
+    cad: 'src/cad/cad.worker.ts',
   };
   const prefix = 'virtual:fem-worker-url/';
   let root = '', base = '/', build = false;

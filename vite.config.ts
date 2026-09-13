@@ -4,9 +4,10 @@ import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 import { sharedWorkers } from './build/shared-workers.ts'
 import { compressedText } from './build/compressed-text.ts'
+import { cadRuntime } from './build/cad-runtime.ts'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), sharedWorkers(), compressedText()],
+  plugins: [react(), tailwindcss(), sharedWorkers(), compressedText(), cadRuntime()],
   base: '/FEM-Modeler/',
   resolve: {
     alias: {

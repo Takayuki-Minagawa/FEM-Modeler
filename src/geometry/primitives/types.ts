@@ -1,4 +1,4 @@
-import type { NativeShapeParams } from '@/core/ir/schema/shapes';
+import type { NativeShapeParams, ImportedCadShapeParams } from '@/core/ir/schema/shapes';
 import type * as THREE from 'three';
 import type { GeometryBody, GeometryFace, GeometryEdge, GeometryVertex } from '@/core/ir/types';
 
@@ -22,6 +22,7 @@ export interface ImportedStlParams extends ShapeParams {
   fileName: string;
   triangleCount: number;
 }
+export type ImportedCadParams = ImportedCadShapeParams;
 
 export type AnyShapeParams =
   | BoxParams
@@ -33,7 +34,8 @@ export type AnyShapeParams =
   | FrameParams
   | TrussParams
   | ChannelParams
-  | ImportedStlParams;
+  | ImportedStlParams
+  | ImportedCadParams;
 
 export interface GeneratedTopology {
   body: GeometryBody;

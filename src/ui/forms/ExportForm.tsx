@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { downloadConditionsCsv } from '@/export/project/csv-export';
@@ -19,7 +19,21 @@ export function ExportForm() {
   const setActivePanel = useAppStore((s) => s.setActivePanel);
 
   const [exporting, setExporting] = useState<string | null>(null);
-  const [lastResult, setLastResult] = useState<{ target: string; errors: string[]; warnings: string[]; manifest?: string } | null>(null);
+  const [lastResult, setLastResult] = useState<{ target: string; errors: string[]; warnings: string[]; manifest?: string; cancelled?: boolean } | null>(null);
+  const activeCADExport = useRef<AbortController | null>(null);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    const unsubscribe = useAppStore.subscribe((next, previous) => {
+      if (next.projectSession !== previous.projectSession) activeCADExport.current?.abort();
+    });
+    return () => {
+      mounted.current = false;
+      unsubscribe();
+      activeCADExport.current?.abort();
+      activeCADExport.current = null;
+    };
+  }, []);
   const [requestedAnalysisCaseId, setRequestedAnalysisCaseId] = useState(() => ir.analysis_cases.find((item) => item.active)?.id ?? ir.analysis_cases[0]?.id ?? '');
   const [coverageTarget, setCoverageTarget] = useState<SolverTargetName>(() => (
     ['OpenSeesPy', 'DOLFINx', 'OpenFOAM'].includes(ir.meta.default_solver_target)
@@ -36,7 +50,8 @@ export function ExportForm() {
   const handleExport = async (target: string) => {
     const solverTargets: SolverTargetName[] = ['OpenSeesPy', 'DOLFINx', 'OpenFOAM'];
     const solverTarget = solverTargets.includes(target as SolverTargetName) ? target as SolverTargetName : undefined;
-    runValidation(solverTarget, analysisCaseId || undefined);
+    const cadFormat = target === 'STEP' ? 'step' : target === 'IGES' ? 'iges' : undefined;
+    if (!cadFormat) runValidation(solverTarget, analysisCaseId || undefined);
 
     // Block solver exports when validation errors exist
     if (solverTarget) {
@@ -61,7 +76,22 @@ export function ExportForm() {
       }
     }
 
+    const controller = cadFormat ? new AbortController() : undefined;
+    const session = useAppStore.getState().projectSession;
+    const current = () => !controller || (mounted.current && activeCADExport.current === controller && !controller.signal.aborted
+      && useAppStore.getState().projectSession === session);
+    if (controller) {
+      activeCADExport.current?.abort();
+      activeCADExport.current = controller;
+      controller.signal.addEventListener('abort', () => {
+        if (mounted.current && activeCADExport.current === controller) {
+          setExporting(null);
+          setLastResult({ target, errors: [], warnings: [], cancelled: true });
+        }
+      }, { once: true });
+    }
     setExporting(target);
+    setLastResult(null);
     try {
       let result: { errors: string[]; warnings: string[]; manifest?: string };
       switch (target) {
@@ -74,6 +104,13 @@ export function ExportForm() {
         case 'OpenFOAM':
           result = await (await import('@/export/openfoam/exporter')).downloadOpenFOAMZip(ir, analysisCaseId);
           break;
+        case 'STEP':
+        case 'IGES': {
+          const { downloadCAD } = await import('@/export/cad/exporter');
+          if (!current()) return;
+          result = await downloadCAD(ir, cadFormat!, controller!.signal);
+          break;
+        }
         case 'JSON':
           saveProjectFile();
           result = { errors: [], warnings: [] };
@@ -93,6 +130,7 @@ export function ExportForm() {
         default:
           result = { errors: ['Unknown target'], warnings: [] };
       }
+      if (!current()) return;
       if (target !== 'JSON') {
         addActivity(
           result.errors.length > 0 ? 'error' : result.warnings.length > 0 ? 'warning' : 'success',
@@ -114,6 +152,7 @@ export function ExportForm() {
       }
       setLastResult({ target, ...result });
     } catch (e) {
+      if (!current()) return;
       const errors = [String(e)];
       addActivity(
         'error',
@@ -123,16 +162,22 @@ export function ExportForm() {
       );
       recordExportResult(target, errors, []);
       setLastResult({ target, errors, warnings: [] });
+    } finally {
+      if (!controller || activeCADExport.current === controller) {
+        if (controller) activeCADExport.current = null;
+        if (mounted.current) setExporting(null);
+      }
     }
-    setExporting(null);
   };
 
   const targets = [
     { name: 'OpenSeesPy', desc: isJa ? '構造解析 (Python + CSV)' : 'Structural (Python + CSV)', enabled: ir.solver_targets.find((t) => t.target_name === 'OpenSeesPy')?.enabled ?? true },
     { name: 'DOLFINx', desc: isJa ? '連続体解析 (Gmsh + Python)' : 'Continuum (Gmsh + Python)', enabled: ir.solver_targets.find((t) => t.target_name === 'DOLFINx')?.enabled ?? false },
     { name: 'OpenFOAM', desc: isJa ? '流体解析 (ケースディレクトリ)' : 'CFD (Case directory)', enabled: ir.solver_targets.find((t) => t.target_name === 'OpenFOAM')?.enabled ?? false },
+    { name: 'STEP', desc: isJa ? '全形状をCADファイル (.step) に出力' : 'Export all bodies as CAD (.step)', enabled: true },
+    { name: 'IGES', desc: isJa ? '全形状をCADファイル (.iges) に出力' : 'Export all bodies as CAD (.iges)', enabled: true },
     { name: 'JSON', desc: isJa ? 'プロジェクトファイル (.fem.json)' : 'Project file (.fem.json)', enabled: true },
-    { name: 'Bundle', desc: isJa ? 'IR・STL・manifest (.fem.zip)' : 'IR, STL assets, and manifest (.fem.zip)', enabled: true },
+    { name: 'Bundle', desc: isJa ? 'IR・形状アセット・manifest (.fem.zip)' : 'IR, geometry assets, and manifest (.fem.zip)', enabled: true },
     { name: 'CSV', desc: isJa ? '条件一覧CSV' : 'Conditions summary CSV', enabled: true },
     { name: 'Markdown', desc: isJa ? '入力サマリーMarkdown' : 'Input summary Markdown', enabled: true },
   ];
@@ -199,7 +244,7 @@ export function ExportForm() {
         </div>
         {errorCount > 0 && (
           <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-            {isJa ? 'エラーを解消してからエクスポートしてください。' : 'Resolve errors before exporting.'}
+            {isJa ? '解析用の出力には、検証エラーの解消が必要です。' : 'Resolve analysis errors before solver export.'}
           </p>
         )}
       </div>
@@ -277,6 +322,10 @@ export function ExportForm() {
 
       {/* Export buttons */}
       <div className="space-y-2">
+        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          {isJa ? 'STEP/IGESはプロジェクト内の全形状を書き出します。非対応形状が含まれる場合は理由を表示して中止します。' : 'STEP/IGES exports every body in the project. Unsupported shapes stop the export with an explanation.'}
+          {' '}{isJa ? 'CAD機能の初回利用時は約66 MBをダウンロードします。' : 'First use of CAD downloads about 66 MB.'}
+        </p>
         {targets.map((t) => (
           <button
             key={t.name}
@@ -303,13 +352,16 @@ export function ExportForm() {
             </div>
           </button>
         ))}
+        {(exporting === 'STEP' || exporting === 'IGES') && <button type="button" onClick={() => activeCADExport.current?.abort()} className="px-3 py-2 text-sm rounded" style={{ backgroundColor: 'var(--color-bg-input)' }}>
+          {isJa ? 'CAD書出しを取消' : 'Cancel CAD export'}
+        </button>}
       </div>
 
       {/* Last result */}
       {lastResult && (
-        <div className="p-3 rounded" style={{ backgroundColor: 'var(--color-bg-input)' }}>
-          <div className="text-sm font-bold mb-1" style={{ color: lastResult.errors.length > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>
-            {lastResult.target}: {lastResult.errors.length > 0 ? (isJa ? '失敗' : 'Failed') : (isJa ? '成功' : 'Success')}
+        <div role="status" className="p-3 rounded" style={{ backgroundColor: 'var(--color-bg-input)' }}>
+          <div className="text-sm font-bold mb-1" style={{ color: lastResult.cancelled ? 'var(--color-text-muted)' : lastResult.errors.length > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>
+            {lastResult.target}: {lastResult.cancelled ? (isJa ? '取消済み' : 'Cancelled') : lastResult.errors.length > 0 ? (isJa ? '失敗' : 'Failed') : (isJa ? '成功' : 'Success')}
           </div>
           {lastResult.errors.map((e, i) => (
             <div key={i} className="text-xs" style={{ color: 'var(--color-error)' }}>{e}</div>

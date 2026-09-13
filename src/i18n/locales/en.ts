@@ -1,7 +1,7 @@
 export const en = {
   app: {
     title: 'FEM Modeler',
-    version: 'v0.3.0',
+    version: 'v0.4.0',
   },
   globalBar: {
     undo: 'Undo',

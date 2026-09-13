@@ -172,7 +172,7 @@ function generatePlateWithHole(p: PlateWithHoleParams, name?: string): Generated
     bevelEnabled: false,
   });
   geo.rotateX(-Math.PI / 2);
-  geo.translate(0, p.thickness / 2, 0);
+  geo.translate(0, -p.thickness / 2, 0);
 
   const topFace: GeometryFace = { id: generateId('face'), name: 'top', body_id: body.id, normal: [0, 1, 0], triangle_indices: [] };
   const bottomFace: GeometryFace = { id: generateId('face'), name: 'bottom', body_id: body.id, normal: [0, -1, 0], triangle_indices: [] };

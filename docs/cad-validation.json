@@ -1,0 +1,2964 @@
+{
+  "validated_at_utc": "2026-09-13T09:30:17.910744+00:00",
+  "validator": "native OCP (independent application binding/build; shared OCCT family)",
+  "ocp_version": "7.9.3.1.1",
+  "python_version": "3.12.12",
+  "case_count": 56,
+  "checks": [
+    "native STEP/IGES parser and transfer",
+    "BRepCheck validity",
+    "SI bbox/volume/surface area/center of mass",
+    "solid count and curved surface preservation",
+    "frame/truss explicit member endpoints and total length",
+    "mm/m/inch source units",
+    "translation/rotation/nonuniform scaling/mirror"
+  ],
+  "references": [
+    "tests/fixtures/cad/references.json",
+    "cad-tests/application_expectations.py"
+  ],
+  "reproduction": "cad-tests/README.md",
+  "limits": [
+    "OCP and OpenCascade.js use separate bindings/builds but share the OCCT kernel family.",
+    "Surface-only IGES is checked as surfaces; no implicit sewing or solid volume is asserted.",
+    "Validation covers these geometric fixtures and transforms, not arbitrary CAD or downstream FEM readiness."
+  ],
+  "cases": [
+    {
+      "file": "cylinder_mm.step.step",
+      "sha256": "b56f810403e21398d2548a5f7d04c3ea7b2c2b2bcff05a893a59ce291284e42b",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.002513274122871833,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 9.424777960769377e-06,
+        "center_of_mass_m": [
+          -1.8817575075396596e-18,
+          -9.135804400985713e-19,
+          0.015000000000000003
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "cylinder_mm.step.iges",
+      "sha256": "b998a4f70bb6be11b72d02b39731c325f7e39af718ff5964fed9cd458d040f0b",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.002513274122871833,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 9.424777960769377e-06,
+        "center_of_mass_m": [
+          -1.8817575075396596e-18,
+          -9.135804398035714e-19,
+          0.015000000000000003
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "cylinder_mm.iges.step",
+      "sha256": "befe8bc2a47ad4c0c953002a3a2305f5fba8cfe3c0d91b06924f65153671a5aa",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.002513274122871833,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 9.424777960769377e-06,
+        "center_of_mass_m": [
+          -1.8817575075396596e-18,
+          -9.135804398035714e-19,
+          0.015000000000000003
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "cylinder_mm.iges.iges",
+      "sha256": "b998a4f70bb6be11b72d02b39731c325f7e39af718ff5964fed9cd458d040f0b",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.002513274122871833,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 9.424777960769377e-06,
+        "center_of_mass_m": [
+          -1.8817575075396596e-18,
+          -9.135804398035714e-19,
+          0.015000000000000003
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "cylinder_m.step.step",
+      "sha256": "37c00052814382ba5ddabd7ee6dbda42605376421601a736abec618ee9d70c69",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.002513274122871833,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 9.424777960769377e-06,
+        "center_of_mass_m": [
+          -1.8817575075396596e-18,
+          -9.135804400985713e-19,
+          0.015000000000000003
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "cylinder_m.step.iges",
+      "sha256": "b998a4f70bb6be11b72d02b39731c325f7e39af718ff5964fed9cd458d040f0b",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.002513274122871833,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 9.424777960769377e-06,
+        "center_of_mass_m": [
+          -1.8817575075396596e-18,
+          -9.135804398035714e-19,
+          0.015000000000000003
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "cylinder_m.iges.step",
+      "sha256": "7a1cceca8848b624f787937981e5205f754b58fa87d4d7c1186798f524769889",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.002513274122871833,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 9.424777960769377e-06,
+        "center_of_mass_m": [
+          -1.8817575075396596e-18,
+          -9.135804398035714e-19,
+          0.015000000000000003
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "cylinder_m.iges.iges",
+      "sha256": "b998a4f70bb6be11b72d02b39731c325f7e39af718ff5964fed9cd458d040f0b",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.002513274122871833,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 9.424777960769377e-06,
+        "center_of_mass_m": [
+          -1.8817575075396596e-18,
+          -9.135804398035714e-19,
+          0.015000000000000003
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "cylinder_inch.step.step",
+      "sha256": "0f2f392750282057a9f108de62567b8fb03f5acef611bfeb54dc395cb83de8ef",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.010000000000011,
+          -0.010000000000011,
+          0.0,
+          0.010000000000011,
+          0.010000000000011,
+          0.030000000000007
+        ],
+        "surface_area_m2": 0.002513274122875729,
+        "surface_integration_error_estimate": 2.84217094303415e-16,
+        "volume_m3": 9.424777960792308e-06,
+        "center_of_mass_m": [
+          2.171258662540479e-18,
+          -7.937088681076002e-19,
+          0.015000000000003504
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "cylinder_inch.step.iges",
+      "sha256": "b998a4f70bb6be11b72d02b39731c325f7e39af718ff5964fed9cd458d040f0b",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0.0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "surface_area_m2": 0.002513274122871833,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 9.424777960769377e-06,
+        "center_of_mass_m": [
+          -1.8817575075396596e-18,
+          -9.135804398035714e-19,
+          0.015000000000000003
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "cylinder_inch.iges.step",
+      "sha256": "3497aaabc6378468806bf93a119860f56c37c61a9dc2e8688407e9d1213995d4",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.0099999999898,
+          -0.0099999999898,
+          0.0,
+          0.0099999999898,
+          0.0099999999898,
+          0.0299999999948
+        ],
+        "surface_area_m2": 0.002513274119667408,
+        "surface_integration_error_estimate": 4.523455550800196e-16,
+        "volume_m3": 9.424777940998285e-06,
+        "center_of_mass_m": [
+          -1.4444640859254086e-13,
+          -1.185741679558897e-18,
+          0.014999999998699998
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "cylinder_inch.iges.iges",
+      "sha256": "16014e3877659f2e5fdb3602d574653cb43858d18c1b800b738301b03a4fe2a0",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.00999999999,
+          -0.00999999999,
+          0.0,
+          0.00999999999,
+          0.00999999999,
+          0.029999999995
+        ],
+        "surface_area_m2": 0.0025132741197302407,
+        "surface_integration_error_estimate": 1.8947806324831634e-16,
+        "volume_m3": 9.424777941396223e-06,
+        "center_of_mass_m": [
+          -1.388882759000548e-13,
+          -5.788447256016949e-19,
+          0.01499999999875
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "holed_box_mm.step.step",
+      "sha256": "b8646254e1bca0745b0c8f6307894a4fb1d3c1d7d0874fa91503489232b73301",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 6,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0.0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "surface_area_m2": 0.0042999114857512856,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 1.3457522203923061e-05,
+        "center_of_mass_m": [
+          -7.212333461841532e-19,
+          1.2671806351173805e-20,
+          0.006000000000000001
+        ]
+      },
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": 1.3457522203923061e-05,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.006
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "holed_box_mm.step.iges",
+      "sha256": "5c6bde506cc11a82aae1306ab094462fd28ade42d317352d9bdb05d19495e854",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 6,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0.0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "surface_area_m2": 0.0042999114857512856,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 1.3457522203923061e-05,
+        "center_of_mass_m": [
+          -7.212333461841532e-19,
+          1.2671806356846028e-20,
+          0.006000000000000001
+        ]
+      },
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": 1.3457522203923061e-05,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.006
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "holed_box_mm.iges.step",
+      "sha256": "d2c559be48e4de1e24d605274ca35c0175e146cb97b47a1926f7aa5bff45a326",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 6,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0.0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "surface_area_m2": 0.0042999114857512856,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 1.3457522203923061e-05,
+        "center_of_mass_m": [
+          -7.212333461841532e-19,
+          1.2671806356846028e-20,
+          0.006000000000000001
+        ]
+      },
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": 1.3457522203923061e-05,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.006
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "holed_box_mm.iges.iges",
+      "sha256": "4803960d124a935d8ca7811722f3479bafb143fdfb232584d1fa4970216a8efa",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 6,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0.0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "surface_area_m2": 0.0042999114857512856,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 1.3457522203923061e-05,
+        "center_of_mass_m": [
+          -7.212333461841532e-19,
+          1.2671806356846028e-20,
+          0.006000000000000001
+        ]
+      },
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": 1.3457522203923061e-05,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.006
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "holed_box_m.step.step",
+      "sha256": "8a6946463c6fb605ea1947a097688fb822c34fdf440f9283b227bbe699a1e6e8",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 6,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0.0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "surface_area_m2": 0.0042999114857512856,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 1.3457522203923061e-05,
+        "center_of_mass_m": [
+          -7.212333461841532e-19,
+          1.2671806351173805e-20,
+          0.006000000000000001
+        ]
+      },
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": 1.3457522203923061e-05,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.006
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "holed_box_m.step.iges",
+      "sha256": "5c6bde506cc11a82aae1306ab094462fd28ade42d317352d9bdb05d19495e854",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 6,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0.0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "surface_area_m2": 0.0042999114857512856,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 1.3457522203923061e-05,
+        "center_of_mass_m": [
+          -7.212333461841532e-19,
+          1.2671806356846028e-20,
+          0.006000000000000001
+        ]
+      },
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": 1.3457522203923061e-05,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.006
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "holed_box_m.iges.step",
+      "sha256": "82fd919f47fad685fe5092a807a753f01cbdb9e7436232a1d0597f74a851a16e",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 6,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0.0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "surface_area_m2": 0.0042999114857512856,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 1.3457522203923061e-05,
+        "center_of_mass_m": [
+          -7.212333461841532e-19,
+          1.2671806356846028e-20,
+          0.006000000000000001
+        ]
+      },
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": 1.3457522203923061e-05,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.006
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "holed_box_m.iges.iges",
+      "sha256": "4803960d124a935d8ca7811722f3479bafb143fdfb232584d1fa4970216a8efa",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 6,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0.0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "surface_area_m2": 0.0042999114857512856,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 1.3457522203923061e-05,
+        "center_of_mass_m": [
+          -7.212333461841532e-19,
+          1.2671806356846028e-20,
+          0.006000000000000001
+        ]
+      },
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": 1.3457522203923061e-05,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.006
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "placed_solids_mm.step.step",
+      "sha256": "1af1f8e7d1c258c908fd365377da93c13f7d05c8f048e43f0ddd9415d2bbd2bd",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 2,
+        "shell_count": 2,
+        "face_count": 9,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 8,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013000000000000001,
+          0.01
+        ],
+        "surface_area_m2": 0.001161398163397448,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 2.0507963267948963e-06,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.005552946979257923,
+          0.003595667467134083
+        ]
+      },
+      "expected": {
+        "description": "10 x 8 x 6 mm box at (-25,5,-4) mm plus radius 5 mm cylinder with local placement: rotate Y 90 degrees then translate (40,-10,5) mm; 2 disconnected solids",
+        "solid_count": 2,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013,
+          0.01
+        ],
+        "volume_m3": 2.0507963267948967e-06,
+        "surface_area_m2": 0.001161398163397448,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.003595667467134081
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "placed_solids_mm.step.iges",
+      "sha256": "152f3a26b6fac2980e24ff4cc10877e78588d271cf779e7f81742ebc99853d3e",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 2,
+        "shell_count": 2,
+        "face_count": 9,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 8,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013000000000000001,
+          0.01
+        ],
+        "surface_area_m2": 0.001161398163397448,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 2.0507963267948963e-06,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.005552946979257923,
+          0.003595667467134083
+        ]
+      },
+      "expected": {
+        "description": "10 x 8 x 6 mm box at (-25,5,-4) mm plus radius 5 mm cylinder with local placement: rotate Y 90 degrees then translate (40,-10,5) mm; 2 disconnected solids",
+        "solid_count": 2,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013,
+          0.01
+        ],
+        "volume_m3": 2.0507963267948967e-06,
+        "surface_area_m2": 0.001161398163397448,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.003595667467134081
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "placed_solids_mm.iges.step",
+      "sha256": "bf0a8a3f48e7f65a57d2c27af779ab2137137becbf75424a6d221ff7757447bd",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 2,
+        "shell_count": 2,
+        "face_count": 9,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 8,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013000000000000001,
+          0.01
+        ],
+        "surface_area_m2": 0.001161398163397448,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 2.0507963267948963e-06,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.005552946979257923,
+          0.003595667467134083
+        ]
+      },
+      "expected": {
+        "description": "10 x 8 x 6 mm box at (-25,5,-4) mm plus radius 5 mm cylinder with local placement: rotate Y 90 degrees then translate (40,-10,5) mm; 2 disconnected solids",
+        "solid_count": 2,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013,
+          0.01
+        ],
+        "volume_m3": 2.0507963267948967e-06,
+        "surface_area_m2": 0.001161398163397448,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.003595667467134081
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "placed_solids_mm.iges.iges",
+      "sha256": "152f3a26b6fac2980e24ff4cc10877e78588d271cf779e7f81742ebc99853d3e",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 2,
+        "shell_count": 2,
+        "face_count": 9,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 8,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013000000000000001,
+          0.01
+        ],
+        "surface_area_m2": 0.001161398163397448,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 2.0507963267948963e-06,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.005552946979257923,
+          0.003595667467134083
+        ]
+      },
+      "expected": {
+        "description": "10 x 8 x 6 mm box at (-25,5,-4) mm plus radius 5 mm cylinder with local placement: rotate Y 90 degrees then translate (40,-10,5) mm; 2 disconnected solids",
+        "solid_count": 2,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013,
+          0.01
+        ],
+        "volume_m3": 2.0507963267948967e-06,
+        "surface_area_m2": 0.001161398163397448,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.003595667467134081
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "placed_solids_m.step.step",
+      "sha256": "184666d47989a8007dbe2a022e760b95a62305ca5c335e73469462cfe9ffe679",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 2,
+        "shell_count": 2,
+        "face_count": 9,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 8,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013000000000000001,
+          0.01
+        ],
+        "surface_area_m2": 0.001161398163397448,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 2.0507963267948963e-06,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.005552946979257923,
+          0.003595667467134083
+        ]
+      },
+      "expected": {
+        "description": "10 x 8 x 6 mm box at (-25,5,-4) mm plus radius 5 mm cylinder with local placement: rotate Y 90 degrees then translate (40,-10,5) mm; 2 disconnected solids",
+        "solid_count": 2,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013,
+          0.01
+        ],
+        "volume_m3": 2.0507963267948967e-06,
+        "surface_area_m2": 0.001161398163397448,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.003595667467134081
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "placed_solids_m.step.iges",
+      "sha256": "152f3a26b6fac2980e24ff4cc10877e78588d271cf779e7f81742ebc99853d3e",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 2,
+        "shell_count": 2,
+        "face_count": 9,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 8,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013000000000000001,
+          0.01
+        ],
+        "surface_area_m2": 0.001161398163397448,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 2.0507963267948963e-06,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.005552946979257923,
+          0.003595667467134083
+        ]
+      },
+      "expected": {
+        "description": "10 x 8 x 6 mm box at (-25,5,-4) mm plus radius 5 mm cylinder with local placement: rotate Y 90 degrees then translate (40,-10,5) mm; 2 disconnected solids",
+        "solid_count": 2,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013,
+          0.01
+        ],
+        "volume_m3": 2.0507963267948967e-06,
+        "surface_area_m2": 0.001161398163397448,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.003595667467134081
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "placed_solids_m.iges.step",
+      "sha256": "9fe49d4ebebeacd5e151eedbf678b1e0fee5d63b7b864fde0130d7014c50c09f",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 2,
+        "shell_count": 2,
+        "face_count": 9,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 8,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013000000000000001,
+          0.01
+        ],
+        "surface_area_m2": 0.001161398163397448,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 2.0507963267948963e-06,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.005552946979257923,
+          0.003595667467134083
+        ]
+      },
+      "expected": {
+        "description": "10 x 8 x 6 mm box at (-25,5,-4) mm plus radius 5 mm cylinder with local placement: rotate Y 90 degrees then translate (40,-10,5) mm; 2 disconnected solids",
+        "solid_count": 2,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013,
+          0.01
+        ],
+        "volume_m3": 2.0507963267948967e-06,
+        "surface_area_m2": 0.001161398163397448,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.003595667467134081
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "placed_solids_m.iges.iges",
+      "sha256": "152f3a26b6fac2980e24ff4cc10877e78588d271cf779e7f81742ebc99853d3e",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 2,
+        "shell_count": 2,
+        "face_count": 9,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 8,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013000000000000001,
+          0.01
+        ],
+        "surface_area_m2": 0.001161398163397448,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 2.0507963267948963e-06,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.005552946979257923,
+          0.003595667467134083
+        ]
+      },
+      "expected": {
+        "description": "10 x 8 x 6 mm box at (-25,5,-4) mm plus radius 5 mm cylinder with local placement: rotate Y 90 degrees then translate (40,-10,5) mm; 2 disconnected solids",
+        "solid_count": 2,
+        "bbox_m": [
+          -0.025,
+          -0.015,
+          -0.004,
+          0.06,
+          0.013,
+          0.01
+        ],
+        "volume_m3": 2.0507963267948967e-06,
+        "surface_area_m2": 0.001161398163397448,
+        "center_of_mass_m": [
+          0.03361612044989762,
+          -0.0055529469792579235,
+          0.003595667467134081
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "holed_box_surfaces_mm.iges.step",
+      "sha256": "1fa5f89596b1721d07ff5a9cdbe986ac7ce40b3ed2609def3d2175380029ac94",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 0,
+        "shell_count": 7,
+        "face_count": 7,
+        "edge_count": 30,
+        "surface_types": {
+          "Plane": 6,
+          "SurfaceOfRevolution": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          -1.0000001276969891e-10,
+          0.02,
+          0.015,
+          0.01200000010000023
+        ],
+        "surface_area_m2": 0.00429991148574051,
+        "surface_integration_error_estimate": 1.1308638867749063e-16,
+        "volume_m3": null,
+        "center_of_mass_m": null
+      },
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z; IGES mode 0 trimmed-surface representation",
+        "solid_count": 0,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": null,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": null,
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "holed_box_surfaces_mm.iges.iges",
+      "sha256": "810bc965d22d9f0495354972a7f748005826660d7d949a837f80a5d3cf37bef1",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 0,
+        "shell_count": 0,
+        "face_count": 7,
+        "edge_count": 30,
+        "surface_types": {
+          "Plane": 6,
+          "SurfaceOfRevolution": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          -1.0000001785579211e-10,
+          0.02,
+          0.015,
+          0.0120000001
+        ],
+        "surface_area_m2": 0.004299911485729734,
+        "surface_integration_error_estimate": 1.1308638868072304e-16,
+        "volume_m3": null,
+        "center_of_mass_m": null
+      },
+      "expected": {
+        "description": "40 x 30 x 12 mm box at (-20,-15,0) mm with radius 5 mm through-hole along +Z; IGES mode 0 trimmed-surface representation",
+        "solid_count": 0,
+        "bbox_m": [
+          -0.02,
+          -0.015,
+          0,
+          0.02,
+          0.015,
+          0.012
+        ],
+        "volume_m3": null,
+        "surface_area_m2": 0.004299911485751285,
+        "center_of_mass_m": null,
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-box.step",
+      "sha256": "d84882c3f1a1940160ee1f68e893885c447ec519cc5d8e16f11ddea07f475c58",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 6,
+        "edge_count": 12,
+        "surface_types": {
+          "Plane": 6
+        },
+        "curved_face_count": 0,
+        "bbox_m": [
+          -1.0,
+          -1.0,
+          -1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "surface_area_m2": 24.0,
+        "surface_integration_error_estimate": 1.1368683772161603e-16,
+        "volume_m3": 8.000000000000002,
+        "center_of_mass_m": [
+          -3.3544401884375835e-18,
+          9.313225746154784e-19,
+          -1.5258789062499997e-17
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -1.0,
+          -1.0,
+          -1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "volume_m3": 8,
+        "surface_area_m2": 24,
+        "center_of_mass_m": [
+          0,
+          0,
+          0
+        ]
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-box.iges",
+      "sha256": "15ff353732e40a5b6fff7cf956e5ad9e40f5b5d1a1bc9d03a8a651a6e0ef785e",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 6,
+        "edge_count": 12,
+        "surface_types": {
+          "Plane": 6
+        },
+        "curved_face_count": 0,
+        "bbox_m": [
+          -1.0,
+          -1.0,
+          -1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "surface_area_m2": 24.0,
+        "surface_integration_error_estimate": 1.1368683772161603e-16,
+        "volume_m3": 8.000000000000002,
+        "center_of_mass_m": [
+          -3.3544401884375835e-18,
+          9.313225746154784e-19,
+          -1.5258789062499997e-17
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -1.0,
+          -1.0,
+          -1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "volume_m3": 8,
+        "surface_area_m2": 24,
+        "center_of_mass_m": [
+          0,
+          0,
+          0
+        ]
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-plate.step",
+      "sha256": "a4e1e3ec98f1ffce0bff34dc81b3c6d45e8d9766ee97dd40c0972ac42d92353d",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 6,
+        "edge_count": 12,
+        "surface_types": {
+          "Plane": 6
+        },
+        "curved_face_count": 0,
+        "bbox_m": [
+          -2.0,
+          -0.1,
+          -1.5,
+          2.0,
+          0.1,
+          1.5
+        ],
+        "surface_area_m2": 26.799999999999997,
+        "surface_integration_error_estimate": 1.1368683772161603e-16,
+        "volume_m3": 2.3999999999999995,
+        "center_of_mass_m": [
+          -2.8139733628388104e-17,
+          -9.685754776000978e-19,
+          0.0
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -2.0,
+          -0.1,
+          -1.5,
+          2.0,
+          0.1,
+          1.5
+        ],
+        "volume_m3": 2.4000000000000004,
+        "surface_area_m2": 26.8,
+        "center_of_mass_m": [
+          0,
+          0,
+          0
+        ]
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-plate.iges",
+      "sha256": "1b30d01a972731f14915300ce919d4d1b5dbeba17fa866c89e1b25c3b6011461",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 6,
+        "edge_count": 12,
+        "surface_types": {
+          "Plane": 6
+        },
+        "curved_face_count": 0,
+        "bbox_m": [
+          -2.0,
+          -0.1,
+          -1.5,
+          2.0,
+          0.1,
+          1.5
+        ],
+        "surface_area_m2": 26.799999999999997,
+        "surface_integration_error_estimate": 1.1368683772161603e-16,
+        "volume_m3": 2.3999999999999995,
+        "center_of_mass_m": [
+          -2.8139733628388104e-17,
+          -9.685754776000978e-19,
+          0.0
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -2.0,
+          -0.1,
+          -1.5,
+          2.0,
+          0.1,
+          1.5
+        ],
+        "volume_m3": 2.4000000000000004,
+        "surface_area_m2": 26.8,
+        "center_of_mass_m": [
+          0,
+          0,
+          0
+        ]
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-channel.step",
+      "sha256": "a3efaaab796ad7248ce07b194ff7ef6371f7e096a74e369e2964038523b3b1f6",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 6,
+        "edge_count": 12,
+        "surface_types": {
+          "Plane": 6
+        },
+        "curved_face_count": 0,
+        "bbox_m": [
+          -3.0,
+          -0.5,
+          -0.5,
+          3.0,
+          0.5,
+          0.5
+        ],
+        "surface_area_m2": 26.0,
+        "surface_integration_error_estimate": 1.1368683772161603e-16,
+        "volume_m3": 6.0,
+        "center_of_mass_m": [
+          -3.772053332708867e-17,
+          -7.450580596923827e-18,
+          -1.0172526041666667e-17
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -3.0,
+          -0.5,
+          -0.5,
+          3.0,
+          0.5,
+          0.5
+        ],
+        "volume_m3": 6,
+        "surface_area_m2": 26,
+        "center_of_mass_m": [
+          0,
+          0,
+          0
+        ]
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-channel.iges",
+      "sha256": "cfd718988480d7d2c4b61d61de7df582f8478c3d7f4572304527a8481d07baab",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 6,
+        "edge_count": 12,
+        "surface_types": {
+          "Plane": 6
+        },
+        "curved_face_count": 0,
+        "bbox_m": [
+          -3.0,
+          -0.5,
+          -0.5,
+          3.0,
+          0.5,
+          0.5
+        ],
+        "surface_area_m2": 26.0,
+        "surface_integration_error_estimate": 1.1368683772161603e-16,
+        "volume_m3": 6.0,
+        "center_of_mass_m": [
+          -3.772053332708867e-17,
+          -7.450580596923827e-18,
+          -1.0172526041666667e-17
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -3.0,
+          -0.5,
+          -0.5,
+          3.0,
+          0.5,
+          0.5
+        ],
+        "volume_m3": 6,
+        "surface_area_m2": 26,
+        "center_of_mass_m": [
+          0,
+          0,
+          0
+        ]
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-cylinder.step",
+      "sha256": "44d08d84217b45dcd40464819fc868cd6518e2a9b3a22cce0e38289083c630f2",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -1.0,
+          -1.5,
+          -1.0,
+          1.0,
+          1.5,
+          1.0
+        ],
+        "surface_area_m2": 25.13274122871834,
+        "surface_integration_error_estimate": 2.8950115500610145e-16,
+        "volume_m3": 9.424777960769381,
+        "center_of_mass_m": [
+          -1.1832421446423582e-16,
+          -5.180824970439301e-17,
+          2.331371236697685e-16
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -1,
+          -1.5,
+          -1,
+          1,
+          1.5,
+          1
+        ],
+        "volume_m3": 9.42477796076938,
+        "surface_area_m2": 25.132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-cylinder.iges",
+      "sha256": "dfdfa34e9b3d87f35393416085cdeeb6d5b07e3551fb1d17aacbd95ea62493c2",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -1.0,
+          -1.5,
+          -1.0,
+          1.0,
+          1.5,
+          1.0
+        ],
+        "surface_area_m2": 25.13274122871834,
+        "surface_integration_error_estimate": 2.8950115500610145e-16,
+        "volume_m3": 9.424777960769381,
+        "center_of_mass_m": [
+          -1.1832421443473587e-16,
+          -5.180824970439301e-17,
+          2.331371236697685e-16
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -1,
+          -1.5,
+          -1,
+          1,
+          1.5,
+          1
+        ],
+        "volume_m3": 9.42477796076938,
+        "surface_area_m2": 25.132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-pipe.step",
+      "sha256": "81aa4ceaf930fe2cdaeb0b384f0b4df1e146ed9bc66e62433bf8d3634b3631e1",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 4,
+        "edge_count": 6,
+        "surface_types": {
+          "Cylinder": 2,
+          "Plane": 2
+        },
+        "curved_face_count": 2,
+        "bbox_m": [
+          -1.0,
+          -1.5,
+          -1.0,
+          1.0,
+          1.5,
+          1.0
+        ],
+        "surface_area_m2": 36.19114736935442,
+        "surface_integration_error_estimate": 4.311678586182773e-16,
+        "volume_m3": 3.392920065876976,
+        "center_of_mass_m": [
+          -9.881759765313863e-17,
+          -2.4427742044623635e-16,
+          6.476031213049128e-16
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -1,
+          -1.5,
+          -1,
+          1,
+          1.5,
+          1
+        ],
+        "volume_m3": 3.392920065876975,
+        "surface_area_m2": 36.19114736935442,
+        "center_of_mass_m": [
+          0,
+          0,
+          0
+        ],
+        "curved_face_count_min": 2
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-pipe.iges",
+      "sha256": "f5f9106b002bd09e7ed1943b55bffceef0440fab828dd6aa8a0ce407de34a2c6",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 4,
+        "edge_count": 6,
+        "surface_types": {
+          "Cylinder": 2,
+          "Plane": 2
+        },
+        "curved_face_count": 2,
+        "bbox_m": [
+          -1.0,
+          -1.5,
+          -1.0,
+          1.0,
+          1.5,
+          1.0
+        ],
+        "surface_area_m2": 36.19114736935442,
+        "surface_integration_error_estimate": 4.311678586182773e-16,
+        "volume_m3": 3.392920065876976,
+        "center_of_mass_m": [
+          -9.881759765658869e-17,
+          -2.4427742044623635e-16,
+          6.476031213049128e-16
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -1,
+          -1.5,
+          -1,
+          1,
+          1.5,
+          1
+        ],
+        "volume_m3": 3.392920065876975,
+        "surface_area_m2": 36.19114736935442,
+        "center_of_mass_m": [
+          0,
+          0,
+          0
+        ],
+        "curved_face_count_min": 2
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-plateWithHole.step",
+      "sha256": "404fd30dee8555d392eff71e25e9665889f7613a1554d4ed0702b375b246fd03",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 6,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -2.0,
+          -0.1,
+          -1.5,
+          2.0,
+          0.1,
+          1.5
+        ],
+        "surface_area_m2": 25.85752220392306,
+        "surface_integration_error_estimate": 2.895011550061014e-16,
+        "volume_m3": 2.2429203673205103,
+        "center_of_mass_m": [
+          3.1291651202145804e-18,
+          1.8668635572084237e-18,
+          5.740107165224477e-17
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -2.0,
+          -0.1,
+          -1.5,
+          2.0,
+          0.1,
+          1.5
+        ],
+        "volume_m3": 2.2429203673205103,
+        "surface_area_m2": 25.85752220392306,
+        "center_of_mass_m": [
+          0,
+          0,
+          0
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-plateWithHole.iges",
+      "sha256": "5543cef650464845059109cd04004cf1d13be439fc03599537fcb4fe39b003b7",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 7,
+        "edge_count": 15,
+        "surface_types": {
+          "Plane": 6,
+          "Cylinder": 1
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -2.0,
+          -0.1,
+          -1.5,
+          2.0,
+          0.1,
+          1.5
+        ],
+        "surface_area_m2": 25.85752220392306,
+        "surface_integration_error_estimate": 2.895011550061014e-16,
+        "volume_m3": 2.2429203673205103,
+        "center_of_mass_m": [
+          3.1291651201230702e-18,
+          1.8668635572084237e-18,
+          5.740107165224477e-17
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -2.0,
+          -0.1,
+          -1.5,
+          2.0,
+          0.1,
+          1.5
+        ],
+        "volume_m3": 2.2429203673205103,
+        "surface_area_m2": 25.85752220392306,
+        "center_of_mass_m": [
+          0,
+          0,
+          0
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-lBracket.step",
+      "sha256": "0967ea94e2615933adfd92b716826c201711b6d9972d626c8c3e99b8dd1ef002",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 14,
+        "edge_count": 28,
+        "surface_types": {
+          "Plane": 14
+        },
+        "curved_face_count": 0,
+        "bbox_m": [
+          -1.0,
+          -1.5,
+          -0.5,
+          1.0,
+          1.5,
+          0.5
+        ],
+        "surface_area_m2": 12.82,
+        "surface_integration_error_estimate": 1.8947806286936001e-16,
+        "volume_m3": 1.41,
+        "center_of_mass_m": [
+          -0.48829787234042543,
+          -0.4882978723404256,
+          -1.6975099415856833e-18
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -1,
+          -1.5,
+          -0.5,
+          1,
+          1.5,
+          0.5
+        ],
+        "volume_m3": 1.41,
+        "surface_area_m2": 12.82,
+        "center_of_mass_m": [
+          -0.48829787234042543,
+          -0.48829787234042565,
+          0
+        ]
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-lBracket.iges",
+      "sha256": "efdf80deb4a0a9d047e8de409164ce167092d55deddc62f2a6406c07027bd607",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 14,
+        "edge_count": 28,
+        "surface_types": {
+          "Plane": 14
+        },
+        "curved_face_count": 0,
+        "bbox_m": [
+          -1.0,
+          -1.5,
+          -0.5,
+          1.0,
+          1.5,
+          0.5
+        ],
+        "surface_area_m2": 12.82,
+        "surface_integration_error_estimate": 1.8947806286936001e-16,
+        "volume_m3": 1.41,
+        "center_of_mass_m": [
+          -0.48829787234042543,
+          -0.4882978723404256,
+          -1.6975099415856833e-18
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          -1,
+          -1.5,
+          -0.5,
+          1,
+          1.5,
+          0.5
+        ],
+        "volume_m3": 1.41,
+        "surface_area_m2": 12.82,
+        "center_of_mass_m": [
+          -0.48829787234042543,
+          -0.48829787234042565,
+          0
+        ]
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "native-frame2d.step",
+      "sha256": "cfed1f997247e7a3525f73d1d59600c30cc6c03e426d1850a0e6af8c4a3727ec",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 0,
+        "shell_count": 0,
+        "face_count": 0,
+        "edge_count": 15,
+        "surface_types": {},
+        "curved_face_count": 0,
+        "bbox_m": [
+          0.0,
+          0.0,
+          0.0,
+          6.0,
+          9.0,
+          0.0
+        ],
+        "surface_area_m2": 0.0,
+        "surface_integration_error_estimate": 0.0,
+        "volume_m3": null,
+        "center_of_mass_m": null,
+        "curve_types": {
+          "Line": 15
+        },
+        "edge_length_m": 45.0
+      },
+      "expected": {
+        "solid_count": 0,
+        "bbox_m": [
+          0,
+          0,
+          0,
+          6,
+          9,
+          0
+        ],
+        "surface_area_m2": 0,
+        "volume_m3": null,
+        "edge_count": 15,
+        "edge_length_m": 45
+      },
+      "explicit_member_endpoints_compared": true
+    },
+    {
+      "file": "native-frame2d.iges",
+      "sha256": "7fce1dd52599c69db37cb88cc704b8b1f4325b4d33d8473d72d49791c3391315",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 0,
+        "shell_count": 0,
+        "face_count": 0,
+        "edge_count": 15,
+        "surface_types": {},
+        "curved_face_count": 0,
+        "bbox_m": [
+          0.0,
+          0.0,
+          0.0,
+          6.0,
+          9.0,
+          0.0
+        ],
+        "surface_area_m2": 0.0,
+        "surface_integration_error_estimate": 0.0,
+        "volume_m3": null,
+        "center_of_mass_m": null,
+        "curve_types": {
+          "Line": 15
+        },
+        "edge_length_m": 45.0
+      },
+      "expected": {
+        "solid_count": 0,
+        "bbox_m": [
+          0,
+          0,
+          0,
+          6,
+          9,
+          0
+        ],
+        "surface_area_m2": 0,
+        "volume_m3": null,
+        "edge_count": 15,
+        "edge_length_m": 45
+      },
+      "explicit_member_endpoints_compared": true
+    },
+    {
+      "file": "native-truss2d.step",
+      "sha256": "e417ec07ee689047031712a78672d86375450b01ea952045084648f4e85f5a8c",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 0,
+        "shell_count": 0,
+        "face_count": 0,
+        "edge_count": 21,
+        "surface_types": {},
+        "curved_face_count": 0,
+        "bbox_m": [
+          0.0,
+          -1.9195160174341112e-13,
+          0.0,
+          10.00000000000013,
+          2.0,
+          0.0
+        ],
+        "surface_area_m2": 0.0,
+        "surface_integration_error_estimate": 0.0,
+        "volume_m3": null,
+        "center_of_mass_m": null,
+        "curve_types": {
+          "Line": 21
+        },
+        "edge_length_m": 35.30782859751733
+      },
+      "expected": {
+        "solid_count": 0,
+        "bbox_m": [
+          0,
+          0,
+          0,
+          10,
+          2,
+          0
+        ],
+        "surface_area_m2": 0,
+        "volume_m3": null,
+        "edge_count": 21,
+        "edge_length_m": 35.30782859751281
+      },
+      "explicit_member_endpoints_compared": true
+    },
+    {
+      "file": "native-truss2d.iges",
+      "sha256": "d868f12dd11a63099603f9327190889c002857b5bbfb1a9ad20cfab235548f3e",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 0,
+        "shell_count": 0,
+        "face_count": 0,
+        "edge_count": 21,
+        "surface_types": {},
+        "curved_face_count": 0,
+        "bbox_m": [
+          0.0,
+          -2.1298749000971228e-16,
+          0.0,
+          10.0,
+          2.0,
+          0.0
+        ],
+        "surface_area_m2": 0.0,
+        "surface_integration_error_estimate": 0.0,
+        "volume_m3": null,
+        "center_of_mass_m": null,
+        "curve_types": {
+          "Line": 21
+        },
+        "edge_length_m": 35.3078285954933
+      },
+      "expected": {
+        "solid_count": 0,
+        "bbox_m": [
+          0,
+          0,
+          0,
+          10,
+          2,
+          0
+        ],
+        "surface_area_m2": 0,
+        "volume_m3": null,
+        "edge_count": 21,
+        "edge_length_m": 35.30782859751281
+      },
+      "explicit_member_endpoints_compared": true
+    },
+    {
+      "file": "transform-translated-rotated.step",
+      "sha256": "fb4c0cb54d9d2a8c388a2a9bb7a48574f9ef7f56f133b9f663ade73835bdc92e",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          0.04,
+          -0.04,
+          0.01,
+          0.07,
+          -0.02,
+          0.03
+        ],
+        "surface_area_m2": 0.002513274122871833,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 9.424777960769377e-06,
+        "center_of_mass_m": [
+          0.05500000000000001,
+          -0.030000000000000006,
+          0.020000000000000004
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          0.04,
+          -0.04,
+          0.01,
+          0.07,
+          -0.02,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.002513274122871835,
+        "center_of_mass_m": [
+          0.055,
+          -0.03,
+          0.02
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "transform-translated-rotated.iges",
+      "sha256": "96889a1d60ca9eb721f740cb4813a340c6724c202e027b1897e45a925d0a2d81",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          0.04,
+          -0.04,
+          0.01,
+          0.07,
+          -0.02,
+          0.03
+        ],
+        "surface_area_m2": 0.002513274122871833,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 9.424777960769377e-06,
+        "center_of_mass_m": [
+          0.05500000000000001,
+          -0.030000000000000006,
+          0.020000000000000004
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          0.04,
+          -0.04,
+          0.01,
+          0.07,
+          -0.02,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.002513274122871835,
+        "center_of_mass_m": [
+          0.055,
+          -0.03,
+          0.02
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "transform-mirrored.step",
+      "sha256": "3aa6077135794a36e0d8769e9985b0ff15af0fc981eb2c4ec137aaaed9f1116c",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          0.04,
+          -0.04,
+          0.01,
+          0.07,
+          -0.02,
+          0.03000000000000001
+        ],
+        "surface_area_m2": 0.0025132741228717096,
+        "surface_integration_error_estimate": 5.654319433713295e-16,
+        "volume_m3": 9.424777960769377e-06,
+        "center_of_mass_m": [
+          0.05499999999999999,
+          -0.029999999999999995,
+          0.02
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          0.04,
+          -0.04,
+          0.01,
+          0.07,
+          -0.02,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.002513274122871835,
+        "center_of_mass_m": [
+          0.055,
+          -0.03,
+          0.02
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "transform-mirrored.iges",
+      "sha256": "6e17b84b767521b1c09118b60e7b2783ef4cff042b8e1526974d6fed3195e9e8",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          0.04,
+          -0.04,
+          0.01,
+          0.07,
+          -0.02,
+          0.03
+        ],
+        "surface_area_m2": 0.002513274122871834,
+        "surface_integration_error_estimate": 4.523455546970337e-16,
+        "volume_m3": 9.424777960769379e-06,
+        "center_of_mass_m": [
+          0.055,
+          -0.029999999999999995,
+          0.02
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          0.04,
+          -0.04,
+          0.01,
+          0.07,
+          -0.02,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.002513274122871835,
+        "center_of_mass_m": [
+          0.055,
+          -0.03,
+          0.02
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "transform-nonuniform.step",
+      "sha256": "c24854a70c4d9ddfa168a5505c787b5734572da5741c166c39855ace6c74f1be",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "BSplineSurface": 3
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          0.03999999989999999,
+          -0.060000000099996356,
+          -1.000000045967981e-10,
+          0.055000000100000015,
+          9.999983108418022e-11,
+          0.0400000001
+        ],
+        "surface_area_m2": 0.006149730656627511,
+        "surface_integration_error_estimate": 4.894849957458619e-16,
+        "volume_m3": 2.8274334171867035e-05,
+        "center_of_mass_m": [
+          0.04750000000000001,
+          -0.029999999999998233,
+          0.02000000002560308
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          0.04,
+          -0.06,
+          0,
+          0.055,
+          0,
+          0.04
+        ],
+        "volume_m3": 2.827433388230814e-05,
+        "surface_area_m2": 0.006149727122701341,
+        "center_of_mass_m": [
+          0.0475,
+          -0.03,
+          0.02
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "transform-nonuniform.iges",
+      "sha256": "f5f2132de2f3aa95bd2c743f43ea413006fa4a4d6f6f1af0d4664b24c39c5396",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "BSplineSurface": 3
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          0.039999999899999986,
+          -0.060000000100295055,
+          -1e-10,
+          0.055000000100000015,
+          1.0029504232649479e-10,
+          0.0400000001
+        ],
+        "surface_area_m2": 0.006149730656711852,
+        "surface_integration_error_estimate": 4.815900765905001e-16,
+        "volume_m3": 2.8274334172235626e-05,
+        "center_of_mass_m": [
+          0.0475,
+          -0.03,
+          0.020000000025630082
+        ]
+      },
+      "expected": {
+        "solid_count": 1,
+        "bbox_m": [
+          0.04,
+          -0.06,
+          0,
+          0.055,
+          0,
+          0.04
+        ],
+        "volume_m3": 2.827433388230814e-05,
+        "surface_area_m2": 0.006149727122701341,
+        "center_of_mass_m": [
+          0.0475,
+          -0.03,
+          0.02
+        ],
+        "curved_face_count_min": 1
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "browser-cylinder-roundtrip.step",
+      "sha256": "ac4ec429ce39877187a204f10f86e787159d62c1968ca47a9ef30dc189722940",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.010000000000011,
+          -0.010000000000011,
+          0.0,
+          0.010000000000011,
+          0.010000000000011,
+          0.030000000000007
+        ],
+        "surface_area_m2": 0.002513274122875729,
+        "surface_integration_error_estimate": 2.84217094303415e-16,
+        "volume_m3": 9.424777960792308e-06,
+        "center_of_mass_m": [
+          2.171258662540479e-18,
+          -7.937088681076002e-19,
+          0.015000000000003504
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ]
+      },
+      "explicit_member_endpoints_compared": false
+    },
+    {
+      "file": "browser-cylinder-roundtrip.iges",
+      "sha256": "d4e622bf008b54ffb289185dae39bbb9f1f9b6044ee947079c8c43b74ece990d",
+      "status": "passed",
+      "measured": {
+        "valid_brep": true,
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 3,
+        "edge_count": 3,
+        "surface_types": {
+          "Cylinder": 1,
+          "Plane": 2
+        },
+        "curved_face_count": 1,
+        "bbox_m": [
+          -0.00999999999,
+          -0.00999999999,
+          0.0,
+          0.00999999999,
+          0.00999999999,
+          0.029999999995
+        ],
+        "surface_area_m2": 0.0025132741197302407,
+        "surface_integration_error_estimate": 1.8947806324831634e-16,
+        "volume_m3": 9.424777941396223e-06,
+        "center_of_mass_m": [
+          -1.388882759000548e-13,
+          -5.788447256016949e-19,
+          0.01499999999875
+        ]
+      },
+      "expected": {
+        "description": "Radius 10 mm, height 30 mm, axis +Z; analytic cylinder",
+        "solid_count": 1,
+        "bbox_m": [
+          -0.01,
+          -0.01,
+          0,
+          0.01,
+          0.01,
+          0.03
+        ],
+        "volume_m3": 9.424777960769379e-06,
+        "surface_area_m2": 0.0025132741228718345,
+        "center_of_mass_m": [
+          0,
+          0,
+          0.015
+        ]
+      },
+      "explicit_member_endpoints_compared": false
+    }
+  ]
+}

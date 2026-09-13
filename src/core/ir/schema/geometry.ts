@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { tuple3NumberSchema, unknownRecordSchema } from './shared';
-import { parseNativeShapeMetadata } from './shapes';
+import { parseImportedCadShapeMetadata, parseNativeShapeMetadata } from './shapes';
+import { MAX_CAD_SOURCE_BYTES, validateCadSource } from '@/geometry/import/cad-source';
 
 export const geometrySchema = z.strictObject({
     model_type: z.enum(['cad_brep', 'mesh_only', 'frame_graph', 'hybrid']),
-    source: z.enum(['native', 'imported_step', 'imported_stl', 'imported_obj', 'imported_msh', 'generated_by_ai']),
+    source: z.enum(['native', 'imported_step', 'imported_iges', 'imported_stl', 'imported_obj', 'imported_msh', 'generated_by_ai']),
     bodies: z.array(z.strictObject({
       id: z.string(),
       name: z.string(),
@@ -22,7 +23,7 @@ export const geometrySchema = z.strictObject({
       metadata: unknownRecordSchema,
     }).superRefine((body, context) => {
       if (body.metadata.shapeType === undefined || body.metadata.shapeType === 'imported_stl') return;
-      try { parseNativeShapeMetadata(body.metadata); }
+      try { if (body.metadata.shapeType === 'imported_cad') parseImportedCadShapeMetadata(body.metadata); else parseNativeShapeMetadata(body.metadata); }
       catch (error) { context.addIssue({ code: 'custom', path: ['metadata'], message: String(error) }); }
     })),
     faces: z.array(z.strictObject({
@@ -64,6 +65,15 @@ export const geometrySchema = z.strictObject({
     })),
   });
 
+export const cadSourceSchema = z.strictObject({
+  format: z.enum(['step', 'iges']), file_name: z.string().min(1).max(1024), media_type: z.enum(['model/step', 'model/iges']),
+  encoding: z.literal('base64'), data: z.string().max(Math.ceil(MAX_CAD_SOURCE_BYTES / 3) * 4),
+  content_hash: z.string().regex(/^sha256:[a-f0-9]{64}$/), byte_length: z.number().int().positive().max(MAX_CAD_SOURCE_BYTES),
+}).superRefine((source, context) => {
+  try { validateCadSource(source); }
+  catch (error) { context.addIssue({ code: 'custom', message: String(error) }); }
+});
+
 export const assetsSchema = z.array(z.strictObject({
     id: z.string().min(1),
     kind: z.literal('stl_mesh'),
@@ -73,6 +83,7 @@ export const assetsSchema = z.array(z.strictObject({
     data: z.string(),
     content_hash: z.string().min(1),
     byte_length: z.number().int().nonnegative(),
+    cad_source: cadSourceSchema.optional(),
     source_unit: z.enum(['m', 'mm', 'cm', 'in', 'ft']),
     scale_to_meters: z.number().finite().positive(),
     triangle_count: z.number().int().positive(),

@@ -1,0 +1,8 @@
+[project]
+name = "fem-modeler-cad-verification"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["cadquery-ocp==7.9.3.1.1"]
+
+[dependency-groups]
+dev = ["pytest==8.4.2"]

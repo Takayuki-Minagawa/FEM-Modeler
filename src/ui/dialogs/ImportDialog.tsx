@@ -3,10 +3,13 @@ import { Modal } from './Modal';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
-import { STL_SOURCE_UNIT_TO_METERS, type STLSourceUnit } from '@/geometry/import/stl-loader';
+import { STL_SOURCE_UNIT_TO_METERS, type STLSourceUnit, type STLImportResult } from '@/geometry/import/stl-loader';
+import { MAX_CAD_SOURCE_BYTES } from '@/geometry/import/cad-source';
 import { cacheSTLGeometry } from '@/geometry/import/stl-geometry-cache';
 import { useAppActionsContext } from '@/hooks/useAppActionsContext';
 import { useProjectFileLoader } from '@/hooks/useProjectFileLoader';
+import { useViewerState } from '@/viewer/view-state';
+import { applyTransformToPoint } from '@/geometry/transforms';
 
 interface ImportDialogProps {
   isOpen: boolean;
@@ -25,7 +28,22 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const activeImport = useRef<AbortController | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busyFormat, setBusyFormat] = useState<string | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    const unsubscribe = useAppStore.subscribe((next, previous) => {
+      if (next.projectSession !== previous.projectSession) activeImport.current?.abort();
+    });
+    return () => {
+      mounted.current = false;
+      unsubscribe();
+      activeImport.current?.abort();
+      activeImport.current = null;
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
+  }, []);
   useEffect(() => {
     if (!isOpen) activeImport.current?.abort();
     return () => activeImport.current?.abort();
@@ -34,9 +52,15 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
 
   if (!isOpen) return null;
 
+  const handleClose = () => {
+    activeImport.current?.abort();
+    onClose();
+  };
+
   const handleFile = async (file: File) => {
     activeImport.current?.abort(); activeImport.current = null;
-    setBusy(false);
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setBusyFormat(null);
     setStatus(null);
     const ext = file.name.split('.').pop()?.toLowerCase();
 
@@ -49,7 +73,7 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
             ? `プロジェクト "${result.projectName}" を読み込みました。`
             : `Loaded project "${result.projectName}".`;
           setStatus({ type: 'success', message: msg });
-          setTimeout(onClose, 1000);
+          closeTimer.current = setTimeout(onClose, 1000);
         } else {
           setStatus({ type: 'error', message: result.error ?? 'Failed to load.' });
         }
@@ -57,39 +81,68 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
         const message = err instanceof Error ? err.message : String(err);
         setStatus({ type: 'error', message });
       }
-    } else if (ext === 'stl') {
+    } else if (ext === 'stl' || ['step', 'stp', 'iges', 'igs'].includes(ext ?? '')) {
       const controller = new AbortController(); activeImport.current = controller;
-      setBusy(true);
+      const session = useAppStore.getState().projectSession;
+      const format = ext === 'stl' ? 'STL' : ext === 'step' || ext === 'stp' ? 'STEP' : 'IGES';
+      const current = () => mounted.current && activeImport.current === controller && !controller.signal.aborted
+        && useAppStore.getState().projectSession === session;
+      controller.signal.addEventListener('abort', () => {
+        if (mounted.current && activeImport.current === controller) {
+          setBusyFormat(null);
+          setStatus({ type: 'error', message: isJa ? '読込を取り消しました。' : 'Import cancelled.' });
+        }
+      }, { once: true });
+      setBusyFormat(format);
       try {
-        if (file.size > MAX_STL_FILE_BYTES) {
-          throw new Error('STL exceeds the 50 MB file-size safety limit.');
+        const limit = ext === 'stl' ? MAX_STL_FILE_BYTES : MAX_CAD_SOURCE_BYTES;
+        if (file.size > limit) {
+          throw new Error(`${format} exceeds the ${limit / 1024 / 1024} MB file-size safety limit.`);
         }
         const buffer = await file.arrayBuffer();
-        const result = await importSTLAsync(buffer, file.name, STL_SOURCE_UNIT_TO_METERS[stlSourceUnit], stlSourceUnit, controller.signal);
-        if (controller.signal.aborted) { result.geometry?.dispose(); return; }
+        if (!current()) return;
+        let result: STLImportResult;
+        if (ext === 'stl') result = await importSTLAsync(buffer, file.name, STL_SOURCE_UNIT_TO_METERS[stlSourceUnit], stlSourceUnit, controller.signal);
+        else {
+          const { importCADAsync } = await import('@/geometry/import/cad-async');
+          if (!current()) return;
+          result = await importCADAsync(buffer, file.name, controller.signal);
+        }
+        if (!current()) { result.geometry?.dispose(); return; }
         if (result.success && result.body && result.asset) {
           addBodyWithTopology(result.body, { faces: result.faces, assets: [result.asset] });
           if (result.geometry) {
             cacheSTLGeometry(result.body.id, result.geometry);
           }
+          if (format !== 'STL') {
+            const { min, max } = result.asset.bounds;
+            const transform = result.body.transform;
+            const points = [min[0], max[0]].flatMap((x) => [min[1], max[1]].flatMap((y) => [min[2], max[2]].map((z) => applyTransformToPoint([x, y, z], transform))));
+            useViewerState.getState().set({ resultId: '', fieldId: '', probe: null });
+            useViewerState.getState().focusPoints(points);
+          }
           addActivity(
             'success',
             isJa
-              ? `STL "${file.name}" を読み込みました。`
-              : `Imported STL "${file.name}".`,
+              ? `${format} "${file.name}" を読み込みました。`
+              : `Imported ${format} "${file.name}".`,
           );
-          setStatus({ type: 'success', message: isJa ? `STL "${file.name}" (${result.triangleCount} 三角形) を読み込みました。` : `Imported STL "${file.name}" (${result.triangleCount} triangles).` });
+          setStatus({ type: 'success', message: isJa ? `${format} "${file.name}" (${result.triangleCount} 三角形) を読み込みました。` : `Imported ${format} "${file.name}" (${result.triangleCount} triangles).` });
         } else {
-          addActivity('error', result.error ?? 'STL import failed.');
-          setStatus({ type: 'error', message: result.error ?? 'STL import failed.' });
+          result.geometry?.dispose();
+          addActivity('error', result.error ?? `${format} import failed.`);
+          setStatus({ type: 'error', message: result.error ?? `${format} import failed.` });
         }
       } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (!current() || (error instanceof Error && error.name === 'AbortError')) return;
         const message = error instanceof Error ? error.message : String(error);
         addActivity('error', message);
         setStatus({ type: 'error', message });
       } finally {
-        if (activeImport.current === controller) setBusy(false);
+        if (activeImport.current === controller) {
+          activeImport.current = null;
+          if (mounted.current) setBusyFormat(null);
+        }
       }
     } else {
       addActivity(
@@ -110,7 +163,7 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
   const handleBrowse = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json,.fem.json,.fem.zip,.stl';
+    input.accept = '.json,.fem.json,.fem.zip,.stl,.step,.stp,.iges,.igs';
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) void handleFile(file);
@@ -119,12 +172,12 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} labelledBy="import-dialog-title" className="max-w-lg">
+    <Modal isOpen={isOpen} onClose={handleClose} labelledBy="import-dialog-title" className="max-w-lg">
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <h2 id="import-dialog-title" className="text-lg font-bold" style={{ color: 'var(--color-accent)' }}>
             {isJa ? 'インポート' : 'Import'}
           </h2>
-          <button onClick={onClose} className="px-3 py-1 text-sm rounded cursor-pointer" style={{ backgroundColor: 'var(--color-bg-input)', color: 'var(--color-text-secondary)' }}>
+          <button onClick={handleClose} className="px-3 py-1 text-sm rounded cursor-pointer" style={{ backgroundColor: 'var(--color-bg-input)', color: 'var(--color-text-secondary)' }}>
             {isJa ? '閉じる' : 'Close'}
           </button>
         </div>
@@ -145,6 +198,10 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
               <option value="ft">ft</option>
             </select>
           </label>
+          <p className="text-xs mb-4" style={{ color: 'var(--color-text-muted)' }}>
+            {isJa ? 'STEP/IGESはファイル内の単位を自動解釈します。上の元単位の指定はSTLのみに適用されます。' : 'STEP/IGES units are read from the file automatically. The source-unit selection above applies only to STL.'}
+            {' '}{isJa ? 'CAD機能の初回利用時は約66 MBをダウンロードします。読み込んだCAD形状の解析メッシュ生成・ソルバ出力は未対応です。' : 'First use of CAD downloads about 66 MB. Analysis meshing and solver export of imported CAD are not yet supported.'}
+          </p>
           {/* Drop zone */}
           <button
             type="button"
@@ -165,11 +222,14 @@ export function ImportDialog({ isOpen, onClose }: ImportDialogProps) {
               {isJa ? 'ファイルをドロップまたはクリックして選択' : 'Drop file or click to browse'}
             </p>
             <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-              {isJa ? '対応: .fem.json, .fem.zip, .stl' : 'Supported: .fem.json, .fem.zip, .stl'}
+              {isJa ? '対応: .fem.json, .fem.zip, .stl, .step, .stp, .iges, .igs' : 'Supported: .fem.json, .fem.zip, .stl, .step, .stp, .iges, .igs'}
             </p>
           </button>
 
-          {busy && <p role="status" className="mt-4 text-sm">{isJa ? 'STLを解析しています…' : 'Parsing STL…'}</p>}
+          {busyFormat && <div className="mt-4 text-sm flex items-center gap-3">
+            <p role="status">{isJa ? `${busyFormat}を変換しています…` : `Converting ${busyFormat}…`}</p>
+            <button type="button" onClick={() => activeImport.current?.abort()}>{isJa ? '読込を取消' : 'Cancel import'}</button>
+          </div>}
           {/* Status */}
           {status && (
             <div role="status" aria-live="polite" className="mt-4 p-3 rounded text-sm" style={{

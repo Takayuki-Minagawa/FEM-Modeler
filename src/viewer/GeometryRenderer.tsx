@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import type { ThreeEvent } from '@react-three/fiber';
 import { generateShape } from '@/geometry/primitives/generators';
 import type { AnyShapeParams } from '@/geometry/primitives/types';
-import { getSTLGeometry, restoreSTLGeometry } from '@/geometry/import/stl-geometry-cache';
+import { getSTLGeometry, restoreSTLGeometry, usesImportedPreview } from '@/geometry/import/stl-geometry-cache';
 import { toRadiansTuple } from '@/geometry/transforms';
 import type { GeometryAsset } from '@/core/ir/types';
 import type { GeometryEdge, GeometryVertex } from '@/core/ir/types';
@@ -185,17 +185,17 @@ interface SolidMeshProps {
 }
 
 function SolidMesh({ bodyId, asset, metadata, position, rotation, scale, color, isSelected, isHovered, onClick, onHover, topologyEdges, topologyVertices, pickFilter, selectedIds, onSelect }: SolidMeshProps) {
-  const usesSharedSTLGeometry = metadata.shapeType === 'imported_stl';
+  const usesSharedSTLGeometry = usesImportedPreview(metadata);
   const geometry = useMemo(() => {
     try {
       const params = metadata as AnyShapeParams;
       if (!params.shapeType) return new THREE.BufferGeometry();
-      // Use cached geometry for imported STL bodies
-      if (params.shapeType === 'imported_stl') {
+      // Imported CAD and STL share the persisted triangulated preview cache.
+      if (usesImportedPreview(metadata)) {
         const cached = getSTLGeometry(bodyId);
         if (cached) return cached;
         if (asset) return restoreSTLGeometry(bodyId, asset);
-        console.error(`Imported STL body ${bodyId} has no persisted asset.`);
+        console.error(`Imported body ${bodyId} has no persisted preview asset.`);
         return new THREE.BufferGeometry();
       }
       const result = generateShape(parseNativeShapeMetadata(metadata));

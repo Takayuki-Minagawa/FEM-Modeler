@@ -52,6 +52,29 @@ const projectFileSchema = z.strictObject({
   ai_annotations: aiAnnotationsSchema,
   audit_trail: auditTrailSchema,
 }).superRefine((project, context) => {
+  const assets = new Map(project.assets.map((asset) => [asset.id, asset]));
+  const bodies = new Map(project.geometry.bodies.map((body) => [body.id, body]));
+  if (assets.size !== project.assets.length) context.addIssue({ code: 'custom', path: ['assets'], message: 'Geometry asset IDs must be unique.' });
+  project.geometry.bodies.forEach((body, index) => {
+    const asset = body.asset_ref ? assets.get(body.asset_ref) : undefined;
+    if (body.metadata.shapeType === 'imported_cad') {
+      if (!asset?.cad_source || asset.cad_source.format !== body.metadata.importFormat
+        || asset.source_unit !== 'm' || asset.scale_to_meters !== 1
+        || asset.content_hash !== body.metadata.contentHash || asset.triangle_count !== body.metadata.triangleCount) {
+        context.addIssue({ code: 'custom', path: ['geometry', 'bodies', index], message: 'Imported CAD requires its matching original CAD source and SI display mesh.' });
+      }
+    } else if (asset?.cad_source) {
+      context.addIssue({ code: 'custom', path: ['geometry', 'bodies', index, 'metadata'], message: 'An asset with a CAD source requires imported_cad body metadata.' });
+    }
+  });
+  project.geometry.faces.forEach((face, index) => {
+    const body = bodies.get(face.body_id);
+    if (body?.metadata.shapeType !== 'imported_cad') return;
+    const count = body.asset_ref ? assets.get(body.asset_ref)?.triangle_count : undefined;
+    if (count !== undefined && face.triangle_indices.some((triangle) => !Number.isInteger(triangle) || triangle < 0 || triangle >= count)) {
+      context.addIssue({ code: 'custom', path: ['geometry', 'faces', index, 'triangle_indices'], message: 'CAD face references a missing display triangle.' });
+    }
+  });
   for (const targetName of REQUIRED_SOLVER_TARGETS) {
     const count = project.solver_targets.filter((target) => target.target_name === targetName).length;
     if (count !== 1) {
@@ -381,6 +404,15 @@ export function normalizeAndValidateProjectData(raw: unknown): NormalizeResult {
     return { success: true, data: current.data };
   }
 
+  const sourceVersion = parseVersion(rawVersion)!;
+  if (sourceVersion[0] === 0 && sourceVersion[1] === 3) {
+    // 0.4 adds optional CAD fields only. Preserve the strict 0.3 contract instead
+    // of silently repairing missing data with the much older migration defaults.
+    const upgraded = projectFileSchema.safeParse({ ...raw, meta: { ...raw.meta, schema_version: SCHEMA_VERSION, app_version: APP_VERSION } });
+    return upgraded.success ? { success: true, data: upgraded.data, migratedFromVersion: rawVersion }
+      : { success: false, error: formatZodError(upgraded.error) };
+  }
+
   const defaults = createDefaultProject();
   const migratedFromVersion = rawVersion;
 
@@ -393,7 +425,10 @@ export function normalizeAndValidateProjectData(raw: unknown): NormalizeResult {
   } catch (error) {
     return { success: false, error: `Invalid project file: ${String(error)}` };
   }
-  const migratedRaw = migrateV02Artifacts(migration.data);
+  const version = parseVersion(rawVersion)!;
+  // Schema 0.3 already carries verified input identities. The CAD extension is
+  // optional and must not downgrade existing results or apply legacy SI conversion.
+  const migratedRaw = version[0] === 0 && version[1] < 3 ? migrateV02Artifacts(migration.data) : migration.data;
 
   const merged = mergeWithDefaults(defaults, migratedRaw);
   const normalized: ProjectIR = {

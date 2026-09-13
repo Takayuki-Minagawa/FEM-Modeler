@@ -87,7 +87,9 @@ export function createModelActions(edit: ProjectEditor) {
         if (topology.assets) {
           const existing = new Set(state.ir.assets.map((asset) => asset.id));
           state.ir.assets.push(...topology.assets.filter((asset) => !existing.has(asset.id)));
-          state.ir.geometry.source = 'imported_stl';
+          state.ir.geometry.source = body.metadata.shapeType === 'imported_cad'
+            ? body.metadata.importFormat === 'iges' ? 'imported_iges' : 'imported_step'
+            : 'imported_stl';
         }
       }),
 
