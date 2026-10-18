@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { NumericField } from './NumericField';
 
 interface VectorInputProps {
   label: string;
@@ -10,9 +11,8 @@ interface VectorInputProps {
 
 export function VectorInput({ label, value, onChange, labels = ['X', 'Y', 'Z'], unit }: VectorInputProps) {
   const groupId = useId();
-  const handleChange = (idx: number, v: string) => {
-    const num = parseFloat(v);
-    if (isNaN(num)) return;
+  const handleChange = (idx: number, num: number | null) => {
+    if (num === null) return;
     const next = [...value] as [number, number, number];
     next[idx] = num;
     onChange(next);
@@ -29,11 +29,10 @@ export function VectorInput({ label, value, onChange, labels = ['X', 'Y', 'Z'], 
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
               {labels[i]}
             </span>
-            <input
+            <NumericField
               aria-label={`${label} ${labels[i]}`}
-              type="number"
               value={value[i]}
-              onChange={(e) => handleChange(i, e.target.value)}
+              onValueChange={(number) => handleChange(i, number)}
               step={0.1}
               className="w-full px-1.5 py-1.5 rounded text-sm outline-none"
               style={{

@@ -24,6 +24,7 @@ export interface StudyQoI {
 
 export function studyFromResults(results: ResultIR[], qoi: StudyQoI): ConvergenceStudy {
   if (results.length !== 3 || new Set(results.map((result) => result.id)).size !== 3) throw new Error('Select three distinct results.');
+  if (results.some((result) => result.metadata.stage === 'mesh_only')) throw new Error('Mesh-only artifacts have no solver solution and cannot enter a convergence study.');
   const reference = results[0];
   const comparison = reference.metadata.comparison_fingerprint;
   const referenceField = reference.fields.find((field) => field.name === qoi.fieldName && field.unit === qoi.unit);

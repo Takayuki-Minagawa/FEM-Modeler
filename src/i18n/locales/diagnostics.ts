@@ -1,5 +1,11 @@
 /** Stable diagnostic codes are translated independently of generated solver detail text. */
 export const diagnosticTitlesJa: Record<string, string> = {
+  OFM_REYNOLDS_UNSUPPORTED: '層流モデルの適用範囲を超えています',
+  OFM_DIMENSIONALITY_INVALID: '流路の2D/3D設定を確認してください',
+  OFM_TRANSPORT_INVALID: '流体の粘性・密度設定を確認してください',
+  OFM_UNITS_INVALID: '流路の長さ単位が未対応です',
+  OFM_INLET_INVALID: '入口の速度・方向・条件設定を確認してください',
+  OFM_CHANNEL_GEOMETRY_INVALID: '流路の寸法・変換設定を確認してください',
   SOLVER_TARGET_CARDINALITY: '各ソルバーの設定は1件ずつ必要です', PROJ_NAME: 'プロジェクト名が未設定です',
   NO_GEOMETRY: '形状を作成または読み込んでください', NO_ANALYSIS: '解析ケースを作成してください',
   ANALYSIS_ACTIVE_COUNT: '有効な解析ケースを1件選んでください', ANALYSIS_RESULTS_EMPTY: '解析ケースの出力項目が未設定です',
@@ -17,7 +23,7 @@ export const diagnosticTitlesJa: Record<string, string> = {
   SECTION_PROPERTY_RANGE: '断面特性が許容範囲外です', SECTION_DIMENSION_RANGE: '断面寸法が許容範囲外です',
   SECTION_H_FLANGE_GEOMETRY: 'H形断面のフランジ寸法を確認してください', SECTION_H_WEB_GEOMETRY: 'H形断面のウェブ寸法を確認してください',
   SECTION_DIMENSIONS_UNRESOLVED: '寸法から断面特性を計算できません', SECTION_EFFECTIVE_LENGTH_RANGE: '有効長係数は正の値が必要です',
-  GEOM_INTEGER_DIVISION: '分割数は有効な整数が必要です', GEOM_PIPE_RADII: 'パイプの内径と外径の大小関係を確認してください',
+  GEOM_INTEGER_DIVISION: '分割数は有効な整数が必要です', GEOM_PIPE_RADII: 'パイプの内半径と外半径の大小関係を確認してください',
   GEOM_HOLE_OUTSIDE: '穴が平板の外周に達しています', STL_ASSET_MISSING: 'STLの元データがありません',
   STL_NOT_WATERTIGHT: 'STLが閉じた体積を構成していません', GEOM_ZERO_LENGTH_EDGE: '長さがゼロの部材があります',
   LOAD_ZERO_DIRECTION: '荷重方向にゼロでないベクトルを設定してください', LOAD_NONFINITE: '荷重に有限でない値があります',

@@ -1,7 +1,7 @@
 import { solverLifecycleFiles, solverRunScript } from '@/export/shared/runtime-lifecycle';
 import type { ProjectIR } from '@/core/ir/types';
 import { scopeProjectForAnalysisCaseValidation } from '@/export/compiler';
-import { downloadArtifactZip, type ArtifactFiles } from '@/export/shared/packaging';
+import { downloadArtifactZip, type ArtifactFiles, type DownloadedArtifact } from '@/export/shared/packaging';
 import { pythonRuntimeFiles } from '@/export/shared/python-runtime';
 import { exportOpenFOAM } from './exporter';
 import type { OpenFOAMExportResult } from './model';
@@ -19,9 +19,9 @@ export function openFoamPackageFiles(result: OpenFOAMExportResult): ArtifactFile
   };
 }
 
-export async function downloadOpenFOAMZip(ir: ProjectIR, analysisCaseId?: string): Promise<OpenFOAMExportResult> {
+export async function downloadOpenFOAMZip(ir: ProjectIR, analysisCaseId?: string): Promise<OpenFOAMExportResult & { artifact?: DownloadedArtifact }> {
   const exportIr = analysisCaseId ? scopeProjectForAnalysisCaseValidation(ir, analysisCaseId) : ir;
   const result = exportOpenFOAM(exportIr);
-  if (result.success) await downloadArtifactZip(openFoamPackageFiles(result), ir.meta.project_name, 'openfoam');
-  return result;
+  const artifact = result.success ? await downloadArtifactZip(openFoamPackageFiles(result), ir.meta.project_name, 'openfoam') : undefined;
+  return { ...result, ...(artifact ? { artifact } : {}) };
 }

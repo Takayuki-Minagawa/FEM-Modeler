@@ -1,7 +1,7 @@
 import { solverLifecycleFiles, solverRunScript } from '@/export/shared/runtime-lifecycle';
 import type { ProjectIR } from '@/core/ir/types';
 import { scopeProjectForAnalysisCaseValidation } from '@/export/compiler';
-import { downloadArtifactZip, type ArtifactFiles } from '@/export/shared/packaging';
+import { downloadArtifactZip, type ArtifactFiles, type DownloadedArtifact } from '@/export/shared/packaging';
 import { pythonRuntimeFiles } from '@/export/shared/python-runtime';
 import { exportDOLFINx } from './exporter';
 import type { DOLFINxExportResult } from './model';
@@ -26,9 +26,9 @@ mpirun -n "\${NPROC:-1}" .venv/bin/python solve.py | tee solver.log
   };
 }
 
-export async function downloadDOLFINxZip(ir: ProjectIR, analysisCaseId?: string): Promise<DOLFINxExportResult> {
+export async function downloadDOLFINxZip(ir: ProjectIR, analysisCaseId?: string): Promise<DOLFINxExportResult & { artifact?: DownloadedArtifact }> {
   const exportIr = analysisCaseId ? scopeProjectForAnalysisCaseValidation(ir, analysisCaseId) : ir;
   const result = exportDOLFINx(exportIr);
-  if (result.success) await downloadArtifactZip(dolfinxPackageFiles(result), ir.meta.project_name, 'dolfinx');
-  return result;
+  const artifact = result.success ? await downloadArtifactZip(dolfinxPackageFiles(result), ir.meta.project_name, 'dolfinx') : undefined;
+  return { ...result, ...(artifact ? { artifact } : {}) };
 }

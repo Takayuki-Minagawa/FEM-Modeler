@@ -4,21 +4,14 @@ import { GeometryForm } from '@/ui/forms/GeometryForm';
 import { NamedSelectionsForm } from '@/ui/forms/NamedSelectionsForm';
 import { MaterialForm } from '@/ui/forms/MaterialForm';
 import { SectionForm } from '@/ui/forms/SectionForm';
-import { MeshControlForm } from '@/ui/forms/MeshControlForm';
-import { BoundaryConditionForm } from '@/ui/forms/BoundaryConditionForm';
-import { LoadForm } from '@/ui/forms/LoadForm';
-import { AnalysisCaseForm } from '@/ui/forms/AnalysisCaseForm';
 import { ExportForm } from '@/ui/forms/ExportForm';
-import { ResultsForm } from '@/ui/forms/ResultsForm';
 
 const PANELS_WITH_FORMS = [
-  'geometry', 'selections', 'materials', 'sections', 'mesh',
-  'bc', 'loads', 'analysis', 'results', 'export',
+  'geometry', 'selections', 'materials', 'sections', 'export',
 ] as const;
 
 const PANEL_I18N_KEYS = [
-  'geometry', 'selections', 'materials', 'sections', 'mesh',
-  'bc', 'loads', 'analysis', 'results', 'export', 'validation',
+  'geometry', 'selections', 'materials', 'sections', 'export', 'validation',
 ] as const;
 
 const FORM_TITLES: Record<string, string> = {
@@ -26,11 +19,6 @@ const FORM_TITLES: Record<string, string> = {
   selections: 'properties.title',
   materials: 'materials.formTitle',
   sections: 'sections.formTitle',
-  mesh: 'properties.title',
-  bc: 'bc.formTitle',
-  loads: 'loads.formTitle',
-  analysis: 'properties.title',
-  results: 'properties.title',
   export: 'properties.title',
 };
 
@@ -42,7 +30,7 @@ export function RightSidebar() {
   const titleKey = FORM_TITLES[activePanel] ?? 'properties.title';
 
   return (
-    <div
+    <section aria-label={t('workflow.properties')}
       className="h-full overflow-y-auto"
       style={{ backgroundColor: 'var(--color-bg-secondary)' }}
     >
@@ -58,11 +46,6 @@ export function RightSidebar() {
         {activePanel === 'selections' && <NamedSelectionsForm />}
         {activePanel === 'materials' && <MaterialForm />}
         {activePanel === 'sections' && <SectionForm />}
-        {activePanel === 'mesh' && <MeshControlForm />}
-        {activePanel === 'bc' && <BoundaryConditionForm />}
-        {activePanel === 'loads' && <LoadForm />}
-        {activePanel === 'analysis' && <AnalysisCaseForm />}
-        {activePanel === 'results' && <ResultsForm />}
         {activePanel === 'export' && <ExportForm />}
 
         {!hasForm && (PANEL_I18N_KEYS as readonly string[]).includes(activePanel) && (
@@ -77,6 +60,6 @@ export function RightSidebar() {
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }

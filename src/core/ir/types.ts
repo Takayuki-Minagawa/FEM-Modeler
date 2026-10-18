@@ -1,3 +1,4 @@
+import type { NamedSelectionQuery } from '@/core/selections/types';
 import type { BoundaryConditionData, LoadData } from './schema/conditions';
 import type { ResultMesh } from '@/results/package';
 import type { ConvergenceStudy } from '@/results/studies';
@@ -277,6 +278,7 @@ export type NamedSelectionUsage =
   | 'export_tag';
 
 export interface NamedSelection {
+  query_definition?: NamedSelectionQuery;
   id: string;
   name: string;
   display_name?: string;
@@ -550,6 +552,15 @@ export type ResultRequest =
   | 'pressure'
   | 'reaction_force';
 
+export type ParticipationField =
+  | 'participating_material_ids'
+  | 'participating_section_ids'
+  | 'participating_bc_ids'
+  | 'participating_load_ids'
+  | 'participating_ic_ids';
+
+export type ParticipationMode = 'all' | 'explicit' | 'none';
+
 export interface AnalysisCase {
   id: string;
   name: string;
@@ -563,6 +574,8 @@ export interface AnalysisCase {
   participating_bc_ids: string[];
   participating_load_ids: string[];
   participating_ic_ids: string[];
+  /** Absent modes retain legacy semantics: empty IDs mean all, otherwise explicit. */
+  participation_modes?: Partial<Record<ParticipationField, ParticipationMode>>;
   mesh_policy_ref: string;
   solver_profile_hint: SolverProfileHint;
   result_requests: ResultRequest[];
@@ -661,6 +674,11 @@ export interface ValidationState {
   last_run_at: string;
   model_revision: number;
   validated_revision: number;
+  /** Model handoff checks are independent of legacy solver validation. */
+  model_context?: {
+    kind: 'model';
+    input_fingerprint: string;
+  };
   context?: {
     analysis_case_id: string;
     solver_target: SolverTargetName;

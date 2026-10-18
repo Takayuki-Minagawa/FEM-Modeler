@@ -1,4 +1,5 @@
 import { generateId } from '@/core/ir/id-generator';
+import { uniqueNameInSet } from '@/core/ir/names';
 import type {
   GeometryBody,
   GeometryEdge,
@@ -21,6 +22,9 @@ interface DuplicateLinearResult {
   createdBodyIds: string[];
 }
 
+export const MAX_PATTERN_COPIES = 100;
+export const MAX_PATTERN_ENTITIES = 100_000;
+
 function cloneMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
   if (typeof structuredClone === 'function') {
     return structuredClone(metadata);
@@ -34,13 +38,28 @@ export function duplicateBodiesLinear(
   copies: number,
   offset: [number, number, number],
 ): DuplicateLinearResult {
-  if (copies < 1 || bodyIds.length === 0) {
+  if (!Number.isInteger(copies) || copies < 1 || copies > MAX_PATTERN_COPIES) {
+    throw new Error(`Copies must be an integer between 1 and ${MAX_PATTERN_COPIES}. / 複製数は1〜${MAX_PATTERN_COPIES}の整数にしてください。`);
+  }
+  if (!offset.every(Number.isFinite)) throw new Error('Pattern offsets must be finite numbers. / オフセットには有限の数値を指定してください。');
+  if (bodyIds.length === 0) {
     return { bodies: [], faces: [], edges: [], vertices: [], createdBodyIds: [] };
   }
 
   const selectedBodies = geometry.bodies.filter((body) => bodyIds.includes(body.id));
   if (selectedBodies.length === 0) {
     return { bodies: [], faces: [], edges: [], vertices: [], createdBodyIds: [] };
+  }
+  const selected = new Set(selectedBodies.map((body) => body.id));
+  const entityCount = selectedBodies.length
+    + geometry.faces.filter((entity) => selected.has(entity.body_id)).length
+    + geometry.edges.filter((entity) => selected.has(entity.body_id)).length
+    + geometry.vertices.filter((entity) => selected.has(entity.body_id)).length;
+  if (entityCount * copies > MAX_PATTERN_ENTITIES) {
+    throw new Error(`A pattern may create at most ${MAX_PATTERN_ENTITIES.toLocaleString('en-US')} entities. Reduce the copies or selected bodies. / 複製数または選択ボディ数を減らしてください。`);
+  }
+  if (selectedBodies.some((body) => body.transform.position.some((value, axis) => !Number.isFinite(value + offset[axis] * copies)))) {
+    throw new Error('Pattern positions exceed the finite coordinate range. / 複製位置が数値の範囲を超えています。');
   }
 
   const facesByBody = new Map<string, GeometryFace[]>();
@@ -79,6 +98,7 @@ export function duplicateBodiesLinear(
   const newEdges: GeometryEdge[] = [];
   const newVertices: GeometryVertex[] = [];
   const createdBodyIds: string[] = [];
+  const usedNames = new Set(geometry.bodies.map((body) => body.name));
 
   for (let copyIndex = 1; copyIndex <= copies; copyIndex += 1) {
     for (const body of selectedBodies) {
@@ -87,11 +107,13 @@ export function duplicateBodiesLinear(
       const bodyEdges = edgesByBody.get(body.id) ?? [];
       const bodyFaces = facesByBody.get(body.id) ?? [];
       const newBodyId = generateId('body');
+      const name = uniqueNameInSet(`${body.name} Copy ${copyIndex}`, usedNames);
+      usedNames.add(name);
 
       const clonedBody: GeometryBody = {
         ...body,
         id: newBodyId,
-        name: `${body.name} Copy ${copyIndex}`,
+        name,
         transform: {
           position: [
             body.transform.position[0] + offset[0] * copyIndex,

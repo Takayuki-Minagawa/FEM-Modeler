@@ -21,7 +21,18 @@ export interface DraftPersistenceState {
 
 export type ExportHistoryStatus = 'success' | 'warning' | 'error';
 
-export interface ExportHistoryEntry {
+export interface ExportHistoryContext {
+  projectId: string;
+  projectName: string;
+  analysisCaseId?: string;
+  analysisCaseName?: string;
+  revision: number;
+  fileName?: string;
+  bytes?: number;
+  operationId?: string;
+}
+
+export interface ExportHistoryEntry extends ExportHistoryContext {
   id: string;
   target: string;
   timestamp: string;
@@ -46,15 +57,16 @@ export interface AppContextValue {
   activityLog: ActivityLogEntry[];
   addActivity: (level: ActivityLogLevel, message: string) => void;
   clearActivityLog: () => void;
-  saveProjectFile: () => void;
+  saveProjectFile: (operationId?: string) => void;
   transitionProject: (replace: () => void) => Promise<{ success: boolean; error?: string }>;
   readiness: 'initializing' | 'awaiting_restore' | 'editing';
   recentProjects: DraftSummary[];
   listDraftVersions: (projectId: string) => Promise<DraftSummary[]>;
   restoreDraft: (projectId?: string, versionId?: string) => Promise<boolean>;
   discardDraft: (projectId?: string) => Promise<void>;
+  renameDraft: (projectId: string, name: string, versionId: string) => Promise<{ success: boolean; error?: string }>;
   exportHistory: ExportHistoryEntry[];
-  recordExportResult: (target: string, errors: string[], warnings: string[]) => void;
+  recordExportResult: (target: string, errors: string[], warnings: string[], context?: ExportHistoryContext) => void;
   clearExportHistory: () => void;
 }
 

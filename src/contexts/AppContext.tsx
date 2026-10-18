@@ -3,7 +3,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { useProjectDraftPersistence } from '@/hooks/useProjectDraftPersistence';
 import { generateId } from '@/core/ir/id-generator';
 import { AppContext, AppUiContext, AppActionsContext } from './app-context-value';
-import type { ExportHistoryEntry, ExportHistoryStatus } from './app-context-value';
+import type { ExportHistoryContext, ExportHistoryEntry, ExportHistoryStatus } from './app-context-value';
+import { useAppStore } from '@/state/store';
 
 const MAX_EXPORT_HISTORY = 30;
 
@@ -14,14 +15,16 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
   const [exportHistory, setExportHistory] = useState<ExportHistoryEntry[]>([]);
   const draftPersistence = useProjectDraftPersistence();
 
-  const recordExportResult = useCallback((target: string, errors: string[], warnings: string[]) => {
+  const recordExportResult = useCallback((target: string, errors: string[], warnings: string[], context?: ExportHistoryContext) => {
     const status: ExportHistoryStatus = errors.length > 0
       ? 'error'
       : warnings.length > 0
         ? 'warning'
         : 'success';
 
+    const ir = useAppStore.getState().ir;
     const entry: ExportHistoryEntry = {
+      ...(context ?? { projectId: ir.meta.project_id, projectName: ir.meta.project_name, revision: ir.validation.model_revision }),
       id: generateId('log'),
       target,
       timestamp: new Date().toISOString(),
@@ -45,9 +48,10 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
   const closeImport = useCallback(() => setImportOpen(false), []);
   const downloadDraftFile = draftPersistence.saveProjectFile;
 
-  const saveProjectFile = useCallback(() => {
-    downloadDraftFile();
-    recordExportResult('JSON', [], []);
+  const saveProjectFile = useCallback((operationId?: string) => {
+    const ir = useAppStore.getState().ir;
+    const artifact = downloadDraftFile();
+    recordExportResult('JSON', [], [], { projectId: ir.meta.project_id, projectName: ir.meta.project_name, revision: ir.validation.model_revision, ...(operationId ? { operationId } : {}), ...artifact });
   }, [downloadDraftFile, recordExportResult]);
 
   const value = useMemo(() => ({

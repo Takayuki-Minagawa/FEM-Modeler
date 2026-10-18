@@ -2,6 +2,7 @@ import type { ProjectIR, ValidationItem } from '@/core/ir/types';
 import { createItem } from '../types';
 import { validateReferences } from '@/core/ir/relations';
 import { calculateSectionProperties } from '@/core/sections/properties';
+import { sectionTargetIssue } from '@/core/sections/assignment';
 
 const ENTITY_DIMENSION: Record<string, number> = {
   vertex: 0,
@@ -60,8 +61,9 @@ export function validateCommon(ir: ProjectIR): ValidationItem[] {
     const usedInBC = ir.boundary_conditions.some((bc) => bc.target_named_selection_id === ns.id);
     const usedInLoad = ir.loads.some((l) => l.target_named_selection_id === ns.id);
     const usedInIC = ir.initial_conditions.some((ic) => ic.target_named_selection_id === ns.id);
-    if (!usedInMat && !usedInSec && !usedInBC && !usedInLoad && !usedInIC) {
-      items.push(createItem('info', 'UNUSED_NS', `Unused named selection: ${ns.display_name ?? ns.name}`, 'This named selection is not referenced by any material, section, BC, load, or initial condition.', ns.id, 'Assign a condition to it or remove it if unnecessary.'));
+    const usedInMesh = ir.mesh_controls.local.some((control) => control.target_named_selection_id === ns.id);
+    if (!usedInMat && !usedInSec && !usedInBC && !usedInLoad && !usedInIC && !usedInMesh) {
+      items.push(createItem('info', 'UNUSED_NS', `Unused named selection: ${ns.display_name ?? ns.name}`, 'This named selection is not referenced by any material, section, BC, load, initial condition, or local mesh control.', ns.id, 'Assign a condition to it or remove it if unnecessary.'));
     }
   }
 
@@ -142,7 +144,11 @@ export function validateCommon(ir: ProjectIR): ValidationItem[] {
   }
   for (const assignment of ir.section_assignments) {
     const selection = selectionsById.get(assignment.target_named_selection_id);
-    if (selection && selection.target_dimension !== 1 && selection.target_dimension !== 3) items.push(createItem('error', 'SECTION_TARGET_DIMENSION', 'Section assigned to incompatible entities', 'Frame sections require an edge/member or beam-region body selection.', assignment.id, 'Choose an edge or beam body selection.', false));
+    const section = ir.sections.find((candidate) => candidate.id === assignment.section_id);
+    if (selection && section && sectionTargetIssue(section.section_type, selection, ir.geometry.bodies)) {
+      const shell = section.section_type === 'shell_thickness';
+      items.push(createItem('error', 'SECTION_TARGET_DIMENSION', 'Section assigned to incompatible entities', shell ? 'Shell thickness requires a dimension-2 surface selection.' : 'Frame sections require an edge/member or beam-region body selection.', assignment.id, shell ? 'Choose a face selection.' : 'Choose an edge or beam body selection.', false));
+    }
   }
 
   // Frame/truss domain with no sections

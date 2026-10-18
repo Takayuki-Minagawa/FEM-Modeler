@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect } from 'vitest';
 import { performance } from 'node:perf_hooks';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { platform, arch, cpus } from 'node:os';
 import { createDefaultProject } from '@/core/ir/defaults';
 import { createUndoRedoManager } from './legacy-undo-manager.fixture';
@@ -49,7 +50,9 @@ describe.skipIf(process.env.FEM_PERFORMANCE !== '1')('history and autosave perfo
       reports.push({ fixture: name, edits: 100, baselineP95Ms: percentile95(beforeTimes), currentP95Ms: percentile95(afterTimes), baselineSerializedPatchBytes, currentEstimatedHistoryBytes: getHistoryStats().estimatedBytes, fullJsonMs, estimate100Ms, initialSaveMs, warmSaveMs });
       await clearProjectDraft();
     }
-    writeFileSync('tests/performance/latest-results.json', JSON.stringify({ measuredAt: new Date().toISOString(), node: process.version, platform: `${platform()} ${arch()}`, cpu: cpus()[0]?.model, note: 'Node/fake-indexeddb microbenchmark; synthetic STL payload; initial import/freeze is outside edit timings. Byte columns are different conservative proxies, not heap measurements. Save includes hashing, serialization, and IndexedDB transaction; browser measurements may differ.', reports }, null, 2) + '\n');
+    const output = process.env.FEM_PERFORMANCE_OUTPUT_DIR ?? 'tests/performance';
+    mkdirSync(output, { recursive: true });
+    writeFileSync(join(output, 'latest-results.json'), JSON.stringify({ measuredAt: new Date().toISOString(), node: process.version, platform: `${platform()} ${arch()}`, cpu: cpus()[0]?.model, note: 'Node/fake-indexeddb microbenchmark; synthetic STL payload; initial import/freeze is outside edit timings. Byte columns are different conservative proxies, not heap measurements. Save includes hashing, serialization, and IndexedDB transaction; browser measurements may differ.', reports }, null, 2) + '\n');
     expect(reports).toHaveLength(3);
   }, 180_000);
 });

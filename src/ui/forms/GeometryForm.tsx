@@ -1,236 +1,37 @@
+import { shapesJa, shapesEn } from '@/i18n/locales/shapes';
+import { geometryEditorJa, geometryEditorEn } from '@/i18n/locales/geometry-editor';
 import { useState } from 'react';
-import { regeneratePrimitive, REGENERABLE_PARAMETERS } from '@/geometry/regeneration';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
-import { generateShape, DEFAULT_SHAPE_PARAMS } from '@/geometry/primitives/generators';
-import { shapesJa, shapesEn, paramLabelsJa, paramLabelsEn } from '@/i18n/locales/shapes';
-import type { AnyShapeParams } from '@/geometry/primitives/types';
-import type { GeometryBody } from '@/core/ir/types';
-import type { UnitSystemName } from '@/core/ir/types';
-import { fromSI, quantityUnitLabel, toSI } from '@/core/units';
-
-const SHAPE_TYPES = Object.keys(DEFAULT_SHAPE_PARAMS);
-const PARAM_EXCLUDE = ['shapeType'];
-const AXIS_LABELS = ['X', 'Y', 'Z'] as const;
-const COUNT_PARAMS = new Set(['segments', 'columns', 'floors', 'divisions']);
-
-type TupleInput = [string, string, string];
-
-function formatTuple(values: [number, number, number]): TupleInput {
-  return values.map((value) => `${Number(value.toFixed(4))}`) as TupleInput;
-}
-
-function parseTuple(values: TupleInput, fallback: [number, number, number]): [number, number, number] {
-  return values.map((value, index) => {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : fallback[index];
-  }) as [number, number, number];
-}
-
-function parseScale(values: TupleInput, fallback: [number, number, number]): [number, number, number] {
-  return values.map((value, index) => {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback[index];
-  }) as [number, number, number];
-}
-
-function updateTupleInput(
-  tuple: TupleInput,
-  index: number,
-  nextValue: string,
-): TupleInput {
-  const next = [...tuple] as TupleInput;
-  next[index] = nextValue;
-  return next;
-}
-
-function estimatePatternOffset(body: GeometryBody | null): TupleInput {
-  if (!body) {
-    return ['2', '0', '0'];
-  }
-
-  const meta = body.metadata;
-  const scaleX = Math.max(Math.abs(body.transform.scale[0]), 0.01);
-  const shapeType = meta.shapeType as string | undefined;
-  let stepX = 2;
-
-  switch (shapeType) {
-    case 'box':
-    case 'plate':
-    case 'plateWithHole':
-    case 'lBracket':
-      stepX = Number(meta.width ?? 2) * scaleX;
-      break;
-    case 'cylinder':
-      stepX = Number(meta.radius ?? 1) * 2 * scaleX;
-      break;
-    case 'pipe':
-      stepX = Number(meta.outerRadius ?? 1) * 2 * scaleX;
-      break;
-    case 'frame2d':
-      stepX = Number(meta.spanX ?? 6) * scaleX;
-      break;
-    case 'truss2d':
-      stepX = Number(meta.span ?? 10) * scaleX;
-      break;
-    case 'channel':
-      stepX = Number(meta.length ?? 6) * scaleX;
-      break;
-    default:
-      stepX = 2;
-      break;
-  }
-
-  return [`${Number((stepX + 0.5).toFixed(4))}`, '0', '0'];
-}
-
-function bodyEditorKey(body: GeometryBody): string {
-  const { position, rotation, scale } = body.transform;
-  return `${body.id}:${body.name}:${body.visible}:${position}:${rotation}:${scale}`;
-}
+import { REGENERABLE_PARAMETERS } from '@/geometry/regeneration';
+import { ShapeCreation } from './geometry/ShapeCreation';
+import { BodyTransformEditor } from './geometry/BodyTransformEditor';
+import { LinearPatternEditor } from './geometry/LinearPatternEditor';
+import { DimensionEditor } from './geometry/DimensionEditor';
+import { bodyEditorKey, estimatePatternOffset } from './geometry/body-editing';
 
 export function GeometryForm() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const ir = useAppStore((s) => s.ir);
   const removeBodies = useAppStore((s) => s.removeBodies);
   const updateBody = useAppStore((s) => s.updateBody);
   const duplicateBodiesLinear = useAppStore((s) => s.duplicateBodiesLinear);
   const setSelectedEntities = useAppStore((s) => s.setSelectedEntities);
   const selectedIds = useAppStore((s) => s.selectedEntityIds);
-
-  const [creationError, setCreationError] = useState('');
-  const [selectedShape, setSelectedShape] = useState('box');
-  const [params, setParams] = useState<Record<string, unknown>>(
-    () => ({ ...DEFAULT_SHAPE_PARAMS['box'] }),
-  );
-
-  const isJa = i18n.language === 'ja';
-  const shapeNames = isJa ? shapesJa : shapesEn;
-  const paramLabels = isJa ? paramLabelsJa : paramLabelsEn;
-  const bodies = ir.geometry.bodies;
   const unitSystem = ir.units.system_name;
-  const lengthUnit = quantityUnitLabel('length', unitSystem);
+  const isJa = i18n.language === 'ja';
+  const copy = isJa ? geometryEditorJa : geometryEditorEn;
+  const [patternStatus, setPatternStatus] = useState('');
+  const bodies = ir.geometry.bodies;
   const selectedBodies = bodies.filter((body) => selectedIds.includes(body.id));
-  const selectedBody = selectedIds.length === 1
-    ? bodies.find((body) => body.id === selectedIds[0]) ?? null
-    : null;
-
-  const handleShapeChange = (type: string) => {
-    setSelectedShape(type);
-    setParams({ ...DEFAULT_SHAPE_PARAMS[type] });
-  };
-
-  const handleParamChange = (key: string, value: string) => {
-    const num = parseFloat(value);
-    if (!isNaN(num)) {
-      setParams((prev) => ({
-        ...prev,
-        [key]: COUNT_PARAMS.has(key) ? Math.max(1, Math.round(num)) : toSI(num, 'length', unitSystem),
-      }));
-    }
-  };
-
-  const handleCreate = () => {
-    try {
-    const shapeParams = { ...params, shapeType: selectedShape } as AnyShapeParams;
-    const result = generateShape(shapeParams, shapeNames[selectedShape]);
-    const store = useAppStore.getState();
-    store.addBodyWithTopology(result.body, {
-      faces: result.faces,
-      edges: result.edges,
-      vertices: result.vertices,
-    });
-    result.threeGeometry.dispose();
-    setCreationError('');
-    } catch (error) { setCreationError(error instanceof Error ? error.message : String(error)); }
-  };
-
+  const selectedBody = selectedIds.length === 1 ? bodies.find((body) => body.id === selectedIds[0]) ?? null : null;
   const handleDeleteSelected = () => {
     removeBodies(selectedBodies.map((body) => body.id));
     setSelectedEntities([]);
   };
-
-  const paramKeys = Object.keys(params).filter((k) => !PARAM_EXCLUDE.includes(k));
-
   return (
     <div className="space-y-4">
-      {/* Shape creation */}
-      <div>
-        <label
-          className="block text-sm font-bold mb-2"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          {isJa ? '形状タイプ' : 'Shape Type'}
-        </label>
-        <div className="grid grid-cols-3 gap-1.5">
-          {SHAPE_TYPES.map((type) => (
-            <button
-              key={type}
-              onClick={() => handleShapeChange(type)}
-              className="px-2 py-2 rounded text-xs text-center transition-colors cursor-pointer"
-              style={{
-                backgroundColor: selectedShape === type ? 'var(--color-accent)' : 'var(--color-bg-input)',
-                color: selectedShape === type ? '#fff' : 'var(--color-text-secondary)',
-                border: `1px solid ${selectedShape === type ? 'var(--color-accent)' : 'var(--color-border)'}`,
-              }}
-            >
-              {shapeNames[type]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Parameters */}
-      <div>
-        <label
-          className="block text-sm font-bold mb-2"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          {isJa ? 'パラメータ' : 'Parameters'}
-        </label>
-        <div className="space-y-2">
-          {paramKeys.map((key) => (
-            <div key={key} className="flex items-center gap-2">
-              <label
-                htmlFor={`geometry-param-${key}`}
-                className="text-sm w-24 shrink-0"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                {paramLabels[key] ?? key}
-              </label>
-              <input
-                id={`geometry-param-${key}`}
-                type="number"
-                value={COUNT_PARAMS.has(key) ? params[key] as number : fromSI(params[key] as number, 'length', unitSystem)}
-                onChange={(e) => handleParamChange(key, e.target.value)}
-                step={COUNT_PARAMS.has(key) ? 1 : 0.1}
-                min={0.01}
-                className="flex-1 px-2 py-1.5 rounded text-sm outline-none"
-                style={{
-                  backgroundColor: 'var(--color-bg-input)',
-                  color: 'var(--color-text)',
-                  border: '1px solid var(--color-border)',
-                }}
-              />
-              {!COUNT_PARAMS.has(key) && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{lengthUnit}</span>}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Create button */}
-      <button
-        onClick={handleCreate}
-        className="w-full py-2.5 rounded text-sm font-bold cursor-pointer transition-colors"
-        style={{
-          backgroundColor: 'var(--color-accent)',
-          color: '#fff',
-        }}
-      >
-        {isJa ? '形状を作成' : 'Create Shape'}
-      </button>
-
-      {creationError && <p role="alert" className="text-xs" style={{ color: "var(--color-error)" }}>{creationError}</p>}
+      <ShapeCreation isJa={isJa} unitSystem={unitSystem} />
       {/* Existing bodies list */}
       {bodies.length > 0 && (
         <div>
@@ -238,7 +39,7 @@ export function GeometryForm() {
             className="block text-sm font-bold mb-2"
             style={{ color: 'var(--color-text-muted)' }}
           >
-            {isJa ? '作成済みボディ' : 'Bodies'}
+            {copy.bodies}
           </label>
           <div className="space-y-1">
             {bodies.map((body) => {
@@ -246,30 +47,30 @@ export function GeometryForm() {
               return (
                 <div
                   key={body.id}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded text-sm cursor-pointer"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded text-sm"
                   style={{
                     backgroundColor: isSelected ? 'var(--color-bg-panel)' : 'var(--color-bg-input)',
                     color: 'var(--color-text-secondary)',
                   }}
-                  onClick={() => useAppStore.getState().setSelectedEntities([body.id])}
                 >
                   <span
                     className="w-3 h-3 rounded-sm shrink-0"
                     style={{ backgroundColor: body.color }}
                   />
-                  <span className="flex-1 truncate">
+                  <button type="button" data-entity-id={body.id} aria-label={t('workflow.selectEntity', { name: `${body.name} (${body.id})` })} aria-pressed={isSelected} onClick={() => useAppStore.getState().setSelectedEntities([body.id])} className="flex-1 truncate text-left cursor-pointer">
                     {body.name}
                     {!body.visible && (
                       <span className="ml-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                        {isJa ? '非表示' : 'Hidden'}
+                        {copy.hidden}
                       </span>
                     )}
-                  </span>
+                  </button>
                   <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                    {(body.metadata.shapeType as string) ?? ''}
+                    {(isJa ? shapesJa : shapesEn)[String(body.metadata.shapeType)] ?? String(body.metadata.shapeType ?? '')}
                   </span>
                   <button
                     type="button"
+                    aria-label={`${body.visible ? (copy.hide) : (copy.show)}: ${body.name}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       updateBody(body.id, { visible: !body.visible });
@@ -282,8 +83,8 @@ export function GeometryForm() {
                     }}
                   >
                     {body.visible
-                      ? (isJa ? '隠す' : 'Hide')
-                      : (isJa ? '表示' : 'Show')}
+                      ? (copy.hideShort)
+                      : (copy.show)}
                   </button>
                 </div>
               );
@@ -300,14 +101,14 @@ export function GeometryForm() {
                 border: '1px solid var(--color-error)',
               }}
             >
-              {isJa ? '選択を削除' : 'Delete Selected'}
+              {copy.deleteSelected}
             </button>
           )}
         </div>
       )}
 
       {selectedBody && (
-        <BodyEditor
+        <BodyTransformEditor
           key={`${bodyEditorKey(selectedBody)}:${unitSystem}`}
           body={selectedBody}
           isJa={isJa}
@@ -316,7 +117,7 @@ export function GeometryForm() {
         />
       )}
 
-      {selectedBody && REGENERABLE_PARAMETERS[String(selectedBody.metadata.shapeType)] && <DimensionEditor key={`${selectedBody.id}:${JSON.stringify(selectedBody.metadata)}:${unitSystem}`} body={selectedBody} isJa={isJa} unitSystem={unitSystem} />}
+      {selectedBody && REGENERABLE_PARAMETERS[String(selectedBody.metadata.shapeType)] && <DimensionEditor key={`${selectedBody.id}:${JSON.stringify(selectedBody.metadata)}:${unitSystem}`} body={selectedBody} isJa={isJa} unitSystem={unitSystem} onApplied={setPatternStatus} />}
 
       {selectedBodies.length > 0 && (
         <LinearPatternEditor
@@ -329,271 +130,12 @@ export function GeometryForm() {
             const createdIds = duplicateBodiesLinear(selectedBodies.map((body) => body.id), copies, offset);
             if (createdIds.length > 0) {
               setSelectedEntities(createdIds);
+              setPatternStatus(copy.patternCreated.replace('{{count}}', String(createdIds.length)));
             }
           }}
         />
       )}
+      {patternStatus && <p role="status" className="text-xs">{patternStatus}</p>}
     </div>
   );
-}
-
-interface BodyEditorProps {
-  body: GeometryBody;
-  isJa: boolean;
-  unitSystem: UnitSystemName;
-  onApply: (updates: {
-    name: string;
-    visible: boolean;
-    transform: {
-      position: [number, number, number];
-      rotation: [number, number, number];
-      scale: [number, number, number];
-    };
-  }) => void;
-}
-
-function BodyEditor({ body, isJa, unitSystem, onApply }: BodyEditorProps) {
-  const [bodyName, setBodyName] = useState(body.name);
-  const [bodyVisible, setBodyVisible] = useState(body.visible);
-  const [positionInputs, setPositionInputs] = useState<TupleInput>(formatTuple(body.transform.position.map((value) => fromSI(value, 'length', unitSystem)) as [number, number, number]));
-  const [rotationInputs, setRotationInputs] = useState<TupleInput>(formatTuple(body.transform.rotation));
-  const [scaleInputs, setScaleInputs] = useState<TupleInput>(formatTuple(body.transform.scale));
-
-  return (
-    <div className="space-y-3">
-      <label
-        className="block text-sm font-bold"
-        style={{ color: 'var(--color-text-muted)' }}
-      >
-        {isJa ? 'ボディ編集' : 'Body Edit'}
-      </label>
-
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <span className="text-sm w-24 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>
-            {isJa ? '名前' : 'Name'}
-          </span>
-          <input
-            type="text"
-            value={bodyName}
-            onChange={(e) => setBodyName(e.target.value)}
-            className="flex-1 px-2 py-1.5 rounded text-sm outline-none"
-            style={{
-              backgroundColor: 'var(--color-bg-input)',
-              color: 'var(--color-text)',
-              border: '1px solid var(--color-border)',
-            }}
-          />
-        </div>
-
-        <label
-          className="flex items-center gap-2 text-sm"
-          style={{ color: 'var(--color-text-secondary)' }}
-        >
-          <input
-            type="checkbox"
-            checked={bodyVisible}
-            onChange={(e) => setBodyVisible(e.target.checked)}
-          />
-          {isJa ? '表示する' : 'Visible'}
-        </label>
-      </div>
-
-      <TupleEditor
-        label={isJa ? '移動' : 'Position'}
-        values={positionInputs}
-        onChange={setPositionInputs}
-        step="0.1"
-        unit={quantityUnitLabel('length', unitSystem)}
-      />
-      <TupleEditor
-        label={isJa ? '回転 (deg)' : 'Rotation (deg)'}
-        values={rotationInputs}
-        onChange={setRotationInputs}
-        step="1"
-      />
-      <TupleEditor
-        label={isJa ? 'スケール' : 'Scale'}
-        values={scaleInputs}
-        onChange={setScaleInputs}
-        step="0.1"
-        min="0.01"
-      />
-
-      <button
-        type="button"
-        onClick={() => {
-          const nextName = bodyName.trim();
-          onApply({
-            name: nextName.length > 0 ? nextName : body.name,
-            visible: bodyVisible,
-            transform: {
-              position: parseTuple(
-                positionInputs,
-                body.transform.position.map((value) => fromSI(value, 'length', unitSystem)) as [number, number, number],
-              ).map((value) => toSI(value, 'length', unitSystem)) as [number, number, number],
-              rotation: parseTuple(rotationInputs, body.transform.rotation),
-              scale: parseScale(scaleInputs, body.transform.scale),
-            },
-          });
-        }}
-        className="w-full py-2 rounded text-sm font-bold cursor-pointer transition-colors"
-        style={{
-          backgroundColor: 'var(--color-bg-input)',
-          color: 'var(--color-text)',
-          border: '1px solid var(--color-border)',
-        }}
-      >
-        {isJa ? '編集を適用' : 'Apply Edits'}
-      </button>
-    </div>
-  );
-}
-
-interface LinearPatternEditorProps {
-  bodyIds: string[];
-  defaultOffset: TupleInput;
-  isJa: boolean;
-  unitSystem: UnitSystemName;
-  onCreate: (copies: number, offset: [number, number, number]) => void;
-}
-
-function LinearPatternEditor({
-  bodyIds,
-  defaultOffset,
-  isJa,
-  unitSystem,
-  onCreate,
-}: LinearPatternEditorProps) {
-  const [patternCopies, setPatternCopies] = useState('1');
-  const [patternOffset, setPatternOffset] = useState<TupleInput>(() => defaultOffset.map((value) => `${fromSI(Number(value), 'length', unitSystem)}`) as TupleInput);
-
-  return (
-    <div className="space-y-3">
-      <label
-        className="block text-sm font-bold"
-        style={{ color: 'var(--color-text-muted)' }}
-      >
-        {isJa ? '線形パターン複製' : 'Linear Pattern'}
-      </label>
-
-      <div className="flex items-center gap-2">
-        <span className="text-sm w-24 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>
-          {isJa ? '複製数' : 'Copies'}
-        </span>
-        <input
-          type="number"
-          min={1}
-          step={1}
-          value={patternCopies}
-          onChange={(e) => setPatternCopies(e.target.value)}
-          className="flex-1 px-2 py-1.5 rounded text-sm outline-none"
-          style={{
-            backgroundColor: 'var(--color-bg-input)',
-            color: 'var(--color-text)',
-            border: '1px solid var(--color-border)',
-          }}
-        />
-      </div>
-
-      <TupleEditor
-        label={isJa ? 'オフセット' : 'Offset'}
-        values={patternOffset}
-        onChange={setPatternOffset}
-        step="0.1"
-        unit={quantityUnitLabel('length', unitSystem)}
-      />
-
-      <button
-        type="button"
-        onClick={() => {
-          const copies = Math.max(0, Math.floor(Number.parseInt(patternCopies, 10) || 0));
-          if (copies < 1 || bodyIds.length === 0) {
-            return;
-          }
-          onCreate(copies, parseTuple(patternOffset, [2, 0, 0]).map((value) => toSI(value, 'length', unitSystem)) as [number, number, number]);
-        }}
-        className="w-full py-2 rounded text-sm font-bold cursor-pointer transition-colors"
-        style={{
-          backgroundColor: 'var(--color-accent)',
-          color: '#fff',
-        }}
-      >
-        {isJa ? 'パターン複製を作成' : 'Create Pattern Copies'}
-      </button>
-    </div>
-  );
-}
-
-interface TupleEditorProps {
-  label: string;
-  values: TupleInput;
-  onChange: (values: TupleInput) => void;
-  step: string;
-  min?: string;
-  unit?: string;
-}
-
-function TupleEditor({
-  label,
-  values,
-  onChange,
-  step,
-  min,
-  unit,
-}: TupleEditorProps) {
-  return (
-    <div>
-      <label
-        className="block text-sm font-bold mb-2"
-        style={{ color: 'var(--color-text-muted)' }}
-      >
-        {label}{unit ? ` [${unit}]` : ''}
-      </label>
-      <div className="grid grid-cols-3 gap-2">
-        {AXIS_LABELS.map((axis, index) => (
-          <div key={axis} className="space-y-1">
-            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              {axis}
-            </span>
-            <input
-              aria-label={`${label} ${axis}`}
-              type="number"
-              value={values[index]}
-              onChange={(e) => onChange(updateTupleInput(values, index, e.target.value))}
-              step={step}
-              min={min}
-              className="w-full px-2 py-1.5 rounded text-sm outline-none"
-              style={{
-                backgroundColor: 'var(--color-bg-input)',
-                color: 'var(--color-text)',
-                border: '1px solid var(--color-border)',
-              }}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DimensionEditor({ body, isJa, unitSystem }: { body: GeometryBody; isJa: boolean; unitSystem: UnitSystemName }) {
-  const keys = REGENERABLE_PARAMETERS[String(body.metadata.shapeType)];
-  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(keys.map((key) => [key, String(key === 'segments' ? body.metadata[key] : fromSI(Number(body.metadata[key]), 'length', unitSystem))])));
-  const [error, setError] = useState('');
-  return <section className="space-y-2 p-3 rounded" style={{ backgroundColor: 'var(--color-bg-input)' }}>
-    <h3 className="text-sm font-bold">{isJa ? '寸法を再編集' : 'Edit primitive dimensions'}</h3>
-    <p className="text-xs">{isJa ? '面の役割から選択と条件を引き継ぎます。対応できない選択はstaleになります。' : 'Selections and conditions follow semantic face roles. Unmatched selections become stale.'}</p>
-    {keys.map((key) => <label key={key} className="flex items-center justify-between text-xs gap-2">{(isJa ? paramLabelsJa : paramLabelsEn)[key] ?? key} [{key === 'segments' ? '—' : quantityUnitLabel('length', unitSystem)}]
-      <input type="number" aria-label={`Dimension ${key}`} className="w-24" value={values[key]} min={key === 'segments' ? 3 : 0} step={key === 'segments' ? 1 : 'any'} onChange={(e) => setValues({ ...values, [key]: e.target.value })} />
-    </label>)}
-    <button type="button" disabled={body.locked} className="w-full py-2 rounded text-sm" style={{ backgroundColor: 'var(--color-accent)', color: '#fff' }} onClick={() => {
-      try {
-        const parameters = Object.fromEntries(keys.map((key) => [key, key === 'segments' ? Number(values[key]) : toSI(Number(values[key]), 'length', unitSystem)]));
-        useAppStore.getState().mutateIR('Regenerate primitive dimensions', (ir) => regeneratePrimitive(ir, body.id, parameters));
-        setError('');
-      } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    }}>{isJa ? '寸法を適用' : 'Apply dimensions'}</button>
-    {error && <p role="alert" className="text-xs" style={{ color: 'var(--color-error)' }}>{error}</p>}
-  </section>;
 }

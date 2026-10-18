@@ -1,12 +1,13 @@
 import { renderSolverFiles } from './render';
 import { createExportProvenance } from '@/core/ir/provenance';
+import { channelHydraulicDiameter, channelReynoldsNumber, laminarChannelError, validateChannelGeometry } from '@/core/physics/channel-flow';
 import type {
   ProjectIR
 } from '@/core/ir/types';
 import { applyTransformToPoint } from '@/geometry/transforms';
 import { earlyFailure, makeManifest } from './manifest';
 import type { OpenFOAMExportResult } from './model';
-import { foamNumber, renderBlockMeshDict } from './render';
+import { renderBlockMeshDict } from './render';
 import { MAX_CELLS_PER_DIRECTION, MAX_TOTAL_CELLS, resolveConvertToMeters, resolveInletVelocity, resolveMaterialProperties, resolvePatches, resolvePressure, resolveSimulationMode, validateBlockMeshControls, VALIDATED_BUT_NOT_CONSUMED_MESH_FIELDS, validateInletVelocityDirection, validateSolverSelection } from './resolve';
 
 export function exportOpenFOAM(ir: ProjectIR): OpenFOAMExportResult {
@@ -34,39 +35,11 @@ export function exportOpenFOAM(ir: ProjectIR): OpenFOAMExportResult {
     return earlyFailure(ir, errors, warnings);
   }
 
-  const dimensions = {
-    length: body.metadata.length,
-    height: body.metadata.height,
-    depth: body.metadata.depth,
-  };
-  for (const [name, value] of Object.entries(dimensions)) {
-    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-      errors.push(`Channel ${name} must be a finite number greater than zero.`);
-    }
-  }
-  if (errors.some((error) => error.startsWith('Channel '))) {
-    return earlyFailure(ir, errors, warnings);
-  }
-  const L = dimensions.length as number;
-  const H = dimensions.height as number;
-  const D = dimensions.depth as number;
-
-  for (const [axis, value] of body.transform.scale.entries()) {
-    if (!Number.isFinite(value) || value <= 0) {
-      errors.push(`Channel transform scale[${axis}] must be finite and greater than zero.`);
-    }
-  }
-  for (const [field, values] of [
-    ['position', body.transform.position],
-    ['rotation', body.transform.rotation],
-  ] as const) {
-    if (values.some((value) => !Number.isFinite(value))) {
-      errors.push(`Channel transform ${field} must contain only finite values.`);
-    }
-  }
-  if (errors.some((error) => error.startsWith('Channel transform'))) {
-    return earlyFailure(ir, errors, warnings);
-  }
+  validateChannelGeometry(body, errors);
+  if (errors.some((error) => error.startsWith('Channel '))) return earlyFailure(ir, errors, warnings);
+  const L = body.metadata.length as number;
+  const H = body.metadata.height as number;
+  const D = body.metadata.depth as number;
 
   const { mode, frontBackType } = resolveSimulationMode(
     body,
@@ -118,18 +91,13 @@ export function exportOpenFOAM(ir: ProjectIR): OpenFOAMExportResult {
     errors,
     warnings,
   );
-  const hydraulicDiameter = (mode === '2D'
-    ? 2 * scaledDimensions.height
-    : 2 * scaledDimensions.height * scaledDimensions.depth
-    / (scaledDimensions.height + scaledDimensions.depth)) * convertToMeters;
-  const reynoldsNumber = inletVelocity && material.kinematicViscosity !== undefined
-    ? Math.hypot(...inletVelocity) * hydraulicDiameter / material.kinematicViscosity
+  const hydraulicDiameter = channelHydraulicDiameter(mode, scaledDimensions.height * convertToMeters, scaledDimensions.depth * convertToMeters);
+  const reynoldsNumber = inletVelocity && hydraulicDiameter !== null && material.kinematicViscosity !== undefined
+    ? channelReynoldsNumber(Math.hypot(...inletVelocity), hydraulicDiameter, material.kinematicViscosity)
     : null;
-  if (reynoldsNumber !== null && (!Number.isFinite(reynoldsNumber) || reynoldsNumber >= 2300)) {
-    errors.push(
-      `OpenFOAM laminar channel profile requires Reynolds number below 2300; calculated Re=${foamNumber(reynoldsNumber)}. Turbulence models are not implemented.`,
-    );
-  }
+  if (hydraulicDiameter === null) errors.push('Channel hydraulic diameter must be finite and greater than zero.');
+  const reynoldsError = reynoldsNumber === null ? null : laminarChannelError(reynoldsNumber);
+  if (reynoldsError) errors.push(reynoldsError);
 
   if (patches.outlet.bc
     && (patches.outlet.bc.status === 'missing' || patches.outlet.bc.status === 'needs_review')) {
@@ -259,8 +227,8 @@ export function exportOpenFOAM(ir: ProjectIR): OpenFOAMExportResult {
       consumed_fields: ['mesh_controls.global.global_size'],
       validated_but_not_consumed_fields: VALIDATED_BUT_NOT_CONSUMED_MESH_FIELDS,
     },
-    consumed_ir_ids: [...consumedIrIds],
-    ignored_ir_ids: ignoredIrIds,
+    consumed_ir_ids: errors.length === 0 ? [...consumedIrIds] : [],
+    ignored_ir_ids: errors.length === 0 ? ignoredIrIds : [...new Set(scopedIrIds)],
     generated_files: [...Object.keys(files), 'export_manifest.json', 'run.sh', 'README.txt', 'runtime/lifecycle.sh', 'runtime/failure_manifest.json', 'pyproject.toml', 'uv.lock', '.python-version', 'collect_results.py', 'result_manifest.json (runtime)', 'result_package.json (runtime)'],
     warnings,
     errors,

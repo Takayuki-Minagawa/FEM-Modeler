@@ -1,24 +1,24 @@
+import { importMappedCsv } from './csv-mapping';
+import type { ResultCsvMapping, ResultCsvPreview } from './csv-mapping';
 import { generateId } from '@/core/ir/id-generator';
 import { parseResultPackage } from './package';
+import { isMeshOnlyResult, resultImportDiagnostics, resultSolverStatus } from './import-diagnostics';
+import type { ResultImportDiagnostic, ResultImportDiagnosticCode } from './import-diagnostics';
 import type {
   ConservationCheck,
-  ResultField,
   ResultIR,
-  ResultLocation,
   SolverProfileHint,
   SolverTargetName,
 } from '@/core/ir/types';
 
 export const MAX_RESULT_TEXT_BYTES = 20 * 1024 * 1024;
-export const MAX_RESULT_CSV_ROWS = 100_000;
-export const MAX_RESULT_CSV_COLUMNS = 256;
-export const MAX_RESULT_CSV_CELLS = 1_000_000;
+export { MAX_RESULT_CSV_ROWS, MAX_RESULT_CSV_COLUMNS, MAX_RESULT_CSV_CELLS } from './csv-source';
 const MAX_CONSERVATION_COMPONENTS = 16;
-const CSV_PROVENANCE_PREFIX = '# FEM_MODELER_PROVENANCE ';
 
 export interface ResultImportResponse {
   success: boolean;
   result?: ResultIR;
+  csvPreview?: ResultCsvPreview;
   error?: string;
   warnings: string[];
 }
@@ -43,148 +43,6 @@ function declaredResultTarget(metadata: Record<string, unknown>): SolverTargetNa
   if (declared === undefined) return undefined;
   if (declared === 'OpenSeesPy' || declared === 'DOLFINx' || declared === 'OpenFOAM') return declared;
   throw new Error(`Result manifest declares unsupported export_target "${String(declared)}".`);
-}
-
-function parseCsv(text: string): string[][] {
-  const records: string[][] = [];
-  let record: string[] = [];
-  let field = '';
-  let quoted = false;
-  let cellCount = 0;
-  const appendRecord = () => {
-    if (!record.some((value) => value.length > 0)) return;
-    if (record.length > MAX_RESULT_CSV_COLUMNS) {
-      throw new Error(`Result CSV exceeds the ${MAX_RESULT_CSV_COLUMNS}-column safety limit.`);
-    }
-    if (records.length >= MAX_RESULT_CSV_ROWS + 1) {
-      throw new Error(`Result CSV exceeds the ${MAX_RESULT_CSV_ROWS}-row safety limit.`);
-    }
-    cellCount += record.length;
-    if (cellCount > MAX_RESULT_CSV_CELLS) {
-      throw new Error(`Result CSV exceeds the ${MAX_RESULT_CSV_CELLS}-cell safety limit.`);
-    }
-    records.push(record);
-  };
-  for (let index = 0; index < text.length; index += 1) {
-    const character = text[index];
-    if (quoted) {
-      if (character === '"' && text[index + 1] === '"') {
-        field += '"';
-        index += 1;
-      } else if (character === '"') quoted = false;
-      else field += character;
-    } else if (character === '"' && field.length === 0) quoted = true;
-    else if (character === ',') {
-      record.push(field);
-      field = '';
-    } else if (character === '\n' || character === '\r') {
-      if (character === '\r' && text[index + 1] === '\n') index += 1;
-      record.push(field);
-      appendRecord();
-      record = [];
-      field = '';
-    } else field += character;
-  }
-  if (quoted) throw new Error('CSV contains an unterminated quoted field.');
-  record.push(field);
-  appendRecord();
-  return records;
-}
-
-function locationFromHeader(header: string, solverTarget: SolverTargetName): ResultLocation {
-  const normalized = header.toLowerCase();
-  if (normalized.includes('node')) return 'node';
-  if (normalized.includes('element')) return 'element';
-  if (normalized.includes('facet') || normalized.includes('face')) return 'facet';
-  if (normalized.includes('cell')) return 'cell';
-  return solverTarget === 'OpenFOAM' ? 'cell' : 'node';
-}
-
-function fieldNameAndUnit(header: string): { name: string; unit: string } {
-  const bracket = /^(.*?)\s*\[([^\]]+)]$/.exec(header.trim());
-  if (bracket) return { name: bracket[1].trim(), unit: bracket[2].trim() };
-  const suffixes: Array<[RegExp, string]> = [
-    [/_m$/i, 'm'], [/_rad$/i, 'rad'], [/_n$/i, 'N'], [/_nm$/i, 'N·m'],
-    [/_pa$/i, 'Pa'], [/_k$/i, 'K'], [/_m_s$/i, 'm/s'], [/_kg_s$/i, 'kg/s'],
-  ];
-  for (const [pattern, unit] of suffixes) if (pattern.test(header)) return { name: header.replace(pattern, ''), unit };
-  return { name: header.trim(), unit: '' };
-}
-
-function extractCsvProvenance(text: string): { csv: string; metadata: Record<string, unknown> } {
-  const firstBreak = text.search(/[\r\n]/);
-  const firstLine = (firstBreak < 0 ? text : text.slice(0, firstBreak)).trim();
-  if (!firstLine.startsWith(CSV_PROVENANCE_PREFIX)) return { csv: text, metadata: {} };
-  const raw = firstLine.slice(CSV_PROVENANCE_PREFIX.length);
-  const parsed: unknown = JSON.parse(raw);
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('CSV provenance header must contain a JSON object.');
-  }
-  const remainderStart = firstBreak < 0
-    ? text.length
-    : text[firstBreak] === '\r' && text[firstBreak + 1] === '\n' ? firstBreak + 2 : firstBreak + 1;
-  return { csv: text.slice(remainderStart), metadata: parsed as Record<string, unknown> };
-}
-
-function importCsv(text: string, sourceFileName: string, analysisCaseId: string, solverTarget: SolverTargetName): ResultIR {
-  const provenance = extractCsvProvenance(text);
-  const records = parseCsv(provenance.csv);
-  if (records.length < 2) throw new Error('Result CSV requires a header and at least one data row.');
-  const headers = records[0].map((header) => header.trim());
-  const rows = records.slice(1);
-  if (headers.some((header) => header.length === 0)) throw new Error('Result CSV headers must not be empty.');
-  if (new Set(headers).size !== headers.length) throw new Error('Result CSV headers must be unique.');
-  if (rows.some((row) => row.length !== headers.length)) throw new Error('Result CSV rows do not have a consistent column count.');
-  const entityColumn = headers.findIndex((header) => /(?:^|_)(id|tag)$/i.test(header) || /^(node|element|cell|facet)/i.test(header));
-  const entityIds = rows.map((row, index) => entityColumn >= 0 ? row[entityColumn].trim() : String(index + 1));
-  if (entityIds.some((id) => id.length === 0)) throw new Error('Result CSV entity IDs must not be empty.');
-  if (new Set(entityIds).size !== entityIds.length) throw new Error('Result CSV entity IDs must be unique.');
-  const location = entityColumn >= 0 ? locationFromHeader(headers[entityColumn], solverTarget) : 'global';
-  const fields: ResultField[] = [];
-  const skippedColumns: string[] = [];
-  for (let column = 0; column < headers.length; column += 1) {
-    if (column === entityColumn) continue;
-    const rawValues = rows.map((row) => row[column].trim());
-    if (rawValues.some((value) => value.length === 0)) {
-      skippedColumns.push(headers[column]);
-      continue;
-    }
-    const values = rawValues.map(Number);
-    if (!values.every(Number.isFinite)) {
-      skippedColumns.push(headers[column]);
-      continue;
-    }
-    const descriptor = fieldNameAndUnit(headers[column]);
-    let minimum = values[0];
-    let maximum = values[0];
-    for (const value of values.slice(1)) {
-      if (value < minimum) minimum = value;
-      if (value > maximum) maximum = value;
-    }
-    fields.push({
-      id: generateId('result_field'),
-      name: descriptor.name,
-      location,
-      component_names: [descriptor.name],
-      unit: descriptor.unit,
-      entity_ids: entityIds,
-      values,
-      minimum,
-      maximum,
-    });
-  }
-  if (fields.length === 0) throw new Error('Result CSV has no finite numeric field columns.');
-  return {
-    id: generateId('result'),
-    analysis_case_id: analysisCaseId,
-    solver_target: solverTarget,
-    source_file_name: sourceFileName,
-    imported_at: new Date().toISOString(),
-    status: 'complete',
-    fields,
-    checks: [],
-    metadata: { ...provenance.metadata, row_count: rows.length, format: 'csv', skipped_columns: skippedColumns },
-  };
 }
 
 function finiteConservationVector(value: unknown, label = 'force_imbalance_N'): number[] | null {
@@ -346,7 +204,11 @@ function importManifest(text: string, sourceFileName: string, analysisCaseId: st
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Result manifest root must be an object.');
   const packet = (parsed as Record<string, unknown>).format === 'fem-modeler-result-package-v1'
     ? parseResultPackage(parsed) : undefined;
-  const metadata = packet?.manifest ?? parsed as Record<string, unknown>;
+  const metadata = { ...(packet?.manifest ?? parsed as Record<string, unknown>) };
+  // Import diagnostics are produced by this importer, never accepted as source claims.
+  delete metadata.import_diagnostics;
+  delete metadata.import_warnings;
+  delete metadata.import_outcome;
   const checks = checksFromManifest(metadata);
   if (checks.length === 0 && !packet) throw new Error('JSON does not contain a supported result or conservation manifest.');
   return {
@@ -369,13 +231,14 @@ export function parseResultText(
   sourceFileName: string,
   analysisCaseId: string,
   solverTarget: SolverTargetName,
+  csvMapping?: ResultCsvMapping,
 ): ResultImportResponse {
   try {
     if (!analysisCaseId) throw new Error('Select an analysis case before importing results.');
     if (new TextEncoder().encode(text).byteLength > MAX_RESULT_TEXT_BYTES) throw new Error('Result file exceeds the 20 MB text import limit.');
     const result = sourceFileName.toLowerCase().endsWith('.json')
       ? importManifest(text, sourceFileName, analysisCaseId, solverTarget)
-      : importCsv(text, sourceFileName, analysisCaseId, solverTarget);
+      : importMappedCsv(text, sourceFileName, analysisCaseId, solverTarget, csvMapping);
     return { success: true, result, warnings: [] };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error), warnings: [] };
@@ -390,9 +253,12 @@ export function verifyResultImport(
   expectations: ResultImportExpectations = {},
 ): ResultImportResponse {
   const warnings: string[] = [];
+  const diagnostics: ResultImportDiagnostic[] = resultImportDiagnostics(parsed).filter((item) => ['excluded_column', 'excluded_rows', 'unconverted_unit'].includes(item.code));
+  const warn = (code: ResultImportDiagnosticCode, message: string) => diagnostics.push({ code, message });
   // Reverification updates metadata only; large field/mesh arrays remain shared.
   const result: ResultIR = { ...parsed, metadata: { ...parsed.metadata } };
   try {
+    if (result.metadata.stage === 'mesh_only' && !isMeshOnlyResult(result)) throw new Error('A mesh-only artifact must contain a mesh and no solver fields or checks.');
     if (!analysisCaseId || parsed.analysis_case_id !== analysisCaseId || parsed.solver_target !== solverTarget) {
       throw new Error('Parsed result context does not match the requested analysis case and solver.');
     }
@@ -402,14 +268,14 @@ export function verifyResultImport(
       throw new Error(`Result ${sourceLabel} was produced by ${declaredTarget}, but the selected analysis case uses ${solverTarget}.`);
     }
     if (!declaredTarget) {
-      warnings.push(`The ${sourceLabel} does not declare export_target; solver provenance could not be verified.`);
+      warn('missing_solver', `The ${sourceLabel} does not declare export_target; solver provenance could not be verified.`);
     }
     const declaredCaseId = result.metadata.analysis_case_id;
     if (typeof declaredCaseId === 'string' && declaredCaseId !== analysisCaseId) {
       throw new Error(`Result ${sourceLabel} belongs to analysis case "${declaredCaseId}", not selected case "${analysisCaseId}".`);
     }
     if (declaredCaseId === undefined || declaredCaseId === null) {
-      warnings.push(`The ${sourceLabel} does not declare analysis_case_id; case provenance could not be verified.`);
+      warn('missing_case', `The ${sourceLabel} does not declare analysis_case_id; case provenance could not be verified.`);
     }
     const declaredRevision = result.metadata.model_revision;
     if (!expectations.expectedInputFingerprint && expectations.expectedModelRevision !== undefined
@@ -418,7 +284,7 @@ export function verifyResultImport(
       throw new Error(`Result ${sourceLabel} model revision ${declaredRevision} does not match current revision ${expectations.expectedModelRevision}.`);
     }
     if (expectations.expectedModelRevision !== undefined && typeof declaredRevision !== 'number') {
-      warnings.push(`The ${sourceLabel} does not declare model_revision; model provenance could not be verified.`);
+      warn('missing_revision', `The ${sourceLabel} does not declare model_revision; model provenance could not be verified.`);
     }
 
     const projectId = result.metadata.project_id;
@@ -441,24 +307,30 @@ export function verifyResultImport(
     }
     const provenanceVerified = declaredTarget === solverTarget && declaredCaseId === analysisCaseId
       && projectId === expectations.expectedProjectId && typeof projectId === 'string' && projectId.length > 0
-      && (currentMatch || meshVariant) && typeof runId === 'string' && runId.length > 0 && runId.length <= 256;
+      && (currentMatch || meshVariant) && typeof runId === 'string' && runId.trim().length > 0 && runId.length <= 256;
     // Discard serialized claims. Verification is derived from this import's expectations.
     delete result.metadata.imported_for_model_revision;
     result.metadata.provenance_verified = provenanceVerified;
     result.metadata.input_match = provenanceVerified ? meshVariant ? 'mesh_variant' : 'current' : 'unverified';
     if (!provenanceVerified) {
-      warnings.push('Input identity is unverified: project ID, SHA-256 input fingerprint and run ID are required; revision numbers alone are insufficient.');
+      warn('unverified_identity', 'Input identity is unverified: project ID, SHA-256 input fingerprint and run ID are required; revision numbers alone are insufficient.');
       if (result.status === 'complete') result.status = 'partial';
     }
-    if (meshVariant) warnings.push('Imported a different mesh for convergence comparison; it is not a result for the current mesh.');
+    if (meshVariant) warn('mesh_variant', 'Imported a different mesh for convergence comparison; it is not a result for the current mesh.');
     const skippedColumns = result.metadata.skipped_columns;
     if (Array.isArray(skippedColumns) && skippedColumns.length > 0) {
-      warnings.push(`Skipped nonnumeric CSV column(s): ${skippedColumns.join(', ')}.`);
       if (result.status === 'complete') result.status = 'partial';
     }
-    if (result.fields.length === 0) warnings.push('The manifest contains checks only; import a result CSV to visualize fields.');
+    if (result.fields.length === 0 && !isMeshOnlyResult(result)) warn('checks_only', 'The manifest contains checks only; import a result CSV to visualize fields.');
+    warnings.push(...diagnostics.map((item) => item.message));
+    result.metadata.import_diagnostics = diagnostics;
+    result.metadata.import_warnings = warnings;
+    result.metadata.import_outcome = diagnostics.some((item) => item.code === 'excluded_column' || item.code === 'excluded_rows' || item.code === 'checks_only')
+      ? 'partial' : warnings.length > 0 ? 'warning' : 'success';
+    result.metadata.solver_status = resultSolverStatus(result);
     return { success: true, result, warnings };
   } catch (error) {
+    warnings.push(...diagnostics.map((item) => item.message));
     return { success: false, error: error instanceof Error ? error.message : String(error), warnings };
   }
 }

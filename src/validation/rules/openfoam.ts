@@ -1,9 +1,13 @@
 import type { ProjectIR, ValidationItem } from '@/core/ir/types';
 import { createItem } from '../types';
+import { evaluateChannelFlows } from '@/core/physics/channel-flow';
+import { scopeProjectForAnalysisCaseValidation } from '@/export/compiler/capabilities';
 
 export function validateOpenFOAM(ir: ProjectIR, force = false): ValidationItem[] {
   const target = ir.solver_targets.find((t) => t.target_name === 'OpenFOAM');
   if (!force && !target?.enabled) return [];
+  const activeCases = ir.analysis_cases.filter((item) => item.active);
+  if (activeCases.length === 1) ir = scopeProjectForAnalysisCaseValidation(ir, activeCases[0].id);
 
   const items: ValidationItem[] = [];
   const fluidBodies = ir.geometry.bodies.filter((b) => b.category === 'fluid_region');
@@ -29,5 +33,9 @@ export function validateOpenFOAM(ir: ProjectIR, force = false): ValidationItem[]
     items.push(createItem('error', 'OFM_NO_FLUID_MAT', 'No fluid material', 'OpenFOAM needs a Newtonian fluid material (density, viscosity).', 'tgt_openfoam', 'Add a fluid material from the library.', false));
   }
 
+  // Targeted validation already includes these diagnostics through preflightExport.
+  if (!force) {
+    items.push(...evaluateChannelFlows(ir).issues.map((issue) => createItem('error', issue.code, 'OpenFOAM physical constraint', issue.message, issue.targetRef, 'Review the selected case, channel dimension, inlet velocity, and viscosity.', false)));
+  }
   return items;
 }

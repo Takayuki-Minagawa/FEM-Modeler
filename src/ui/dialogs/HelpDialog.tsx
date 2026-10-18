@@ -72,11 +72,11 @@ export function HelpDialog({ isOpen, onClose }: HelpDialogProps) {
       ),
     },
     {
-      key: 'solvers',
-      title: t('help.sections.solvers.title'),
+      key: 'handoff',
+      title: t('help.sections.handoff.title'),
       content: (
         <ul className="space-y-1">
-          {(t('help.sections.solvers.items', { returnObjects: true }) as string[]).map(
+          {(t('help.sections.handoff.items', { returnObjects: true }) as string[]).map(
             (item, i) => (
               <li key={i}>{item}</li>
             ),

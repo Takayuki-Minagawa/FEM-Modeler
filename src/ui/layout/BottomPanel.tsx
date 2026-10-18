@@ -1,15 +1,20 @@
-import { DiagnosticMessage } from '@/ui/forms/common/DiagnosticMessage';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { useAppContext } from '@/hooks/useAppContext';
+import { ModelDiagnosticMessage, ModelValidationSummary } from '@/ui/forms/common/ModelValidationSummary';
+import { modelValidationCopy } from '@/modeling/validation-copy';
 
 type TabKey = 'validation' | 'log' | 'export';
 
 export function BottomPanel() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const copy = modelValidationCopy(i18n.language);
   const [activeTab, setActiveTab] = useState<TabKey>('validation');
-  const validation = useAppStore((s) => s.ir.validation);
+  const ir = useAppStore((s) => s.ir);
+  const validation = ir.validation;
+  const modelChecks = validation.model_context?.kind === 'model';
+  const [historyScope, setHistoryScope] = useState<'current' | 'all'>('current');
   const {
     activityLog,
     clearActivityLog,
@@ -17,25 +22,26 @@ export function BottomPanel() {
     exportHistory,
     clearExportHistory,
   } = useAppContext();
+  const visibleHistory = exportHistory.filter(entry => ['JSON', 'Bundle', 'STEP', 'IGES'].includes(entry.target) && (historyScope === 'all' || entry.projectId === ir.meta.project_id));
 
-  const tabs: { key: TabKey; labelKey: string; badge?: number }[] = [
+  const tabs: { key: TabKey; label: string; badge?: number }[] = [
     {
       key: 'validation',
-      labelKey: 'bottomPanel.validation',
-      badge: validation.summary.error_count + validation.summary.warning_count,
+      label: copy.tab,
+      badge: modelChecks ? validation.summary.error_count + validation.summary.warning_count : undefined,
     },
-    { key: 'log', labelKey: 'bottomPanel.log', badge: activityLog.length },
-    { key: 'export', labelKey: 'bottomPanel.export', badge: exportHistory.length },
+    { key: 'log', label: copy.log, badge: activityLog.length },
+    { key: 'export', label: copy.history, badge: visibleHistory.length },
   ];
 
   const handleRunValidation = () => {
-    useAppStore.getState().runValidation();
+    useAppStore.getState().runModelValidation();
     const nextValidation = useAppStore.getState().ir.validation;
     addActivity(
       nextValidation.summary.error_count > 0 ? 'warning' : 'success',
       nextValidation.summary.error_count > 0
-        ? `${t('bottomPanel.validation')}: ${nextValidation.summary.error_count} error(s), ${nextValidation.summary.warning_count} warning(s)`
-        : `${t('bottomPanel.validation')}: OK`,
+        ? `${copy.tab}: ${copy.counts(nextValidation.summary.error_count, nextValidation.summary.warning_count)}`
+        : `${copy.tab}: OK`,
     );
   };
 
@@ -65,7 +71,7 @@ export function BottomPanel() {
                   : '2px solid transparent',
             }}
           >
-            {t(tab.labelKey)}
+            {tab.label}
             {tab.badge != null && tab.badge > 0 && (
               <span
                 className="ml-1.5 px-1.5 py-0.5 rounded-full"
@@ -91,23 +97,17 @@ export function BottomPanel() {
               className="mb-2 px-3 py-1.5 rounded text-sm cursor-pointer"
               style={{ backgroundColor: 'var(--color-accent)', color: '#fff' }}
             >
-              {t('validation.runValidation')}
+              {copy.run}
             </button>
-            {validation.items.length === 0 ? (
-              <div
-                className="text-sm p-4 text-center"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
-                {t('bottomPanel.noIssues')}
-              </div>
-            ) : (
+            <ModelValidationSummary ir={ir} />
+            {modelChecks && validation.items.length > 0 && (
               validation.items.map((item) => (
                 <div
                   key={item.id}
                   className="text-sm p-3 rounded mb-1.5"
                   style={{ backgroundColor: 'var(--color-bg-input)' }}
                 >
-                  <DiagnosticMessage item={item} />
+                  <ModelDiagnosticMessage ir={ir} item={item} />
                 </div>
               ))
             )}
@@ -171,7 +171,11 @@ export function BottomPanel() {
         )}
         {activeTab === 'export' && (
           <div>
-            <div className="flex items-center justify-end mb-2">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <select aria-label={t('review.history.filter')} value={historyScope} onChange={event => setHistoryScope(event.target.value as 'current' | 'all')} className="min-w-0 text-xs px-2 py-1 rounded" style={{ backgroundColor: 'var(--color-bg-input)' }}>
+                <option value="current">{t('review.history.current')}</option>
+                <option value="all">{t('review.history.all')}</option>
+              </select>
               <button
                 onClick={clearExportHistory}
                 className="px-3 py-1.5 rounded text-sm cursor-pointer"
@@ -183,7 +187,8 @@ export function BottomPanel() {
                 {t('bottomPanel.clearExportHistory')}
               </button>
             </div>
-            {exportHistory.length === 0 ? (
+            <p className="text-xs mb-2" style={{ color: 'var(--color-text-muted)' }}>{t('review.history.generatedOnly')}</p>
+            {visibleHistory.length === 0 ? (
               <div
                 className="text-sm p-4 text-center"
                 style={{ color: 'var(--color-text-muted)' }}
@@ -191,7 +196,7 @@ export function BottomPanel() {
                 {t('bottomPanel.emptyExportHistory')}
               </div>
             ) : (
-              exportHistory.map((entry) => (
+              visibleHistory.map((entry) => (
                 <div
                   key={entry.id}
                   className="mb-2 p-3 rounded text-sm"
@@ -223,13 +228,21 @@ export function BottomPanel() {
                                 : 'var(--color-success)',
                         }}
                       >
-                        {entry.status}
+                        {t(`review.history.${entry.status}`)}
                       </span>
                     </div>
                     <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                       {new Date(entry.timestamp).toLocaleTimeString()}
                     </span>
                   </div>
+
+                  <dl className="text-xs mt-2 space-y-1 break-all">
+                    <div><dt className="inline">{t('review.history.project')}: </dt><dd className="inline">{entry.projectName} ({entry.projectId})</dd></div>
+                    <div><dt className="inline">{t('review.history.revision')}: </dt><dd className="inline">{entry.revision}</dd></div>
+                    {entry.fileName && <div><dt className="inline">{t('review.history.file')}: </dt><dd className="inline">{entry.fileName}</dd></div>}
+                    {entry.status !== 'error' && <div><dt className="inline">{t('review.history.bytes')}: </dt><dd className="inline">{entry.bytes == null ? t('review.history.unknownSize') : `${entry.bytes.toLocaleString()} B`}</dd></div>}
+                    {entry.operationId && <div>{t('review.export.operation', { id: entry.operationId })}</div>}
+                  </dl>
 
                   <div className="mt-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
                     {entry.errorCount > 0

@@ -1,0 +1,68 @@
+/** Shared diagnostic wording keeps saved checks and the bilingual UI consistent. */
+export const modelIssuesEn = {
+  MODEL_EMPTY: ['No components yet', 'Create or import geometry to begin a model.', 'Open the geometry panel.'],
+  MODEL_DUPLICATE_ID: ['Duplicate identifier', 'Model objects must have distinct identifiers.', 'Recreate or reimport the affected object.'],
+  MODEL_REFERENCE: ['Missing model reference', 'A referenced model object cannot be found.', 'Restore the object or update this reference.'],
+  MODEL_SHAPE: ['Invalid shape dimensions', 'The native shape dimensions are invalid or exceed the supported rendering range.', 'Correct the dimensions in the geometry panel.'],
+  MODEL_TRANSFORM: ['Invalid placement', 'Placement values must be finite, and each scale must be nonzero.', 'Correct the position, rotation, and scale.'],
+  MODEL_COORDINATE: ['Invalid model coordinates', 'Model coordinates must remain finite and within the supported rendering range.', 'Correct the coordinates, placement, or dimensions.'],
+  MODEL_EDGE: ['Invalid edge', 'An edge must connect two distinct positions within its own component.', 'Correct the edge endpoints or component placement.'],
+  MODEL_FACE: ['Invalid face data', 'Face normals, areas, and triangle indices must be valid.', 'Regenerate the shape or reimport the geometry.'],
+  MODEL_FRAME: ['Invalid coordinate system', 'A coordinate system needs a finite origin and three independent, nonzero axes.', 'Correct the coordinate system.'],
+  MODEL_FRAME_CYCLE: ['Circular coordinate-system attachment', 'Coordinate-system attachments must not form a cycle.', 'Attach the coordinate system to a component or remove the circular attachment.'],
+  MODEL_ASSET: ['Imported geometry is missing', 'This component needs its imported geometry asset to be restored.', 'Reimport the original geometry file.'],
+  MODEL_ASSET_DATA: ['Invalid imported geometry data', 'The imported geometry has invalid bounds or coordinates.', 'Repair the geometry and import it again.'],
+  MODEL_ASSET_SURFACE: ['Imported surface needs review', 'The imported surface contains degenerate triangles or is known to be open or non-manifold.', 'Review the surface before handing it to another application.'],
+  MODEL_CAD_SOURCE: ['Original CAD source is missing', 'This imported CAD component has no original CAD source for STEP or IGES handoff.', 'Reimport the original STEP or IGES file.'],
+  MODEL_SELECTION: ['Invalid component group', 'Group members must match the selected entity type and dimension.', 'Review the group members and entity type.'],
+  MODEL_SELECTION_EMPTY: ['Empty component group', 'This group does not contain any model objects.', 'Add group members or remove the group.'],
+  MODEL_SELECTION_STALE: ['Component group needs review', 'The group was marked stale or unresolved after an earlier edit.', 'Review and update its members.'],
+  MODEL_SELECTION_EXTERNAL: ['External mesh group retained', 'This group refers to external mesh entities, which are not checked by the model editor.', 'Review this group in the receiving application.'],
+  MODEL_PROPERTY: ['Invalid component property', 'Existing component dimensions and numeric properties must be finite.', 'Correct the component property.'],
+  MODEL_UNITS: ['Unsupported numeric units', 'Model values must be stored in canonical SI units.', 'Migrate the project before handing it to another application.'],
+} satisfies Record<string, readonly [string, string, string]>;
+export type ModelIssueCode = keyof typeof modelIssuesEn;
+const modelIssuesJa: Record<ModelIssueCode, readonly [string, string, string]> = {
+  MODEL_EMPTY: ['部材がありません', '形状を作成または読み込んでモデルを作成できます。', '形状パネルを開いてください。'],
+  MODEL_DUPLICATE_ID: ['識別子が重複しています', 'モデル内の各オブジェクトには固有の識別子が必要です。', '対象を作り直すか、再読み込みしてください。'],
+  MODEL_REFERENCE: ['モデルの参照先がありません', '参照されているモデルのオブジェクトが見つかりません。', '参照先を復元するか、参照を更新してください。'],
+  MODEL_SHAPE: ['形状寸法が不正です', '形状寸法が不正、または表示できる数値範囲を超えています。', '形状パネルで寸法を修正してください。'],
+  MODEL_TRANSFORM: ['配置が不正です', '配置には有限の値を指定し、各方向の倍率はゼロ以外にしてください。', '位置・回転・倍率を修正してください。'],
+  MODEL_COORDINATE: ['モデル座標が不正です', 'モデルの座標は有限で、表示できる数値範囲内である必要があります。', '座標・配置・寸法を修正してください。'],
+  MODEL_EDGE: ['エッジが不正です', 'エッジは同じ部材内の異なる位置にある二点を結ぶ必要があります。', '端点または部材の配置を修正してください。'],
+  MODEL_FACE: ['面の情報が不正です', '面の法線・面積・三角形の番号が不正です。', '形状を再生成するか、再読み込みしてください。'],
+  MODEL_FRAME: ['座標系が不正です', '座標系には有限の原点と、ゼロでない独立した三つの軸が必要です。', '座標系を修正してください。'],
+  MODEL_FRAME_CYCLE: ['座標系の参照が循環しています', '座標系の取り付け先が循環しています。', '部材に取り付けるか、循環する参照を解除してください。'],
+  MODEL_ASSET: ['読み込んだ形状がありません', '部材を復元するための形状データが見つかりません。', '元の形状ファイルを読み込み直してください。'],
+  MODEL_ASSET_DATA: ['読み込んだ形状データが不正です', '読み込んだ形状の範囲または座標が不正です。', '形状を修復して読み込み直してください。'],
+  MODEL_ASSET_SURFACE: ['読み込んだ面の確認が必要です', '面に縮退した三角形、閉じていない箇所、または非多様体の箇所があります。', '別アプリへ受け渡す前に形状を確認してください。'],
+  MODEL_CAD_SOURCE: ['元のCADデータがありません', 'STEP／IGESの受け渡しに必要な元のCADデータがありません。', '元のSTEP／IGESファイルを読み込み直してください。'],
+  MODEL_SELECTION: ['構成グループが不正です', 'メンバーは選択した要素の種類・次元に一致する必要があります。', 'グループのメンバーと要素の種類を確認してください。'],
+  MODEL_SELECTION_EMPTY: ['構成グループが空です', 'このグループにはモデルの要素がありません。', 'メンバーを追加するか、グループを削除してください。'],
+  MODEL_SELECTION_STALE: ['構成グループの確認が必要です', '以前の編集により、このグループは要確認または未解決になっています。', 'メンバーを確認して更新してください。'],
+  MODEL_SELECTION_EXTERNAL: ['外部メッシュのグループを保持しています', 'このグループは外部メッシュの要素を参照するため、モデル編集では検査しません。', '受け渡し先のアプリで確認してください。'],
+  MODEL_PROPERTY: ['部材の属性が不正です', '保存された部材の寸法と数値属性は有限である必要があります。', '部材の属性を修正してください。'],
+  MODEL_UNITS: ['数値の単位基準が未対応です', 'モデルの数値は標準SI単位で保存する必要があります。', '受け渡し前にプロジェクトを移行してください。'],
+};
+export function modelIssueCopy(language: string) { return language.startsWith('ja') ? modelIssuesJa : modelIssuesEn; }
+export function modelValidationCopy(language: string) {
+  return language.startsWith('ja') ? {
+    tab: 'モデル確認', log: '操作ログ', history: '保存・受け渡し履歴', run: 'モデルを確認',
+    not_run: 'モデルの確認は未実行です', stale: '確認後にモデルが変更されています', current: '現在のモデルを確認済みです',
+    scope: '形状・配置・構成の整合性', clear: 'モデルの整合性に問題は見つかりませんでした。',
+    legacy: '以前の解析用チェックは、モデルの確認結果として使用しません。',
+    counts: (errors: number, warnings: number) => `エラー ${errors} 件・注意 ${warnings} 件`,
+    revision: (checked: number, current: number) => `確認時の版 ${checked} ／ 現在の版 ${current}`,
+    open: (name: string) => `対象を開く: ${name}`, target: '対象', fix: '修正方法',
+    severity: { error: 'エラー', warning: '注意', info: '情報' },
+  } : {
+    tab: 'Model checks', log: 'Activity log', history: 'Save / handoff history', run: 'Check model',
+    not_run: 'Model checks have not been run', stale: 'Model changed after the checks', current: 'Current model checked',
+    scope: 'Geometry, placement, and component structure', clear: 'No model consistency issues were found.',
+    legacy: 'Earlier analysis checks are not used as model checks.',
+    counts: (errors: number, warnings: number) => `${errors} error(s), ${warnings} warning(s)`,
+    revision: (checked: number, current: number) => `Checked revision ${checked} / current revision ${current}`,
+    open: (name: string) => `Open target: ${name}`, target: 'Target', fix: 'Suggested fix',
+    severity: { error: 'Error', warning: 'Warning', info: 'Info' },
+  };
+}

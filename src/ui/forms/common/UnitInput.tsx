@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { NumericField } from './NumericField';
 
 interface UnitInputProps {
   label: string;
@@ -28,14 +29,11 @@ export function UnitInput({ label, value, unit, onChange, status, step = 0.01, m
         {label}
       </label>
       <div className="flex-1 min-w-0 flex items-center gap-1">
-        <input
+        <NumericField
           id={inputId}
-          type="number"
-          value={value ?? ''}
-          onChange={(e) => {
-            const v = e.target.value;
-            onChange(v === '' ? null : parseFloat(v));
-          }}
+          value={value}
+          onValueChange={onChange}
+          allowNull
           step={step}
           min={min}
           disabled={disabled}

@@ -1,258 +1,112 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { generateId } from '@/core/ir/id-generator';
 import type { NamedSelection, EntityType } from '@/core/ir/types';
+import { EntityRow } from './common/EntityRow';
+import { FormField } from './common/FormField';
+import { SelectionMembershipEditor } from './SelectionMembershipEditor';
+import { editableEntityType } from '@/core/selections/query';
 
-const SELECTION_COLORS = [
-  '#e53935', '#d81b60', '#8e24aa', '#5e35b1',
-  '#3949ab', '#1e88e5', '#039be5', '#00acc1',
-  '#00897b', '#43a047', '#7cb342', '#c0ca33',
-  '#fdd835', '#ffb300', '#fb8c00', '#f4511e',
-];
-
+const SELECTION_COLORS = ['#e53935', '#d81b60', '#8e24aa', '#5e35b1', '#3949ab', '#1e88e5', '#039be5', '#00acc1', '#00897b', '#43a047', '#7cb342', '#c0ca33', '#fdd835', '#ffb300', '#fb8c00', '#f4511e'];
 let colorIdx = 0;
-function nextSelectionColor(): string {
-  return SELECTION_COLORS[colorIdx++ % SELECTION_COLORS.length];
-}
 
 export function NamedSelectionsForm() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isJa = i18n.language === 'ja';
-
   const namedSelections = useAppStore((s) => s.ir.named_selections);
   const selectedEntityIds = useAppStore((s) => s.selectedEntityIds);
   const addNamedSelection = useAppStore((s) => s.addNamedSelection);
   const updateNamedSelection = useAppStore((s) => s.updateNamedSelection);
   const removeNamedSelection = useAppStore((s) => s.removeNamedSelection);
   const setSelectedEntities = useAppStore((s) => s.setSelectedEntities);
-  const bodies = useAppStore((s) => s.ir.geometry.bodies);
-  const faces = useAppStore((s) => s.ir.geometry.faces);
-  const edges = useAppStore((s) => s.ir.geometry.edges);
-  const vertices = useAppStore((s) => s.ir.geometry.vertices);
+  const geometry = useAppStore((s) => s.ir.geometry);
   const setPickFilter = useAppStore((s) => s.setPickFilter);
   const toggleEntitySelection = useAppStore((s) => s.toggleEntitySelection);
-
   const [newName, setNewName] = useState('');
   const [entityType, setEntityType] = useState<EntityType>('body');
+  const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
-
+  const entities = entityType === 'body' ? geometry.bodies : entityType === 'face' ? geometry.faces : entityType === 'edge' ? geometry.edges : geometry.vertices;
+  const bodiesById = useMemo(() => new Map(geometry.bodies.map((body) => [body.id, body])), [geometry.bodies]);
+  const entityLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const body of geometry.bodies) labels.set(body.id, `${body.name} / ${body.id}`);
+    for (const collection of [geometry.faces, geometry.edges, geometry.vertices]) {
+      for (const entity of collection) labels.set(entity.id, `${bodiesById.get(entity.body_id)?.name ?? entity.body_id} / ${entity.name} / ${entity.id}`);
+    }
+    return labels;
+  }, [geometry, bodiesById]);
+  const selectedSet = new Set(selectedEntityIds);
+  const selectedCandidates = entities.filter((entity) => selectedSet.has(entity.id));
+  const filtered = entities.filter((entity) => entityLabels.get(entity.id)?.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  const groups = new Map<string, typeof filtered>();
+  for (const entity of filtered) {
+    const owner = 'body_id' in entity ? entity.body_id : entity.id;
+    const group = groups.get(owner) ?? [];
+    group.push(entity); groups.set(owner, group);
+  }
   const handleCreate = () => {
-    const validIds = new Set(
-      entityType === 'body' ? bodies.map((item) => item.id)
-        : entityType === 'face' ? faces.map((item) => item.id)
-          : entityType === 'edge' ? edges.map((item) => item.id)
-            : vertices.map((item) => item.id),
-    );
-    const memberRefs = selectedEntityIds.filter((id) => validIds.has(id));
-    if (!newName.trim() || memberRefs.length === 0) return;
-
-    const ns: NamedSelection = {
-      id: generateId('named_selection'),
-      name: newName.trim().replace(/\s+/g, '_'),
-      display_name: newName.trim(),
+    if (!newName.trim() || !selectedCandidates.length) return;
+    addNamedSelection({
+      id: generateId('named_selection'), name: newName.trim().replace(/\s+/g, '_'), display_name: newName.trim(),
       target_dimension: entityType === 'body' ? 3 : entityType === 'face' ? 2 : entityType === 'edge' ? 1 : 0,
-      entity_type: entityType,
-      member_refs: memberRefs,
-      color: nextSelectionColor(),
-      description: '',
-      created_by: 'user',
-      status: 'active',
-      usages: [],
-    };
-
-    addNamedSelection(ns);
+      entity_type: entityType, member_refs: selectedCandidates.map((entity) => entity.id),
+      color: SELECTION_COLORS[colorIdx++ % SELECTION_COLORS.length], description: '', created_by: 'user', status: 'active', usages: [],
+    });
     setNewName('');
   };
-
-  const handleHighlight = (ns: NamedSelection) => {
-    setSelectedEntities(ns.member_refs);
+  const startEdit = (selection: NamedSelection) => {
+    setEditingId(selection.id); setEditName(selection.display_name ?? selection.name);
+    if (editableEntityType(selection.entity_type)) { setEntityType(selection.entity_type); setPickFilter(selection.entity_type); setSelectedEntities(selection.member_refs); }
   };
-
-  const startEdit = (ns: NamedSelection) => {
-    setEditingId(ns.id);
-    setEditName(ns.display_name ?? ns.name);
-  };
-
   const commitEdit = () => {
-    if (editingId && editName.trim()) {
-      updateNamedSelection(editingId, {
-        name: editName.trim().replace(/\s+/g, '_'),
-        display_name: editName.trim(),
-      });
-    }
-    setEditingId(null);
+    const current = namedSelections.find((selection) => selection.id === editingId);
+    if (current && editName.trim() && editName.trim() !== (current.display_name ?? current.name)) updateNamedSelection(current.id, { name: editName.trim().replace(/\s+/g, '_'), display_name: editName.trim() });
   };
+  const editing = namedSelections.find((selection) => selection.id === editingId);
+  const inputClass = 'w-full min-w-0 px-2 py-1.5 rounded text-sm';
+  const inputStyle = { backgroundColor: 'var(--color-bg-input)', color: 'var(--color-text)', border: '1px solid var(--color-border)' };
 
-  const getMemberInfo = (ns: NamedSelection): string => {
-    const count = ns.member_refs.length;
-    if (ns.entity_type === 'body') {
-      const names = ns.member_refs
-        .map((ref) => bodies.find((b) => b.id === ref)?.name)
-        .filter(Boolean);
-      return names.length > 0 ? names.join(', ') : `${count} ${isJa ? '個' : 'items'}`;
-    }
-    if (ns.entity_type === 'face') {
-      const names = ns.member_refs
-        .map((ref) => faces.find((f) => f.id === ref)?.name)
-        .filter(Boolean);
-      return names.length > 0 ? names.join(', ') : `${count} ${isJa ? '面' : 'faces'}`;
-    }
-    return `${count} ${isJa ? '個' : 'items'}`;
-  };
-
-  return (
-    <div className="space-y-4">
-      {/* Create new */}
-      <div>
-        <label className="block text-sm font-bold mb-2" style={{ color: 'var(--color-text-muted)' }}>
-          {isJa ? '新規名前付き選択' : 'New Named Selection'}
-        </label>
-
-        <div className="flex gap-2 mb-2">
-          {(['body', 'face', 'edge', 'vertex'] as const).map((et) => {
-            return (
-              <button
-                key={et}
-                onClick={() => {
-                  setEntityType(et);
-                  setPickFilter(et);
-                  setSelectedEntities([]);
-                }}
-                className="px-2 py-1 rounded text-xs cursor-pointer"
-                style={{
-                  backgroundColor: entityType === et ? 'var(--color-accent)' : 'var(--color-bg-input)',
-                  color: entityType === et ? '#fff' : 'var(--color-text-secondary)',
-                  border: `1px solid ${entityType === et ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                }}
-              >
-                {et}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="max-h-40 overflow-y-auto mb-2 rounded" role="listbox" aria-multiselectable="true" aria-label={isJa ? '選択可能エンティティ' : 'Selectable entities'}>
-          {(entityType === 'body' ? bodies : entityType === 'face' ? faces : entityType === 'edge' ? edges : vertices).map((entity) => (
-            <button
-              type="button"
-              role="option"
-              aria-selected={selectedEntityIds.includes(entity.id)}
-              key={entity.id}
-              onClick={() => toggleEntitySelection(entity.id)}
-              className="w-full text-left px-2 py-1 text-xs flex items-center gap-2 cursor-pointer"
-              style={{
-                backgroundColor: selectedEntityIds.includes(entity.id) ? 'var(--color-bg-panel)' : 'var(--color-bg-input)',
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              <span aria-hidden="true">{selectedEntityIds.includes(entity.id) ? '✓' : '○'}</span>
-              <span>{entity.name || entity.id}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder={isJa ? '選択名 (例: fixed_face)' : 'Name (e.g. fixed_face)'}
-            className="flex-1 px-2 py-1.5 rounded text-sm outline-none"
-            style={{
-              backgroundColor: 'var(--color-bg-input)',
-              color: 'var(--color-text)',
-              border: '1px solid var(--color-border)',
-            }}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
-          />
-          <button
-            onClick={handleCreate}
-            disabled={!newName.trim() || selectedEntityIds.length === 0}
-            className="px-3 py-1.5 rounded text-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{
-              backgroundColor: 'var(--color-accent)',
-              color: '#fff',
-            }}
-          >
-            {isJa ? '作成' : 'Create'}
-          </button>
-        </div>
-
-        {selectedEntityIds.length === 0 && (
-          <p className="text-xs mt-1" style={{ color: 'var(--color-warning)' }}>
-            {isJa ? '3Dビューワーでオブジェクトを選択してください' : 'Select objects in the 3D viewer first'}
-          </p>
-        )}
+  return <div className="space-y-4">
+    <section className="space-y-2" aria-label={isJa ? '新規名前付き選択' : 'New Named Selection'}>
+      <h3 className="text-sm font-bold">{isJa ? '新規名前付き選択' : 'New Named Selection'}</h3>
+      <div className="flex gap-2">
+        {(['body', 'face', 'edge', 'vertex'] as const).map((type) => <button key={type} type="button" aria-pressed={entityType === type}
+          onClick={() => { setEntityType(type); setPickFilter(type); setSelectedEntities([]); }} className="px-2 py-1 rounded text-xs"
+          style={{ backgroundColor: entityType === type ? 'var(--color-accent)' : 'var(--color-bg-input)' }}>{type}</button>)}
       </div>
-
-      {/* List */}
-      {namedSelections.length > 0 && (
-        <div>
-          <label className="block text-sm font-bold mb-2" style={{ color: 'var(--color-text-muted)' }}>
-            {isJa ? '名前付き選択一覧' : 'Named Selections'} ({namedSelections.length})
-          </label>
-          <div className="space-y-1">
-            {namedSelections.map((ns) => (
-              <div
-                key={ns.id}
-                className="flex items-center gap-2 px-2 py-2 rounded text-sm cursor-pointer group"
-                style={{ backgroundColor: 'var(--color-bg-input)' }}
-                onClick={() => handleHighlight(ns)}
-              >
-                <span
-                  className="w-3 h-3 rounded-sm shrink-0"
-                  style={{ backgroundColor: ns.color }}
-                />
-                <div className="flex-1 min-w-0">
-                  {editingId === ns.id ? (
-                    <input
-                      type="text"
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      onBlur={commitEdit}
-                      onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); }}
-                      className="w-full px-1 py-0.5 rounded text-sm outline-none"
-                      style={{
-                        backgroundColor: 'var(--color-bg-secondary)',
-                        color: 'var(--color-text)',
-                      }}
-                      autoFocus
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  ) : (
-                    <div>
-                      <span style={{ color: 'var(--color-text)' }}>
-                        {ns.display_name ?? ns.name}
-                      </span>
-                      <span className="text-xs ml-2" style={{ color: 'var(--color-text-muted)' }}>
-                        {ns.entity_type} | {getMemberInfo(ns)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); startEdit(ns); }}
-                  className="text-xs px-1 opacity-50 hover:opacity-100 cursor-pointer"
-                  style={{ color: 'var(--color-text-muted)' }}
-                  title={isJa ? '名前変更' : 'Rename'}
-                >
-                  &#9998;
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); removeNamedSelection(ns.id); }}
-                  className="text-xs px-1 opacity-50 hover:opacity-100 cursor-pointer"
-                  style={{ color: 'var(--color-error)' }}
-                  title={isJa ? '削除' : 'Delete'}
-                >
-                  &times;
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+      <FormField label={t('workflow.entitySearch')}>{(attributes) => <input {...attributes} type="search" value={search} onChange={(event) => setSearch(event.target.value)} className={inputClass} style={inputStyle} />}</FormField>
+      <p role="status" className="text-xs">{t('workflow.selectionCount', { selected: selectedCandidates.length, total: entities.length })}</p>
+      <div className="max-h-52 overflow-y-auto rounded" role="listbox" aria-multiselectable="true" aria-label={isJa ? '選択可能エンティティ' : 'Selectable entities'}>
+        {[...groups].map(([owner, items]) => <div key={owner} role="group" aria-label={`${bodiesById.get(owner)?.name ?? owner} (${owner})`}>
+          <div aria-hidden="true" className="sticky top-0 px-2 py-1 text-xs font-bold break-words" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>{bodiesById.get(owner)?.name ?? owner}</div>
+          {items.map((entity) => <button type="button" role="option" aria-selected={selectedSet.has(entity.id)} key={entity.id} onClick={() => toggleEntitySelection(entity.id)}
+            className="w-full text-left px-2 py-2 text-xs flex gap-2 break-words" style={{ backgroundColor: selectedSet.has(entity.id) ? 'var(--color-bg-panel)' : 'var(--color-bg-input)' }}>
+            <span aria-hidden="true">{selectedSet.has(entity.id) ? '✓' : '○'}</span><span className="min-w-0">{entityLabels.get(entity.id)}</span>
+          </button>)}
+        </div>)}
+      </div>
+      {!filtered.length && <p className="text-xs">{t('workflow.noEntities')}</p>}
+      {selectedCandidates.length > 0 && <details className="text-xs"><summary>{isJa ? '選択中の識別子' : 'Selected identifiers'}</summary><ul className="max-h-32 overflow-y-auto">{selectedCandidates.map((entity) => <li key={entity.id} className="break-words">{entityLabels.get(entity.id)}</li>)}</ul></details>}
+      <FormField label={t('workflow.selectionName')}>{(attributes) => <input {...attributes} type="text" value={newName} onChange={(event) => setNewName(event.target.value)}
+        placeholder={isJa ? '選択名 (例: 上段の部材)' : 'Name (e.g. upper_members)'} className={inputClass} style={inputStyle} onKeyDown={(event) => { if (event.key === 'Enter') handleCreate(); }} />}</FormField>
+      <button type="button" onClick={handleCreate} disabled={!newName.trim() || !selectedCandidates.length} className="px-3 py-1.5 rounded text-sm disabled:opacity-40" style={{ backgroundColor: 'var(--color-accent)', color: '#fff' }}>{isJa ? '作成' : 'Create'}</button>
+      {!selectedCandidates.length && <p className="text-xs" style={{ color: 'var(--color-warning)' }}>{isJa ? '上の一覧または3Dビューで対象を選択してください。' : 'Select entities from the list above or the 3D view.'}</p>}
+    </section>
+    {editing && <FormField label={t('workflow.renameSelection', { name: editing.display_name ?? editing.name })}>
+      {(attributes) => <input {...attributes} autoFocus type="text" value={editName} onChange={(event) => setEditName(event.target.value)} onBlur={commitEdit}
+        onKeyDown={(event) => { if (event.key === 'Enter') commitEdit(); if (event.key === 'Escape') setEditingId(null); }} className={inputClass} style={inputStyle} />}
+    </FormField>}
+    {editing && <SelectionMembershipEditor key={editing.id} selection={editing} onClose={() => setEditingId(null)} />}
+    {namedSelections.length > 0 && <section className="space-y-1" aria-label={isJa ? '名前付き選択一覧' : 'Named Selections'}>
+      <h3 className="text-sm font-bold">{isJa ? '名前付き選択一覧' : 'Named Selections'} ({namedSelections.length})</h3>
+      {namedSelections.map((selection) => <EntityRow key={selection.id} name={selection.display_name ?? selection.name} entityId={selection.id} color={selection.color}
+        selected={selection.member_refs.length > 0 && selection.member_refs.every((id) => selectedSet.has(id)) && selection.member_refs.length === selectedSet.size}
+        onSelect={() => setSelectedEntities(selection.member_refs)} onEdit={() => startEdit(selection)} onDelete={() => removeNamedSelection(selection.id)}>
+        {selection.entity_type} · {selection.member_refs.length} · {selection.member_refs.map((id) => entityLabels.get(id) ?? id).join(', ')}
+      </EntityRow>)}
+    </section>}
+  </div>;
 }

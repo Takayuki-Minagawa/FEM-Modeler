@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { downloadProjectFile } from '@/export/project/save';
 import { useAppStore } from '@/state/store';
 import { clearProjectDraft, DraftConflictError, estimateProjectDraftBytes, getProjectDraftSummary,
-  listProjectDrafts, listProjectDraftVersions, loadProjectDraft, saveProjectDraft, type DraftSummary } from '@/lib/project-draft-storage';
+  listProjectDrafts, listProjectDraftVersions, loadProjectDraft, renameProjectDraft, saveProjectDraft, type DraftSummary } from '@/lib/project-draft-storage';
 import { generateId } from '@/core/ir/id-generator';
 import type { ActivityLogEntry, ActivityLogLevel, DraftPersistenceState } from '@/contexts/app-context-value';
 
@@ -193,9 +193,10 @@ export function useProjectDraftPersistence() {
 
   const saveProjectFile = useCallback(() => {
     const current = useAppStore.getState().ir;
-    downloadProjectFile(current);
+    const artifact = downloadProjectFile(current);
     lastDownloadedIR.current = current;
     addActivity('success', language.current === 'ja' ? `プロジェクト "${current.meta.project_name}" を保存しました。` : `Saved project "${current.meta.project_name}".`);
+    return artifact;
   }, [addActivity]);
 
   const restoreDraft = useCallback(async (projectId?: string, versionId?: string) => {
@@ -274,7 +275,48 @@ export function useProjectDraftPersistence() {
     }
   }, [draftSummary, addActivity, reportError]);
 
+  const renameDraft = useCallback(async (projectId: string, name: string, versionId: string) => {
+    const original = useAppStore.getState();
+    const isCurrent = original.projectSession > 0 && original.ir.meta.project_id === projectId;
+    if (isCurrent && (sessionReady.current !== original.projectSession || paused.current)) {
+      return { success: false, error: language.current === 'ja' ? '保存データの確認または競合の解決後に、改名を再試行してください。' : 'Resolve pending restoration or save conflicts before renaming this project.' };
+    }
+    const operation = isCurrent ? ++operationSequence.current : operationSequence.current;
+    // Current-project autosaves can advance while the rename editor stays open.
+    // Only this tab's completed saves advance this token; foreign heads still fail CAS.
+    const versionToken = expectedVersion.current;
+    if (isCurrent) { paused.current = true; generation.current += 1; }
+    try {
+      const summary = await renameProjectDraft(projectId, name, isCurrent ? () => versionToken.value : versionId);
+      setRecentProjects((projects) => [summary, ...projects.filter((project) => project.projectId !== projectId)]);
+      const current = useAppStore.getState();
+      if (isCurrent && current.projectSession === original.projectSession && operation === operationSequence.current) {
+        expectedVersion.current.value = summary.versionId;
+        setDraftSummary(summary);
+        // Only replace the name, keeping edits that arrived while storage was busy.
+        // An explicit newer rename in the editor wins and will be autosaved next.
+        if (current.ir.meta.project_name === original.ir.meta.project_name) current.setProjectName(summary.projectName);
+      } else if (current.projectSession === 0) {
+        setDraftSummary((previous) => previous?.projectId === projectId ? summary : previous);
+      }
+      addActivity('success', language.current === 'ja' ? `保存プロジェクトを「${summary.projectName}」に改名しました。` : `Renamed saved project to "${summary.projectName}".`);
+      return { success: true };
+    } catch (cause) {
+      if (isCurrent && operation === operationSequence.current && useAppStore.getState().projectSession === original.projectSession) reportError(cause);
+      const error = cause instanceof DraftConflictError
+        ? language.current === 'ja' ? '別の保存または削除により世代が変わりました。最新の一覧で再試行してください。' : 'The saved version changed or was deleted. Refresh the latest project list and try again.'
+        : cause instanceof Error ? cause.message : String(cause);
+      try { setRecentProjects(await listProjectDrafts()); } catch { /* Keep the original error if refresh also fails. */ }
+      return { success: false, error };
+    } finally {
+      if (isCurrent && operation === operationSequence.current && useAppStore.getState().projectSession === original.projectSession) {
+        paused.current = conflictPaused.current;
+        setSaveAttempt((attempt) => attempt + 1);
+      }
+    }
+  }, [addActivity, reportError]);
+
   return useMemo(() => ({ readiness, recentProjects, draftSummary, autosaveState, activityLog, addActivity, clearActivityLog,
-    saveProjectFile, transitionProject, restoreDraft, discardDraft, listDraftVersions: listProjectDraftVersions }),
-  [readiness, recentProjects, draftSummary, autosaveState, activityLog, addActivity, clearActivityLog, saveProjectFile, transitionProject, restoreDraft, discardDraft]);
+    saveProjectFile, transitionProject, restoreDraft, discardDraft, renameDraft, listDraftVersions: listProjectDraftVersions }),
+  [readiness, recentProjects, draftSummary, autosaveState, activityLog, addActivity, clearActivityLog, saveProjectFile, transitionProject, restoreDraft, discardDraft, renameDraft]);
 }

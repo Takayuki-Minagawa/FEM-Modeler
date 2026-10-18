@@ -83,6 +83,15 @@ describe('result parsing worker lifecycle', () => {
       expect((await parseResultFileRequest({ file: input, analysisCaseId: 'case', solverTarget: 'OpenSeesPy' })).success).toBe(false);
     }
   });
+  it('returns a bounded CSV preview without results, and applies the chosen mapping only on a later parse request', async () => {
+    const input = { name: 'values.csv', size: 40, text: async () => 'node,u [mm],v\n1,2,3\n2,4,' };
+    const preview = await parseResultFileRequest({ file: input, analysisCaseId: 'case', solverTarget: 'OpenSeesPy', previewCsv: true });
+    expect(preview.result).toBeUndefined();
+    expect(preview.csvPreview).toMatchObject({ sourceRows: 2, importedFields: 1, excludedColumns: ['v'] });
+    const csvMapping = { ...preview.csvPreview!.mapping, missingPolicy: 'exclude_rows' as const };
+    const parsed = await parseResultFileRequest({ file: input, analysisCaseId: 'case', solverTarget: 'OpenSeesPy', csvMapping });
+    expect(parsed.result?.fields[0]).toMatchObject({ unit: 'm', values: [0.002], entity_ids: ['1'] });
+  });
   it('reverification changes only metadata and rejects a different parsed context', () => {
     const result = parsed().result!; result.metadata.provenance_verified = true;
     const response = verifyResultImport(result, 'case', 'OpenSeesPy');

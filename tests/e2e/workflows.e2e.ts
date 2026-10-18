@@ -71,7 +71,8 @@ test('creates, resizes, deletes and undoes geometry, with a real JSON download',
   await page.getByRole('button', { name: 'Create Shape', exact: true }).click();
   const before = await downloadProject(page);
   expect(before.geometry.bodies).toHaveLength(1);
-  await page.getByText(before.geometry.bodies[0].name, { exact: true }).last().click();
+  const body = before.geometry.bodies[0];
+  await page.getByRole('button', { name: `Select ${body.name} (${body.id})`, exact: true }).click();
   await page.getByRole('spinbutton', { name: 'Dimension width', exact: true }).fill('3');
   await page.getByRole('button', { name: 'Apply dimensions', exact: true }).click();
   const changed = await downloadProject(page);
@@ -94,7 +95,7 @@ test('creates, resizes, deletes and undoes geometry, with a real JSON download',
   expect((await downloadProject(page)).geometry.bodies).toHaveLength(2);
 });
 
-test('keeps modal focus stable through autosave and exports a template solver ZIP', async ({ page }) => {
+test('keeps modal focus stable through autosave and exports a portable model Bundle', async ({ page }) => {
   await createTemplate(page, '2D Frame');
   const original = (await downloadProject(page)).geometry;
   await page.getByText(original.bodies[0].name, { exact: true }).last().click();
@@ -115,14 +116,15 @@ test('keeps modal focus stable through autosave and exports a template solver ZI
   await expect(dialog).toBeHidden();
   await expect(help).toBeFocused();
   expect((await downloadProject(page)).geometry).toEqual(original);
-  await page.getByRole('button', { name: /Solver Targets/ }).click();
+  await page.getByRole('button', { name: /Model handoff/ }).click();
   const pending = page.waitForEvent('download');
-  await page.getByRole('button', { name: /OpenSeesPy Structural/ }).click();
+  await page.getByRole('button', { name: /^Bundle Save the complete model/ }).click();
   const zip = await pending;
   expect(zip.suggestedFilename()).toMatch(/\.zip$/);
   const files = unzipSync(await readFile((await zip.path())!));
-  expect(strFromU8(files['uv.lock'])).toBe(await readFile('solver-tests/openseespy/uv.lock', 'utf8'));
-  expect(strFromU8(files['run.sh'])).toContain('source runtime/lifecycle.sh');
+  expect(JSON.parse(strFromU8(files['project.fem.json'])).geometry).toEqual(original);
+  expect(JSON.parse(strFromU8(files['bundle_manifest.json'])).format).toBe('fem-modeler-bundle');
+  expect(Object.keys(files)).not.toContain('run.sh');
 });
 
 test('keeps edits after failed saves when creating or opening another project, and allows a file backup', async ({ page }) => {
@@ -151,7 +153,9 @@ test('keeps edits after failed saves when creating or opening another project, a
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Load', exact: true }).click();
   await (await chooser).setFiles({ name: 'other.fem.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(other)) });
-  await expect(page.getByRole('alert')).toContainText('current edits have been kept');
+  const fileNotice = page.getByRole('banner').getByRole('status');
+  await expect(fileNotice).toContainText('other.fem.json: Failure');
+  await expect(fileNotice).toContainText('current edits have been kept');
   await expect(page.getByRole('combobox', { name: 'Display unit system' })).toHaveValue('mm-N-s');
   await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
   await page.getByRole('button', { name: 'New', exact: true }).click();
@@ -222,4 +226,18 @@ test('imports a large STL through the worker and keeps the resulting asset porta
   expect(project.geometry.bodies).toHaveLength(1);
   expect(project.assets[0].triangle_count).toBe(count);
   expect(Buffer.from(project.assets[0].data, 'base64')).toEqual(bytes);
+  await page.getByRole('button', { name: /Model handoff/ }).click();
+  const bundlePending = page.waitForEvent('download');
+  await page.getByRole('button', { name: /^Bundle Save the complete model/ }).click();
+  const bundle = await readFile((await (await bundlePending).path())!);
+  const files = unzipSync(bundle);
+  const manifest = JSON.parse(strFromU8(files['bundle_manifest.json']));
+  expect(Buffer.from(files[manifest.assets[0].path])).toEqual(bytes);
+  const chooserBundle = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Load', exact: true }).click();
+  await (await chooserBundle).setFiles({ name: 'large-grid.fem.zip', mimeType: 'application/zip', buffer: bundle });
+  await expect(page.getByRole('banner').getByRole('status')).toContainText('large-grid.fem.zip: Success');
+  const restored = await downloadProject(page);
+  expect(restored.geometry).toEqual(project.geometry);
+  expect(restored.assets).toEqual(project.assets);
 });

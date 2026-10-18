@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'fem-modeler-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v4`;
+const CACHE_NAME = `${CACHE_PREFIX}v5`;
 const SHELL_URLS = ['./', './manifest.webmanifest', './favicon.svg'];
 const MAX_CACHE_ENTRIES = 80;
 

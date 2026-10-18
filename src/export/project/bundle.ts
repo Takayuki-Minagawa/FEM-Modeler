@@ -274,9 +274,11 @@ export async function createProjectBundle(ir: ProjectIR): Promise<Blob> {
   return blob;
 }
 
-export async function downloadProjectBundle(ir: ProjectIR): Promise<void> {
+export async function downloadProjectBundle(ir: ProjectIR): Promise<{ fileName: string; bytes: number }> {
   const blob = await createProjectBundle(ir);
-  saveAs(blob, `${sanitizeArtifactName(ir.meta.project_name)}.fem.zip`);
+  const fileName = `${sanitizeArtifactName(ir.meta.project_name)}.fem.zip`;
+  saveAs(blob, fileName);
+  return { fileName, bytes: blob.size };
 }
 
 /** Read, validate, and hydrate a portable project ZIP. */

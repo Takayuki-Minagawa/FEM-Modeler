@@ -1,0 +1,26 @@
+export const workflowJa = {
+  selectEntity: '{{name}} を選択', editEntity: '{{name}} を編集', deleteEntity: '{{name}} を削除',
+  modelTree: 'モデルツリー', properties: 'プロパティ', toggleTree: 'モデルツリーを開閉', toggleProperties: 'プロパティを開閉',
+  closeProperties: 'プロパティを閉じる', moreActions: 'その他の操作', projectName: 'プロジェクト名', renameProject: 'プロジェクト名を変更',
+  immediate: '変更は即時反映されます。元に戻すで取り消せます。', close: '閉じる',
+  additionDomain: '追加する解析領域', entitySearch: '名前・所有ボディ・IDで検索', selectionCount: '選択中 {{selected}} 件 / 候補 {{total}} 件',
+  selectionName: '選択名', renameSelection: '{{name}} の新しい名前', noEntities: '一致するエンティティがありません。',
+  filmCoefficient: '熱伝達係数', ambientTemperature: '周囲温度', pressureBasis: '圧力の基準',
+  dynamicPressure: '圧力 [Pa]', kinematicPressure: '密度で割った圧力 [m²/s²]', applicationMode: '荷重の指定方法',
+  applicationModes: { total: '合計量', per_length: '単位長さあたり', per_area: '単位面積あたり', per_volume: '単位体積あたり' },
+  coordinateSystem: '座標系', globalCoordinates: '全体座標系', quantity: '数量', value: '値', unit: '単位', rawDetails: '詳細データ（JSON）',
+  functionReference: '関数参照', direction: '方向', targetZoom: '{{name}} の対象へ移動',
+};
+export const workflowEn = {
+  selectEntity: 'Select {{name}}', editEntity: 'Edit {{name}}', deleteEntity: 'Delete {{name}}',
+  modelTree: 'Model tree', properties: 'Properties', toggleTree: 'Toggle model tree', toggleProperties: 'Toggle properties',
+  closeProperties: 'Close properties', moreActions: 'More actions', projectName: 'Project name', renameProject: 'Rename project',
+  immediate: 'Changes apply immediately. Use Undo to revert them.', close: 'Close',
+  additionDomain: 'Domain for new conditions', entitySearch: 'Search name, owning body or ID', selectionCount: '{{selected}} selected / {{total}} available',
+  selectionName: 'Selection name', renameSelection: 'New name for {{name}}', noEntities: 'No matching entities.',
+  filmCoefficient: 'Film coefficient', ambientTemperature: 'Ambient temperature', pressureBasis: 'Pressure basis',
+  dynamicPressure: 'Pressure [Pa]', kinematicPressure: 'Pressure divided by density [m²/s²]', applicationMode: 'Application mode',
+  applicationModes: { total: 'Total', per_length: 'Per unit length', per_area: 'Per unit area', per_volume: 'Per unit volume' },
+  coordinateSystem: 'Coordinate system', globalCoordinates: 'Global', quantity: 'Quantity', value: 'Value', unit: 'Unit', rawDetails: 'Raw details (JSON)',
+  functionReference: 'Function reference', direction: 'Direction', targetZoom: 'Zoom to target of {{name}}',
+};

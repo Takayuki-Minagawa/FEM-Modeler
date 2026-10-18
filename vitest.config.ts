@@ -18,6 +18,7 @@ export default mergeConfig(viteConfig, defineConfig({
         'src/lib/**/*.ts',
         'src/results/**/*.ts',
         'src/mesh/**/*.ts',
+        'src/modeling/**/*.ts',
         'src/cad/**/*.ts',
       ],
       exclude: ['src/**/index.ts'],

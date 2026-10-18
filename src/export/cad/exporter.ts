@@ -5,6 +5,7 @@ import { parseNativeShapeMetadata } from '@/core/ir/schema/shapes';
 import { getTransformMatrix } from '@/geometry/transforms';
 import { validateCadSource } from '@/geometry/import/cad-source';
 import { sanitizeArtifactName } from '@/export/shared/artifact-sanitization';
+import type { DownloadedArtifact } from '@/export/shared/packaging';
 
 export function cadExportBodies(ir: ProjectIR): CADExportBody[] {
   if (!ir.geometry.bodies.length) throw new Error('There are no bodies to export.');
@@ -35,7 +36,7 @@ export function cadExportBodies(ir: ProjectIR): CADExportBody[] {
   });
 }
 
-export async function downloadCAD(ir: ProjectIR, format: CADFormat, signal?: AbortSignal): Promise<{ errors: string[]; warnings: string[] }> {
+export async function downloadCAD(ir: ProjectIR, format: CADFormat, signal?: AbortSignal): Promise<{ errors: string[]; warnings: string[]; artifact: DownloadedArtifact }> {
   const bodies = cadExportBodies(ir);
   const bytes = await runCADTask({ operation: 'export', format, bodies }, signal);
   if (!(bytes instanceof Uint8Array)) throw new Error('Invalid CAD export response.');
@@ -45,5 +46,5 @@ export async function downloadCAD(ir: ProjectIR, format: CADFormat, signal?: Abo
   anchor.href = url; anchor.download = `${sanitizeArtifactName(ir.meta.project_name)}.${format}`; anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   const wires = bodies.some((body) => body.shape.shapeType === 'frame2d' || body.shape.shapeType === 'truss2d');
-  return { errors: [], warnings: wires ? ['Frame/truss members are exported as centreline curves, without section solids. Curve-only CAD cannot be re-imported by the surface viewer.'] : [] };
+  return { errors: [], warnings: wires ? ['Frame/truss members are exported as centreline curves, without section solids. Curve-only CAD cannot be re-imported by the surface viewer.'] : [], artifact: { fileName: anchor.download, bytes: bytes.byteLength } };
 }

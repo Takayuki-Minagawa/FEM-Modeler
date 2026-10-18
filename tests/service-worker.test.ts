@@ -18,7 +18,7 @@ function worker() {
   };
   const caches = {
     open: vi.fn(async () => cache),
-    keys: vi.fn(async () => ['fem-modeler-shell-v3', 'fem-modeler-shell-v4', 'other-app-cache']),
+    keys: vi.fn(async () => ['fem-modeler-shell-v3', 'fem-modeler-shell-v4', 'fem-modeler-shell-v5', 'other-app-cache']),
     delete: vi.fn(async () => true),
   };
   const fetch = vi.fn(async () => new Response('network data'));
@@ -100,10 +100,10 @@ describe('deployed service worker', () => {
     await expect(sw.request('assets/missing.js')).rejects.toThrow('Offline');
   });
 
-  it('uses cache v4 and retires only older FEM Modeler caches on activation', async () => {
+  it('uses cache v5 and retires only older FEM Modeler caches on activation', async () => {
     const sw = worker(); await sw.request('assets/app.js'); await sw.activate();
-    expect(sw.caches.open).toHaveBeenCalledWith('fem-modeler-shell-v4');
-    expect(sw.caches.delete).toHaveBeenCalledExactlyOnceWith('fem-modeler-shell-v3');
+    expect(sw.caches.open).toHaveBeenCalledWith('fem-modeler-shell-v5');
+    expect(sw.caches.delete.mock.calls).toEqual([['fem-modeler-shell-v3'], ['fem-modeler-shell-v4']]);
     expect(sw.self.clients.claim).toHaveBeenCalledOnce();
   });
 });

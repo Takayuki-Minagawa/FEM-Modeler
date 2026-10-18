@@ -59,7 +59,7 @@ describe('direct recipe history', () => {
   it('keeps current derived validation when undoing unrelated edits and clears the redo branch', () => {
     const store = useAppStore.getState();
     store.setProjectName('A'); store.setProjectName('B'); store.undo();
-    store.runValidation();
+    store.runModelValidation();
     const checks = useAppStore.getState().ir.validation;
     store.setProjectName('C');
     expect(useAppStore.getState().canRedo).toBe(false);

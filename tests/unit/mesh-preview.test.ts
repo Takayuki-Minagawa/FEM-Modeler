@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createDefaultProject } from '@/core/ir/defaults';
 import { generateShape } from '@/geometry/primitives/generators';
 import { estimateMeshPreview } from '@/mesh/preview';
+import { validateCommon } from '@/validation/rules/common';
 
 describe('mesh preview estimator', () => {
   it('labels primitive bounds as derived and element counts as estimates', () => {
@@ -71,6 +72,61 @@ describe('mesh preview estimator', () => {
     expect(body.effectiveElementSize?.value).toBe(0.5);
     expect(body.elementCount?.value).toBe(96);
     expect(body.appliedLocalControlIds).toEqual(['mesh_local']);
+    expect(validateCommon(ir).some((issue) => issue.code === 'UNUSED_NS' && issue.target_ref === 'ns_face')).toBe(false);
+    for (const status of ['stale', 'unresolved'] as const) {
+      ir.named_selections[0].status = status;
+      const inactive = estimateMeshPreview(ir);
+      expect(inactive.bodies[0].effectiveElementSize?.value).toBe(1);
+      expect(inactive.bodies[0].elementCount?.value).toBe(12);
+      expect(inactive.bodies[0].appliedLocalControlIds).toEqual([]);
+      expect(inactive.notices.some((notice) => notice.code === 'MESH_LOCAL_TARGET_EMPTY')).toBe(true);
+    }
+  });
+
+  it('matches generated holed plate bounds through a body transform', () => {
+    const ir = createDefaultProject();
+    const shape = generateShape({ shapeType: 'plateWithHole', width: 4, depth: 3, thickness: 0.2, holeRadius: 0.5 });
+    shape.body.transform.position = [2, 3, 4];
+    shape.body.transform.scale = [1, 2, 1];
+    ir.geometry.bodies.push(shape.body);
+    shape.threeGeometry.computeBoundingBox();
+    const rendered = shape.threeGeometry.boundingBox!;
+    const bounds = estimateMeshPreview(ir).bodies[0].bounds!.value;
+    for (const [axis, key] of ['x', 'y', 'z'].entries()) {
+      const component = key as 'x' | 'y' | 'z';
+      expect(bounds.min[axis]).toBeCloseTo(rendered.min[component] * shape.body.transform.scale[axis] + shape.body.transform.position[axis], 6);
+      expect(bounds.max[axis]).toBeCloseTo(rendered.max[component] * shape.body.transform.scale[axis] + shape.body.transform.position[axis], 6);
+    }
+  });
+
+  it.each([Number.MIN_VALUE, 1e-100, 1e-6])('does not expose an unsafe element estimate for size %s', (size) => {
+    const ir = createDefaultProject();
+    ir.geometry.bodies.push(generateShape({ shapeType: 'box', width: 1, height: 1, depth: 1 }).body);
+    ir.mesh_controls.global.global_size = size;
+    const report = estimateMeshPreview(ir);
+    expect(report.bodies[0].elementCount).toBeNull();
+    expect(report.totalElementCount).toBeNull();
+    expect(report.notices.some((notice) => notice.code === 'MESH_PREVIEW_ESTIMATE_LIMIT')).toBe(true);
+  });
+
+  it('reports non-finite transformed geometry without falling back to local bounds', () => {
+    const ir = createDefaultProject();
+    const shape = generateShape({ shapeType: 'box', width: 4, height: 1, depth: 1 });
+    shape.body.transform.scale = [Number.MAX_VALUE, 2, 2];
+    ir.geometry.bodies.push(shape.body);
+    ir.mesh_controls.global.global_size = 1;
+    const body = estimateMeshPreview(ir).bodies[0];
+    expect(body.bounds).toBeNull(); expect(body.geometricMeasure).toBeNull(); expect(body.elementCount).toBeNull();
+  });
+
+  it('omits a total that exceeds safe integers even when each body count is representable', () => {
+    const ir = createDefaultProject();
+    for (let i = 0; i < 2; i += 1) ir.geometry.bodies.push(generateShape({ shapeType: 'box', width: 1, height: 1, depth: 1 }).body);
+    ir.mesh_controls.global.global_size = Math.cbrt(6 / 8e15);
+    const report = estimateMeshPreview(ir);
+    expect(report.bodies.every((body) => Number.isSafeInteger(body.elementCount?.value))).toBe(true);
+    expect(report.totalElementCount).toBeNull();
+    expect(report.notices.some((notice) => notice.code === 'MESH_PREVIEW_ESTIMATE_LIMIT')).toBe(true);
   });
 
   it('interprets body rotations in degrees when deriving world-space bounds', () => {

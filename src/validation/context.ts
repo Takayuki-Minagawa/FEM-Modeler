@@ -20,3 +20,17 @@ export function isValidationCurrent(ir: ProjectIR, target: SolverTargetName, cas
     && previous.solver_target === current.solver_target
     && previous.input_fingerprint === current.input_fingerprint);
 }
+
+export type ValidationRunStatus = 'not_run' | 'stale' | 'common' | 'other_scope' | 'current';
+
+/** Explain why a validation result can (or cannot) describe the requested input. */
+export function validationRunStatus(ir: ProjectIR, target?: SolverTargetName, caseId?: string): ValidationRunStatus {
+  const previous = ir.validation;
+  if (!previous.last_run_at) return 'not_run';
+  if (previous.validated_revision !== previous.model_revision) return 'stale';
+  if (!previous.context) return 'common';
+  const requestedTarget = target ?? previous.context.solver_target;
+  const requestedCase = caseId ?? previous.context.analysis_case_id;
+  if (previous.context.solver_target !== requestedTarget || previous.context.analysis_case_id !== requestedCase) return 'other_scope';
+  return isValidationCurrent(ir, requestedTarget, requestedCase) ? 'current' : 'stale';
+}

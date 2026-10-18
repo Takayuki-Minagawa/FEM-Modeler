@@ -1,8 +1,8 @@
-import type { Draft } from 'immer';
+import { current, type Draft } from 'immer';
 import type { AppState } from '../store';
 import { getUnitPreset } from '@/core/units/presets';
 import { generateId } from '@/core/ir/id-generator';
-import { runValidation } from '@/validation/engine';
+import { validateModel } from '@/modeling/validation';
 import { duplicateBodiesLinear as duplicateBodiesLinearInGeometry } from '@/geometry/editing';
 import { deleteBodyCascade, deleteBoundaryConditionCascade, deleteInitialConditionCascade, deleteLoadCascade, deleteMaterialCascade, deleteNamedSelectionCascade, deleteSectionCascade } from '@/core/ir/relations';
 import { removeSTLGeometry } from '@/geometry/import/stl-geometry-cache';
@@ -118,7 +118,7 @@ export function createModelActions(edit: ProjectEditor) {
 
       edit((state) => {
         const duplicated = duplicateBodiesLinearInGeometry(
-          state.ir.geometry,
+          current(state.ir.geometry),
           ids,
           copies,
           offset,
@@ -350,9 +350,9 @@ export function createModelActions(edit: ProjectEditor) {
       }),
 
     // --- Validation ---
-    runValidation: (target, analysisCaseId) =>
+    runModelValidation: () =>
       edit((state) => {
-        state.ir.validation = runValidation(state.ir, target, analysisCaseId);
+        state.ir.validation = validateModel(state.ir);
       }, 'derived'),
 
   } satisfies Partial<AppState>;

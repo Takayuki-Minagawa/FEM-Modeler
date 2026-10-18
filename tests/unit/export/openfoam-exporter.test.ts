@@ -10,6 +10,8 @@ import type {
 import { preflightExport } from '@/export/compiler/capabilities';
 import { exportOpenFOAM } from '@/export/openfoam/exporter';
 import { generateShape } from '@/geometry/primitives/generators';
+import { buildPhysicsAdvisorReport } from '@/validation/physics-advisor';
+import { runValidation } from '@/validation/engine';
 
 const IDS = {
   bodySelection: 'ns_body',
@@ -172,6 +174,124 @@ function expectBalancedDictionary(content: string): void {
 }
 
 describe('OpenFOAM exporter contract', () => {
+  it('checks high Reynolds numbers for a supported cell material selection', () => {
+    const project = validProject('2D');
+    project.named_selections.find((selection) => selection.id === IDS.bodySelection)!.entity_type = 'cell';
+    project.boundary_conditions[0].values.vector = [0.002, 0, 0];
+    const metric = buildPhysicsAdvisorReport(project).metrics.find((item) => item.kind === 'reynolds_number');
+    expect(metric?.value).toBeCloseTo(4000, 10);
+    expect(preflightExport(project, 'OpenFOAM').errors.some((issue) => issue.code === 'OFM_REYNOLDS_UNSUPPORTED')).toBe(true);
+    expect(exportOpenFOAM(project).errors.some((error) => error.includes('Reynolds number below 2300'))).toBe(true);
+  });
+
+  it.each(['imported', 'library', 'inferred'] as const)('checks high Reynolds numbers for a supported %s inlet', (status) => {
+    const project = validProject('2D');
+    project.boundary_conditions[0].status = status;
+    project.boundary_conditions[0].values.vector = [0.002, 0, 0];
+    const metric = buildPhysicsAdvisorReport(project).metrics.find((item) => item.kind === 'reynolds_number');
+    expect(metric?.value).toBeCloseTo(4000, 10);
+    expect(preflightExport(project, 'OpenFOAM').errors.some((issue) => issue.code === 'OFM_REYNOLDS_UNSUPPORTED')).toBe(true);
+    expect(exportOpenFOAM(project).errors.some((error) => error.includes('Reynolds number below 2300'))).toBe(true);
+    project.boundary_conditions[0].values.vector = [0.0001, 0, 0];
+    expect(exportOpenFOAM(project).success).toBe(true);
+    expect(preflightExport(project, 'OpenFOAM').errors).toEqual([]);
+  });
+
+  it.each([[0, 0, 0], [-0.0001, 0, 0], [0, 0.0001, 0]])('rejects invalid inlet direction %s before reporting nominal flow', (x, y, z) => {
+    const project = validProject('2D');
+    project.boundary_conditions[0].values.vector = [x, y, z];
+    expect(preflightExport(project, 'OpenFOAM').errors.some((issue) => issue.code === 'OFM_INLET_INVALID')).toBe(true);
+    expect(buildPhysicsAdvisorReport(project).metrics.some((metric) => metric.kind === 'reynolds_number')).toBe(false);
+    expect(exportOpenFOAM(project).success).toBe(false);
+  });
+
+  it.each([-1, 0, Number.POSITIVE_INFINITY])('rejects unsupported channel scale %s consistently', (scale) => {
+    const project = validProject('2D');
+    project.geometry.bodies[0].transform.scale[1] = scale;
+    expect(preflightExport(project, 'OpenFOAM').errors.some((issue) => issue.code === 'OFM_CHANNEL_GEOMETRY_INVALID')).toBe(true);
+    expect(buildPhysicsAdvisorReport(project).metrics.some((metric) => metric.kind === 'reynolds_number')).toBe(false);
+    expect(exportOpenFOAM(project).success).toBe(false);
+  });
+
+  it('rejects overflowed scaled geometry in both preflight and export', () => {
+    const project = validProject('2D');
+    project.geometry.bodies[0].metadata.height = Number.MAX_VALUE;
+    project.geometry.bodies[0].transform.scale[1] = 2;
+    expect(preflightExport(project, 'OpenFOAM').errors.some((issue) => issue.code === 'OFM_CHANNEL_GEOMETRY_INVALID')).toBe(true);
+    expect(buildPhysicsAdvisorReport(project).metrics.some((metric) => metric.kind === 'reynolds_number')).toBe(false);
+    expect(exportOpenFOAM(project).success).toBe(false);
+  });
+
+  it.each([
+    ['2D', 0.1, 2299, true], ['2D', 0.1, 2300, false], ['2D', 10, 2301, false],
+    ['3D', 0.1, 2299, true], ['3D', 0.1, 2300, false], ['3D', 10, 2301, false],
+  ] as const)('shares %s Re and laminar eligibility at depth %s and Re %s', (mode, depth, reynolds, allowed) => {
+    const project = validProject(mode);
+    project.geometry.bodies[0].metadata.depth = depth;
+    const diameter = mode === '2D' ? 2 : 2 * Math.min(1, depth) / (1 + Math.min(1, depth) / Math.max(1, depth));
+    project.boundary_conditions[0].values.vector = [reynolds * 1e-6 / diameter, 0, 0];
+    const advisor = buildPhysicsAdvisorReport(project).metrics.find((metric) => metric.kind === 'reynolds_number')!;
+    const result = exportOpenFOAM(project);
+    const manifest = JSON.parse(result.manifest);
+    expect(advisor.value).toBeCloseTo(reynolds, 8);
+    expect(advisor.value).toBe(manifest.reynolds_number);
+    expect(advisor.inputs.find((input) => input.name === 'hydraulic diameter')?.value).toBe(manifest.hydraulic_diameter_m);
+    expect(result.success).toBe(allowed);
+    expect(preflightExport(project, 'OpenFOAM').errors.some((issue) => issue.code === 'OFM_REYNOLDS_UNSUPPORTED')).toBe(!allowed);
+    expect(runValidation(project, 'OpenFOAM', IDS.analysisCase).items.some((issue) => issue.code === 'OFM_REYNOLDS_UNSUPPORTED')).toBe(!allowed);
+    expect(runValidation(project).items.some((issue) => issue.code === 'OFM_REYNOLDS_UNSUPPORTED')).toBe(!allowed);
+    if (!allowed) expect(manifest.consumed_ir_ids).toEqual([]);
+  });
+
+  it('uses only the selected case inlet and material in physics advisories and preflight', () => {
+    const project = validProject('2D');
+    const secondInlet = structuredClone(project.boundary_conditions[0]);
+    secondInlet.id = 'fast-inlet'; secondInlet.values.vector = [1, 0, 0];
+    project.boundary_conditions.push(secondInlet);
+    const secondCase = structuredClone(project.analysis_cases[0]);
+    secondCase.id = 'fast-case'; secondCase.active = false;
+    secondCase.participating_bc_ids = secondCase.participating_bc_ids.map((id) => id === IDS.inletBC ? secondInlet.id : id);
+    const secondMaterial = structuredClone(project.materials[0]);
+    secondMaterial.id = 'other-fluid';
+    secondMaterial.parameter_set.kinematic_viscosity.value = 2e-6;
+    secondMaterial.parameter_set.dynamic_viscosity.value = 0.002;
+    project.materials.push(secondMaterial);
+    project.material_assignments.push({ ...project.material_assignments[0], id: 'other-assignment', material_id: secondMaterial.id });
+    secondCase.participating_material_ids = [secondMaterial.id];
+    project.analysis_cases.push(secondCase);
+    const selectedMetrics = buildPhysicsAdvisorReport(project).metrics.filter((metric) => metric.kind === 'reynolds_number');
+    expect(selectedMetrics).toHaveLength(1);
+    expect(selectedMetrics[0].value).toBeCloseTo(200, 10);
+    expect(preflightExport(project, 'OpenFOAM', IDS.analysisCase).errors).toEqual([]);
+    expect(buildPhysicsAdvisorReport(project, secondCase.id).metrics.find((metric) => metric.kind === 'reynolds_number')?.value).toBe(1_000_000);
+    expect(preflightExport(project, 'OpenFOAM', secondCase.id).errors.some((issue) => issue.code === 'OFM_REYNOLDS_UNSUPPORTED')).toBe(true);
+    secondCase.participation_modes = { participating_bc_ids: 'none' };
+    expect(buildPhysicsAdvisorReport(project, secondCase.id).metrics.some((metric) => metric.kind === 'reynolds_number')).toBe(false);
+    expect(project.analysis_cases[0].active).toBe(true);
+  });
+
+  it('reports missing mode and conflicting viscosity before presenting a Reynolds metric', () => {
+    const project = validProject(undefined);
+    project.solver_targets.find((target) => target.target_name === 'OpenFOAM')!.solver_options = {};
+    expect(buildPhysicsAdvisorReport(project).metrics.some((metric) => metric.kind === 'reynolds_number')).toBe(false);
+    expect(preflightExport(project, 'OpenFOAM').errors.some((issue) => issue.code === 'OFM_DIMENSIONALITY_INVALID')).toBe(true);
+    project.solver_targets.find((target) => target.target_name === 'OpenFOAM')!.solver_options.dimensionality = '2D';
+    project.materials[0].parameter_set.kinematic_viscosity.value = 1e-4;
+    expect(buildPhysicsAdvisorReport(project).metrics.some((metric) => metric.kind === 'reynolds_number')).toBe(false);
+    expect(preflightExport(project, 'OpenFOAM').errors.some((issue) => issue.code === 'OFM_TRANSPORT_INVALID')).toBe(true);
+    expect(exportOpenFOAM(project).success).toBe(false);
+  });
+
+  it('does not present an overflowed Reynolds number as a usable physics metric', () => {
+    const project = validProject('2D');
+    project.boundary_conditions[0].values.vector = [Number.MAX_VALUE, 0, 0];
+    const advisory = buildPhysicsAdvisorReport(project);
+    expect(advisory.metrics.some((metric) => metric.kind === 'reynolds_number')).toBe(false);
+    expect(advisory.notices.some((notice) => notice.code === 'OFM_REYNOLDS_UNSUPPORTED')).toBe(true);
+    expect(preflightExport(project, 'OpenFOAM').errors.some((issue) => issue.code === 'OFM_REYNOLDS_UNSUPPORTED')).toBe(true);
+    expect(exportOpenFOAM(project).success).toBe(false);
+  });
+
   it('emits a complete and internally consistent 2D simpleFoam case', () => {
     const result = exportOpenFOAM(validProject('2D'));
 

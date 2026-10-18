@@ -11,7 +11,7 @@ export const nativeShapeSchema = z.discriminatedUnion('shapeType', [
   z.strictObject({ shapeType: z.literal('plateWithHole'), width: length, depth: length, thickness: length, holeRadius: length }),
   z.strictObject({ shapeType: z.literal('pipe'), outerRadius: length, innerRadius: length, length, segments }),
   z.strictObject({ shapeType: z.literal('lBracket'), width: length, height: length, thickness: length, depth: length }),
-  z.strictObject({ shapeType: z.literal('frame2d'), spanX: length, spanY: length, columns: count, floors: count }),
+  z.strictObject({ shapeType: z.literal('frame2d'), spanX: length, spanY: length, columns: count.min(2), floors: count }),
   z.strictObject({ shapeType: z.literal('truss2d'), span: length, height: length, divisions: count }),
   z.strictObject({ shapeType: z.literal('channel'), length, height: length, depth: length, dimensionality: z.enum(['2D', '3D']).optional() }),
 ]).superRefine((shape, context) => {
@@ -24,12 +24,35 @@ export const nativeShapeSchema = z.discriminatedUnion('shapeType', [
   if (shape.shapeType === 'lBracket' && shape.thickness >= Math.min(shape.width, shape.height)) {
     context.addIssue({ code: 'custom', path: ['thickness'], message: 'Bracket thickness must be smaller than both legs.' });
   }
-  if (shape.shapeType === 'frame2d' && shape.columns < 2) {
-    context.addIssue({ code: 'custom', path: ['columns'], message: 'A frame needs at least two columns.' });
+  if (shape.shapeType === 'frame2d' && shape.columns * (shape.floors + 1) + (2 * shape.columns - 1) * shape.floors > 100_000) {
+    context.addIssue({ code: 'custom', path: ['floors'], message: 'A frame must contain at most 100,000 topology entities.' });
   }
 });
 
 export type NativeShapeParams = z.infer<typeof nativeShapeSchema>;
+
+export interface NativeShapeParameter {
+  key: string;
+  kind: 'length' | 'count' | 'choice';
+  min?: number;
+  max?: number;
+  options?: readonly string[];
+  /** Changes the meaning of indexed edges/nodes or dimensional boundary roles. */
+  changesTopology: boolean;
+}
+
+/** Creation and regeneration use the same parameter names, units and bounds as validation. */
+export function nativeShapeParameters(shapeType: string): NativeShapeParameter[] {
+  const variant = nativeShapeSchema.options.find((item) => item.shape.shapeType.value === shapeType);
+  if (!variant) return [];
+  return Object.entries(variant.shape).flatMap(([key, field]) => {
+    if (key === 'shapeType') return [];
+    const schema = field instanceof z.ZodOptional ? field.unwrap() : field;
+    if (schema instanceof z.ZodNumber) return [{ key, kind: schema.isInt ? 'count' : 'length', min: schema.minValue ?? undefined, max: schema.maxValue ?? undefined, changesTopology: schema.isInt && key !== 'segments' } as NativeShapeParameter];
+    if (schema instanceof z.ZodEnum) return [{ key, kind: 'choice', options: schema.options as string[], changesTopology: true } as NativeShapeParameter];
+    return [];
+  });
+}
 
 export const importedCadShapeSchema = z.strictObject({
   shapeType: z.literal('imported_cad'), importFormat: z.enum(['step', 'iges']),
@@ -46,5 +69,7 @@ export function parseNativeShapeMetadata(metadata: Record<string, unknown>): Nat
   const variant = nativeShapeSchema.options.find((item) => item.shape.shapeType.value === metadata.shapeType);
   if (!variant) throw new Error(`Unknown native shape: ${String(metadata.shapeType)}.`);
   const parameters = Object.fromEntries(Object.keys(variant.shape).map((key) => [key, metadata[key]]));
-  return nativeShapeSchema.parse(parameters);
+  const result = nativeShapeSchema.safeParse(parameters);
+  if (!result.success) throw new Error(`Invalid native dimensions: ${result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`);
+  return result.data;
 }

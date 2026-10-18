@@ -39,6 +39,10 @@ export const validationSchema = z.strictObject({
     last_run_at: z.string(),
     model_revision: z.number().int().nonnegative(),
     validated_revision: z.number().int().min(-1),
+    model_context: z.strictObject({
+      kind: z.literal('model'),
+      input_fingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    }).optional(),
     context: z.strictObject({
       analysis_case_id: z.string(),
       solver_target: z.enum(['OpenSeesPy', 'DOLFINx', 'OpenFOAM']),

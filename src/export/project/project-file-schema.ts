@@ -26,6 +26,7 @@ import {
 import { migrateLegacyUnits } from './migrations/v0_1';
 import { migrateV02Artifacts } from './migrations/v0_2';
 import { validateMeshFieldReferences } from '@/results/package';
+import { isMeshOnlyResult } from '@/results/import-diagnostics';
 
 const REQUIRED_SOLVER_TARGETS = ['OpenSeesPy', 'DOLFINx', 'OpenFOAM'] as const;
 
@@ -86,6 +87,9 @@ const projectFileSchema = z.strictObject({
     }
   }
   project.results.forEach((result, resultIndex) => {
+    if (result.metadata.stage === 'mesh_only' && !isMeshOnlyResult(result)) {
+      context.addIssue({ code: 'custom', path: ['results', resultIndex, 'metadata', 'stage'], message: 'A mesh-only artifact must contain a mesh and no solver fields or checks.' });
+    }
     if (result.mesh) {
       if (result.mesh.source.solver !== result.solver_target
         || result.metadata.export_target !== result.solver_target

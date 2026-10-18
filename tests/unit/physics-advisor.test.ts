@@ -88,6 +88,7 @@ describe('physics advisor', () => {
   it('computes channel Reynolds number from inlet, assignment, and viscosity', () => {
     const ir = createDefaultProject();
     ir.meta.domain_type = 'fluid';
+    ir.solver_targets.find((target) => target.target_name === 'OpenFOAM')!.solver_options.dimensionality = '3D';
     const channel = generateShape({ shapeType: 'channel', length: 6, height: 1, depth: 0.5 }, 'Channel');
     addShape(ir, channel);
     const inletFace = channel.faces.find((face) => face.name === 'inlet')!;
@@ -203,6 +204,16 @@ describe('physics advisor', () => {
     const steady = buildPhysicsAdvisorReport(ir);
     expect(steady.metrics.some((metric) => metric.kind === 'fourier_number')).toBe(false);
     expect(steady.notices.some((notice) => notice.code.startsWith('FOURIER_'))).toBe(false);
+
+    const otherCondition = structuredClone(ir.boundary_conditions[0]);
+    otherCondition.id = 'other-convection'; otherCondition.values.heat_transfer_coefficient = 50;
+    ir.boundary_conditions.push(otherCondition);
+    const otherCase = structuredClone(ir.analysis_cases[0]);
+    otherCase.id = 'other-thermal'; otherCase.active = false; otherCase.participating_bc_ids = [otherCondition.id];
+    ir.analysis_cases.push(otherCase);
+    expect(buildPhysicsAdvisorReport(ir).metrics.filter((metric) => metric.kind === 'biot_number').map((metric) => metric.value)).toEqual([0.1]);
+    expect(buildPhysicsAdvisorReport(ir, otherCase.id).metrics.find((metric) => metric.kind === 'biot_number')?.value).toBe(1);
+    expect(buildPhysicsAdvisorReport(ir, 'unknown-case').metrics).toEqual([]);
   });
 
   it('emits typed missing-input notices instead of fabricated fluid metrics', () => {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import i18n from '@/i18n';
 import { useAppStore } from '@/state/store';
 import { ImportDialog } from '@/ui/dialogs/ImportDialog';
 import { ExportForm } from '@/ui/forms/ExportForm';
@@ -10,7 +11,6 @@ import { createCadSource } from '@/geometry/import/cad-source';
 import { useViewerState } from '@/viewer/view-state';
 
 const mocks = vi.hoisted(() => ({ importCAD: vi.fn(), importSTL: vi.fn(), downloadCAD: vi.fn(), addActivity: vi.fn(), recordExportResult: vi.fn(), saveProjectFile: vi.fn(), loadFromFile: vi.fn() }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 vi.mock('@/geometry/import/cad-async', () => ({ importCADAsync: mocks.importCAD }));
 vi.mock('@/geometry/import/stl-async', () => ({ importSTLAsync: mocks.importSTL }));
 vi.mock('@/export/cad/exporter', () => ({ downloadCAD: mocks.downloadCAD }));
@@ -35,7 +35,7 @@ function drop(name: string, arrayBuffer = vi.fn(async () => bytes), size = bytes
   fireEvent.drop(screen.getByRole('button', { name: /Drop file or click to browse/ }), { dataTransfer: { files: [{ name, size, arrayBuffer }] } });
   return arrayBuffer;
 }
-beforeEach(() => { vi.clearAllMocks(); useAppStore.getState().createProject('CAD workflow', 'solid'); useViewerState.getState().set({ focus: null }); });
+beforeEach(async () => { await i18n.changeLanguage('en'); vi.clearAllMocks(); useAppStore.getState().createProject('CAD workflow', 'solid'); useViewerState.getState().set({ focus: null }); });
 afterEach(() => { cleanup(); clearSTLGeometryCache(); });
 
 describe('CAD import UI', () => {
@@ -128,7 +128,7 @@ describe('CAD export UI', () => {
     fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${target} Export all bodies`) }));
     await waitFor(() => expect(mocks.downloadCAD).toHaveBeenCalledWith(snapshot, target.toLowerCase(), expect.any(AbortSignal)));
     expect(screen.getByRole('status').textContent).toContain(`${target}: Success`);
-    expect(mocks.recordExportResult).toHaveBeenCalledWith(target, [], []);
+    expect(mocks.recordExportResult).toHaveBeenCalledWith(target, [], [], expect.objectContaining({ projectId: snapshot.meta.project_id, projectName: snapshot.meta.project_name, revision: snapshot.validation.model_revision }));
   });
 
   it('shows unsupported shape errors and releases the buttons', async () => {

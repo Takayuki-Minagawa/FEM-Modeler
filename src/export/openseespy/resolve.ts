@@ -6,6 +6,7 @@ import {
   unsupportedOpenSeesMeshSettings
 } from '@/export/compiler';
 import { pushUnique } from './helpers';
+import { participatingIds } from '@/core/ir/participation';
 import type { OpenSeesCaseScope, OpenSeesPyModel, OpenSeesPyNode, OpenSeesPyTopology, OpenSeesPyTopologyElement, ResolvedBinding } from './model';
 
 export function resolveOpenSeesCaseScope(ir: ProjectIR): OpenSeesCaseScope {
@@ -51,7 +52,7 @@ export function resolveOpenSeesCaseScope(ir: ProjectIR): OpenSeesCaseScope {
     requestedIds: string[] | undefined,
     label: string,
   ): T[] => {
-    if (!analysisCase || !requestedIds || requestedIds.length === 0) return values;
+    if (!analysisCase || requestedIds === undefined) return values;
     const knownIds = new Set(values.map((value) => value.id));
     for (const id of requestedIds) {
       if (!knownIds.has(id)) errors.push(`Analysis case "${analysisCase.name}" references missing ${label} "${id}".`);
@@ -60,11 +61,11 @@ export function resolveOpenSeesCaseScope(ir: ProjectIR): OpenSeesCaseScope {
     return values.filter((value) => requested.has(value.id));
   };
 
-  const materials = selected(ir.materials, analysisCase?.participating_material_ids, 'material');
-  const sections = selected(ir.sections, analysisCase?.participating_section_ids, 'section');
-  const boundaryConditions = selected(ir.boundary_conditions, analysisCase?.participating_bc_ids, 'boundary condition');
-  const loads = selected(ir.loads, analysisCase?.participating_load_ids, 'load');
-  const initialConditions = selected(ir.initial_conditions, analysisCase?.participating_ic_ids, 'initial condition');
+  const materials = selected(ir.materials, participatingIds(analysisCase, 'participating_material_ids'), 'material');
+  const sections = selected(ir.sections, participatingIds(analysisCase, 'participating_section_ids'), 'section');
+  const boundaryConditions = selected(ir.boundary_conditions, participatingIds(analysisCase, 'participating_bc_ids'), 'boundary condition');
+  const loads = selected(ir.loads, participatingIds(analysisCase, 'participating_load_ids'), 'load');
+  const initialConditions = selected(ir.initial_conditions, participatingIds(analysisCase, 'participating_ic_ids'), 'initial condition');
   for (const boundaryCondition of boundaryConditions) {
     if (boundaryCondition.physics_domain !== 'structural') {
       errors.push(

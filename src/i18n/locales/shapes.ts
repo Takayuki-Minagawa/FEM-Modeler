@@ -25,9 +25,9 @@ export const shapesEn: Record<string, string> = {
 export const paramLabelsJa: Record<string, string> = {
   width: '幅', height: '高さ', depth: '奥行', radius: '半径',
   thickness: '厚さ', segments: '分割数', holeRadius: '穴の半径',
-  outerRadius: '外径', innerRadius: '内径', length: '長さ',
+  outerRadius: '外半径', innerRadius: '内半径', length: '長さ',
   spanX: 'X方向スパン', spanY: 'Y方向スパン', columns: '柱数', floors: '層数',
-  span: 'スパン', divisions: '分割数',
+  span: 'スパン', divisions: '分割数', dimensionality: '解析次元',
 };
 
 export const paramLabelsEn: Record<string, string> = {
@@ -35,5 +35,5 @@ export const paramLabelsEn: Record<string, string> = {
   thickness: 'Thickness', segments: 'Segments', holeRadius: 'Hole Radius',
   outerRadius: 'Outer Radius', innerRadius: 'Inner Radius', length: 'Length',
   spanX: 'Span X', spanY: 'Span Y', columns: 'Columns', floors: 'Floors',
-  span: 'Span', divisions: 'Divisions',
+  span: 'Span', divisions: 'Divisions', dimensionality: 'Dimensionality',
 };

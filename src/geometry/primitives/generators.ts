@@ -1,4 +1,4 @@
-import { nativeShapeSchema } from '@/core/ir/schema/shapes';
+import { nativeShapeSchema, type NativeShapeParams } from '@/core/ir/schema/shapes';
 import * as THREE from 'three';
 import { generateId } from '@/core/ir/id-generator';
 import type { GeometryBody, GeometryFace, GeometryEdge, GeometryVertex, BodyCategory } from '@/core/ir/types';
@@ -30,6 +30,30 @@ function nextColor(): string {
 
 export function generateShape(input: AnyShapeParams, name?: string): GeneratedTopology {
   const params = nativeShapeSchema.parse(input);
+  // Rendering uses Float32 buffers even though the IR stores double precision.
+  // Reject overflow/underflow before allocating geometry or mutating the model.
+  for (const value of Object.values(params)) {
+    if (typeof value === 'number' && (!Number.isFinite(Math.fround(value)) || (value !== 0 && Math.fround(value) === 0))) {
+      throw new Error('Shape dimensions exceed the supported finite rendering range.');
+    }
+  }
+  const generated = generateNativeShape(params, name);
+  const finite = (values: Iterable<number>) => {
+    for (const value of values) if (!Number.isFinite(value)) return false;
+    return true;
+  };
+  const valid = generated.vertices.every((vertex) => finite(vertex.position))
+    && generated.edges.every((edge) => edge.length === undefined || Number.isFinite(edge.length))
+    && generated.faces.every((face) => (face.area === undefined || Number.isFinite(face.area)) && (!face.normal || finite(face.normal)))
+    && Object.values(generated.threeGeometry.attributes).every((attribute) => finite(attribute.array));
+  if (!valid) {
+    generated.threeGeometry.dispose();
+    throw new Error('Shape dimensions produce non-finite geometry. Reduce the dimensions before applying.');
+  }
+  return generated;
+}
+
+function generateNativeShape(params: NativeShapeParams, name?: string): GeneratedTopology {
   switch (params.shapeType) {
     case 'box': return generateBox(params, name);
     case 'cylinder': return generateCylinder(params, name);
@@ -40,7 +64,6 @@ export function generateShape(input: AnyShapeParams, name?: string): GeneratedTo
     case 'frame2d': return generateFrame2D(params, name);
     case 'truss2d': return generateTruss2D(params, name);
     case 'channel': return generateChannel(params, name);
-
   }
 }
 

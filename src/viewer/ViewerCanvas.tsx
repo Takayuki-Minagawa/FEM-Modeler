@@ -1,16 +1,13 @@
-import { Canvas } from '@react-three/fiber';
+import { SceneCanvas } from './SceneCanvas';
 import { OrbitControls, GizmoHelper, GizmoViewport, Grid } from '@react-three/drei';
 import { useAppStore } from '@/state/store';
 import { useAppUiContext } from '@/hooks/useAppUiContext';
 import { GeometryRenderer } from './GeometryRenderer';
-import { AnalysisOverlays, FocusController } from './AnalysisOverlays';
-import { ResultOverlay } from './ResultOverlay';
+import { FocusController } from './FocusController';
+import { MaterialOverlays } from './MaterialOverlays';
 import { ViewerControls } from './ViewerControls';
-import { useViewerState } from './view-state';
 
 export function ViewerCanvas() {
-  const resultId = useViewerState((s) => s.resultId);
-  const hasResult = useAppStore((s) => s.ir.results.some((r) => r.id === resultId && r.mesh));
   const showGrid = useAppStore((s) => s.showGrid);
   const showAxes = useAppStore((s) => s.showAxes);
   const { theme } = useAppUiContext();
@@ -23,10 +20,8 @@ export function ViewerCanvas() {
   return (
     <div className="w-full h-full relative">
       <ViewerControls />
-      <Canvas
-        camera={{ position: [10, 10, 10], fov: 50, near: 0.1, far: 10000 }}
+      <SceneCanvas
         style={{ background: bgColor }}
-        frameloop="demand"
       >
         <ambientLight intensity={isDark ? 0.4 : 0.6} />
         <directionalLight position={[10, 20, 10]} intensity={isDark ? 0.8 : 1.0} />
@@ -48,7 +43,8 @@ export function ViewerCanvas() {
 
         {showAxes && <axesHelper args={[5]} />}
 
-        {hasResult ? <ResultOverlay /> : <><GeometryRenderer /><AnalysisOverlays /></>}
+        <GeometryRenderer />
+        <MaterialOverlays />
         <FocusController />
 
         <GizmoHelper alignment="bottom-right" margin={[60, 60]}>
@@ -57,7 +53,7 @@ export function ViewerCanvas() {
             labelColor={isDark ? '#ffffff' : '#333333'}
           />
         </GizmoHelper>
-      </Canvas>
+      </SceneCanvas>
     </div>
   );
 }

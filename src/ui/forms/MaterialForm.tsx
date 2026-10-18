@@ -5,9 +5,16 @@ import { generateId } from '@/core/ir/id-generator';
 import { createEmptyParameterSet } from '@/core/ir/defaults';
 import { MATERIAL_LIBRARY, createMaterialFromLibrary } from '@/lib/material-library';
 import { UnitInput } from './common/UnitInput';
-import { SelectInput } from './common/SelectInput';
-import type { Material, MaterialParameterKey } from '@/core/ir/types';
-import { fromSINullable, quantityUnitLabel, toSINullable, type QuantityKind } from '@/core/units';
+import { EntityRow } from './common/EntityRow';
+import { FormField } from './common/FormField';
+import { AssignmentPicker } from './common/AssignmentPicker';
+import { DuplicateAction } from './common/BulkActions';
+import { uniqueEntityName } from '@/core/ir/names';
+import type { Material } from '@/core/ir/types';
+import { fromSINullable, quantityUnitLabel, toSINullable } from '@/core/units';
+import { modelFormsEn, modelFormsJa } from '@/i18n/locales/model-forms';
+
+const PART_MATERIAL_LIBRARY = MATERIAL_LIBRARY.filter((entry) => entry.material.class !== 'fluid_newtonian');
 
 export function MaterialForm() {
   const { t, i18n } = useTranslation();
@@ -18,38 +25,19 @@ export function MaterialForm() {
   const addMaterial = useAppStore((s) => s.addMaterial);
   const updateMaterial = useAppStore((s) => s.updateMaterial);
   const removeMaterial = useAppStore((s) => s.removeMaterial);
-  const addMaterialAssignment = useAppStore((s) => s.addMaterialAssignment);
   const removeMaterialAssignment = useAppStore((s) => s.removeMaterialAssignment);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showLibrary, setShowLibrary] = useState(false);
   const [assignMatId, setAssignMatId] = useState<string | null>(null);
 
   const isJa = i18n.language === 'ja';
+  const copy = isJa ? modelFormsJa : modelFormsEn;
   const unitSystem = units.system_name;
-  const quantityMap: Record<MaterialParameterKey, QuantityKind> = {
-    density: 'density',
-    young_modulus: 'stress',
-    poisson_ratio: 'dimensionless',
-    thermal_conductivity: 'thermal_conductivity',
-    specific_heat: 'specific_heat',
-    dynamic_viscosity: 'dynamic_viscosity',
-    kinematic_viscosity: 'kinematic_viscosity',
-  };
-
-  const paramKeys: { key: MaterialParameterKey; labelKey: string }[] = [
-    { key: 'density', labelKey: 'materials.density' },
-    { key: 'young_modulus', labelKey: 'materials.youngModulus' },
-    { key: 'poisson_ratio', labelKey: 'materials.poissonRatio' },
-    { key: 'thermal_conductivity', labelKey: 'materials.thermalConductivity' },
-    { key: 'specific_heat', labelKey: 'materials.specificHeat' },
-    { key: 'dynamic_viscosity', labelKey: 'materials.dynamicViscosity' },
-    { key: 'kinematic_viscosity', labelKey: 'materials.kinematicViscosity' },
-  ];
 
   const handleAddEmpty = () => {
     const mat: Material = {
       id: generateId('material'),
-      name: isJa ? '新規材料' : 'New Material',
+      name: uniqueEntityName(isJa ? '新規材料' : 'New Material', materials),
       class: 'elastic',
       physical_model: 'isotropic_linear',
       parameter_set: createEmptyParameterSet(),
@@ -61,32 +49,24 @@ export function MaterialForm() {
   };
 
   const handleAddFromLibrary = (idx: number) => {
-    const entry = MATERIAL_LIBRARY[idx];
+    const entry = PART_MATERIAL_LIBRARY[idx];
     const mat = createMaterialFromLibrary(entry, i18n.language);
+    mat.name = uniqueEntityName(mat.name, materials);
+    mat.parameter_set = { ...createEmptyParameterSet(), density: { ...mat.parameter_set.density } };
     addMaterial(mat);
     setShowLibrary(false);
     setEditingId(mat.id);
   };
 
-  const handleParamChange = (matId: string, key: MaterialParameterKey, value: number | null) => {
+  const handleDensityChange = (matId: string, value: number | null) => {
     const mat = materials.find((m) => m.id === matId);
     if (!mat) return;
     const updated = { ...mat.parameter_set };
-    updated[key] = {
-      value: toSINullable(value, quantityMap[key], unitSystem),
+    updated.density = {
+      value: toSINullable(value, 'density', unitSystem),
       status: value !== null ? 'confirmed' : 'missing',
     };
     updateMaterial(matId, { parameter_set: updated });
-  };
-
-  const handleAssign = (matId: string, nsId: string) => {
-    addMaterialAssignment({
-      id: generateId('material_assignment'),
-      material_id: matId,
-      target_named_selection_id: nsId,
-      override_allowed: true,
-    });
-    setAssignMatId(null);
   };
 
   const editingMat = editingId ? materials.find((m) => m.id === editingId) : null;
@@ -118,7 +98,7 @@ export function MaterialForm() {
       {/* Library dropdown */}
       {showLibrary && (
         <div className="space-y-1 p-2 rounded" style={{ backgroundColor: 'var(--color-bg-input)' }}>
-          {MATERIAL_LIBRARY.map((entry, idx) => (
+          {PART_MATERIAL_LIBRARY.map((entry, idx) => (
             <button
               key={idx}
               onClick={() => handleAddFromLibrary(idx)}
@@ -139,59 +119,44 @@ export function MaterialForm() {
       {/* Editing form */}
       {editingMat && (
         <div className="p-3 rounded space-y-2" style={{ backgroundColor: 'var(--color-bg-input)', border: '1px solid var(--color-accent)' }}>
-          <div className="flex items-center gap-2">
-            <span className="text-sm w-28 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>
-              {t('materials.name')}
-            </span>
+          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{t('workflow.immediate')}</p>
+          <DuplicateAction kind="material" itemId={editingMat.id} onDuplicated={setEditingId} />
+          <FormField label={t('materials.name')}>{(attributes) => (
             <input
+              {...attributes}
               type="text"
               value={editingMat.name}
               onChange={(e) => updateMaterial(editingMat.id, { name: e.target.value })}
-              className="flex-1 px-2 py-1.5 rounded text-sm outline-none"
+              className="w-full min-w-0 px-2 py-1.5 rounded text-sm outline-none"
               style={{
                 backgroundColor: 'var(--color-bg-secondary)',
                 color: 'var(--color-text)',
                 border: '1px solid var(--color-border)',
               }}
             />
-          </div>
+          )}</FormField>
 
-          <SelectInput
-            label={t('materials.class')}
-            value={editingMat.class}
-            options={[
-              { value: 'elastic', label: isJa ? '弾性体' : 'Elastic' },
-              { value: 'thermo_elastic', label: isJa ? '熱弾性体' : 'Thermo-Elastic' },
-              { value: 'fluid_newtonian', label: isJa ? 'ニュートン流体' : 'Newtonian Fluid' },
-            ]}
-            onChange={(v) => {
-              const materialClass = v as Material['class'];
-              updateMaterial(editingMat.id, {
-                class: materialClass,
-                physical_model: materialClass === 'fluid_newtonian'
-                  ? 'incompressible_newtonian'
-                  : 'isotropic_linear',
-              });
-            }}
+          <UnitInput
+            label={copy.densityOptional}
+            value={fromSINullable(editingMat.parameter_set.density.value, 'density', unitSystem)}
+            unit={quantityUnitLabel('density', unitSystem)}
+            status={editingMat.parameter_set.density.value === null ? undefined : editingMat.parameter_set.density.status}
+            min={0}
+            onChange={(value) => handleDensityChange(editingMat.id, value)}
           />
-
-          {paramKeys.map(({ key, labelKey }) => (
-            <UnitInput
-              key={key}
-              label={t(labelKey)}
-              value={fromSINullable(editingMat.parameter_set[key].value, quantityMap[key], unitSystem)}
-              unit={quantityUnitLabel(quantityMap[key], unitSystem)}
-              status={editingMat.parameter_set[key].status}
-              onChange={(v) => handleParamChange(editingMat.id, key, v)}
-            />
-          ))}
+          <FormField label={copy.materialSource}>{(attributes) => <input {...attributes} type="text" value={editingMat.source}
+            onChange={(event) => updateMaterial(editingMat.id, { source: event.target.value })}
+            className="w-full min-w-0 px-2 py-1.5 rounded text-sm" style={{ backgroundColor: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }} />}</FormField>
+          <FormField label={copy.materialNotes}>{(attributes) => <textarea {...attributes} value={editingMat.notes} rows={3}
+            onChange={(event) => updateMaterial(editingMat.id, { notes: event.target.value })}
+            className="w-full min-w-0 px-2 py-1.5 rounded text-sm" style={{ backgroundColor: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }} />}</FormField>
 
           <button
             onClick={() => setEditingId(null)}
             className="w-full py-1.5 rounded text-sm cursor-pointer"
             style={{ backgroundColor: 'var(--color-bg-panel)', color: 'var(--color-text-secondary)' }}
           >
-            {t('common.apply')}
+            {t('workflow.close')}
           </button>
         </div>
       )}
@@ -213,31 +178,19 @@ export function MaterialForm() {
                   backgroundColor: editingId === mat.id ? 'var(--color-bg-panel)' : 'var(--color-bg-input)',
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <span
-                    className="font-medium cursor-pointer"
-                    style={{ color: 'var(--color-text)' }}
-                    onClick={() => setEditingId(editingId === mat.id ? null : mat.id)}
-                  >
-                    {mat.name}
-                  </span>
-                  <div className="flex gap-1">
+                <EntityRow name={mat.name} entityId={mat.id} selected={editingId === mat.id}
+                  onSelect={() => setEditingId(editingId === mat.id ? null : mat.id)}
+                  onDelete={() => { removeMaterial(mat.id); if (editingId === mat.id) setEditingId(null); }} />
                     <button
+                      type="button"
+                      aria-label={`${t('materials.assignTo')}: ${mat.name} (${mat.id})`}
+                      aria-expanded={assignMatId === mat.id}
                       onClick={() => setAssignMatId(assignMatId === mat.id ? null : mat.id)}
                       className="text-xs px-1.5 py-0.5 rounded cursor-pointer"
                       style={{ backgroundColor: 'var(--color-bg-panel)', color: 'var(--color-accent)' }}
                     >
                       {t('materials.assignTo')}
                     </button>
-                    <button
-                      onClick={() => { removeMaterial(mat.id); if (editingId === mat.id) setEditingId(null); }}
-                      className="text-xs px-1.5 cursor-pointer"
-                      style={{ color: 'var(--color-error)' }}
-                    >
-                      &times;
-                    </button>
-                  </div>
-                </div>
                 {assignments.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
                     {assignments.map((assignment) => {
@@ -250,6 +203,7 @@ export function MaterialForm() {
                           className="text-xs px-1.5 py-0.5 rounded cursor-pointer"
                           style={{ color: 'var(--color-text-muted)', backgroundColor: 'var(--color-bg-secondary)' }}
                           title={isJa ? '割当を解除' : 'Remove assignment'}
+                          aria-label={t('assignments.remove', { item: mat.name, target: `${ns?.display_name ?? ns?.name ?? '?'} (${ns?.id ?? assignment.target_named_selection_id})` })}
                         >
                           → {ns?.display_name ?? ns?.name ?? '?'} ×
                         </button>
@@ -260,25 +214,7 @@ export function MaterialForm() {
 
                 {/* Assign dropdown */}
                 {assignMatId === mat.id && (
-                  <div className="mt-2 p-2 rounded space-y-1" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
-                    {namedSelections.length === 0 ? (
-                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{t('common.noSelections')}</p>
-                    ) : (
-                      namedSelections.map((ns) => (
-                        <button
-                          key={ns.id}
-                          onClick={() => handleAssign(mat.id, ns.id)}
-                          className="w-full text-left px-2 py-1 rounded text-xs cursor-pointer flex items-center gap-2"
-                          style={{ color: 'var(--color-text-secondary)' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-panel)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                        >
-                          <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: ns.color }} />
-                          {ns.display_name ?? ns.name}
-                        </button>
-                      ))
-                    )}
-                  </div>
+                  <AssignmentPicker kind="material" itemId={mat.id} />
                 )}
               </div>
             );

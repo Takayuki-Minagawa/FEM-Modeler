@@ -112,16 +112,27 @@ export function resultImportExpectations(ir: ProjectIR, target: SolverTargetName
   };
 }
 
-export function resultMatchesInput(ir: ProjectIR, result: ResultIR): boolean {
+export type ResultInputStatus = 'current' | 'stale' | 'unverified' | 'mesh_variant';
+
+/** Provenance completeness, current identity and explicitly archived mesh variants are separate states. */
+export function resultInputStatus(ir: ProjectIR, result: ResultIR): ResultInputStatus {
   const metadata = result.metadata;
   if (metadata.provenance_verified !== true || metadata.project_id !== ir.meta.project_id
     || metadata.export_target !== result.solver_target || metadata.analysis_case_id !== result.analysis_case_id
+    || typeof metadata.input_fingerprint !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(metadata.input_fingerprint)
     || typeof metadata.run_id !== 'string' || !metadata.run_id.trim() || metadata.run_id.length > 256
     || (result.mesh && (result.mesh.source.solver !== result.solver_target
-      || result.mesh.source.input_fingerprint !== metadata.input_fingerprint))) return false;
+      || result.mesh.source.input_fingerprint !== metadata.input_fingerprint))) return 'unverified';
   try {
-    return result.metadata.input_fingerprint === inputFingerprint(ir, result.solver_target, result.analysis_case_id);
+    if (metadata.input_fingerprint === inputFingerprint(ir, result.solver_target, result.analysis_case_id)) return 'current';
+    if (metadata.input_match === 'mesh_variant'
+      && metadata.comparison_fingerprint === comparisonFingerprint(ir, result.solver_target, result.analysis_case_id)) return 'mesh_variant';
+    return 'stale';
   } catch {
-    return false;
+    return 'stale';
   }
+}
+
+export function resultMatchesInput(ir: ProjectIR, result: ResultIR): boolean {
+  return resultInputStatus(ir, result) === 'current';
 }

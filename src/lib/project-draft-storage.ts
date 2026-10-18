@@ -218,6 +218,24 @@ export async function readProjectDraftRecord(projectId?: string, versionId?: str
 export async function loadProjectDraft(projectId?: string, versionId?: string): Promise<ProjectIR | null> {
   return (await readProjectDraftRecord(projectId, versionId))?.ir ?? null;
 }
+/** Create a new head for a rename while retaining the old name in saved history.
+ * The expected-version callback observes this tab's completed saves after waiting
+ * for the storage queue. The final CAS remains tied to the exact snapshot read.
+ */
+export async function renameProjectDraft(projectId: string, name: string, expectedVersion: string | (() => string | null)): Promise<DraftSummary> {
+  const projectName = name.trim();
+  if (!projectName) throw new Error('Project name must not be empty.');
+  const record = await readProjectDraftRecord(projectId);
+  const expected = typeof expectedVersion === 'function' ? expectedVersion() : expectedVersion;
+  if (!record || record.versionId !== expected) throw new DraftConflictError();
+  if (record.projectName === projectName) {
+    const latest = await getProjectDraftSummary(projectId);
+    if (latest?.versionId !== record.versionId) throw new DraftConflictError();
+    return latest;
+  }
+  const updated = { ...record.ir, meta: { ...record.ir.meta, project_name: projectName, updated_at: new Date().toISOString() } };
+  return saveProjectDraft(updated, undefined, { expectedVersion: record.versionId });
+}
 export async function getProjectDraftSummary(projectId?: string): Promise<DraftSummary | null> {
   const summaries = await listProjectDrafts();
   return (projectId ? summaries.find((item) => item.projectId === projectId) : summaries[0]) ?? null;

@@ -1,7 +1,7 @@
 {
   "name": "FEM Modeler",
   "short_name": "FEM Modeler",
-  "description": "Browser-based FEM/CAE model preprocessor",
+  "description": "Create component geometry and assemblies for handoff to other apps",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

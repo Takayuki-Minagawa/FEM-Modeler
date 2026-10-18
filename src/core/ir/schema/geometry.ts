@@ -1,3 +1,4 @@
+import { namedSelectionQuerySchema } from './selection-query';
 import { z } from 'zod';
 import { tuple3NumberSchema, unknownRecordSchema } from './shared';
 import { parseImportedCadShapeMetadata, parseNativeShapeMetadata } from './shapes';
@@ -97,6 +98,7 @@ export const assetsSchema = z.array(z.strictObject({
   }));
 
 export const namedSelectionsSchema = z.array(z.strictObject({
+    query_definition: namedSelectionQuerySchema.optional(),
     id: z.string(),
     name: z.string(),
     display_name: z.string().optional(),

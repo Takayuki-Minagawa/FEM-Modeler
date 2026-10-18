@@ -1,5 +1,6 @@
+import { scopeProjectForAnalysisCaseValidation } from '@/export/compiler/capabilities';
+import { evaluateChannelFlows, LAMINAR_CHANNEL_REYNOLDS_LIMIT } from '@/core/physics/channel-flow';
 import type {
-  BoundaryCondition,
   GeometryBody,
   GeometryEdge,
   Material,
@@ -58,7 +59,14 @@ interface ThermalDuration {
  * ProjectIR inputs are explicit and physically valid. Missing data produces a
  * typed notice rather than a fabricated default.
  */
-export function buildPhysicsAdvisorReport(ir: ProjectIR): PhysicsAdvisorReport {
+export function buildPhysicsAdvisorReport(ir: ProjectIR, analysisCaseId?: string): PhysicsAdvisorReport {
+  const selectedCases = analysisCaseId
+    ? ir.analysis_cases.filter((item) => item.id === analysisCaseId)
+    : ir.analysis_cases.filter((item) => item.active);
+  if ((analysisCaseId || ir.analysis_cases.length > 0) && selectedCases.length !== 1) {
+    return { metrics: [], notices: [{ severity: 'info', code: 'PHYSICS_CASE_REQUIRED', message: 'Select one analysis case to calculate physics advisories from its participating inputs.', targetRefs: ['analysis_cases'] }] };
+  }
+  if (selectedCases[0]) ir = scopeProjectForAnalysisCaseValidation(ir, selectedCases[0].id);
   const metrics: PhysicsAdvisorMetric[] = [];
   const notices: PhysicsAdvisorNotice[] = [];
 
@@ -176,60 +184,36 @@ function addReynoldsMetrics(
   const channelBodies = ir.geometry.bodies.filter((body) => body.metadata.shapeType === 'channel');
   const velocityInlets = ir.boundary_conditions.filter((condition) => condition.bc_type === 'velocity_inlet');
 
-  for (const inlet of velocityInlets) {
-    const selection = ir.named_selections.find((candidate) => candidate.id === inlet.target_named_selection_id);
-    if (!selection) continue;
-    const inletBodies = selectionBodyIds(ir, selection);
-    for (const body of channelBodies.filter((candidate) => inletBodies.has(candidate.id))) {
-      const height = scaledMetadataLength(body, 'height', 1);
-      const depth = scaledMetadataLength(body, 'depth', 2);
-      const velocity = inletVelocity(inlet);
-      const material = materialForBody(ir, body.id);
-      const transport = material ? fluidTransport(material) : null;
-      if (!height || !depth || !velocity || !transport) continue;
-
-      const hydraulicDiameter = 2 * height * depth / (height + depth);
-      const reynolds = velocity * hydraulicDiameter / transport.kinematicViscosity;
-      const status: PhysicsAdvisorStatus = reynolds >= 4_000
-        ? 'warning'
-        : reynolds >= 2_300 ? 'caution' : 'nominal';
-      const interpretation = status === 'warning'
-        ? 'Internal-flow Reynolds number is in a turbulent range; use a turbulence-capable model and resolve near-wall requirements.'
-        : status === 'caution'
-          ? 'Internal-flow Reynolds number is in a transitional range; laminar and turbulent assumptions are both sensitive.'
-          : 'Internal-flow Reynolds number is in a nominal laminar range.';
-      const metric: PhysicsAdvisorMetric = {
-        id: `reynolds:${inlet.id}:${body.id}`,
-        kind: 'reynolds_number',
-        symbol: 'Re',
-        value: reynolds,
-        status,
-        interpretation,
-        inputs: [
-          { name: 'mean inlet speed', value: velocity, unit: 'm/s', sourceRef: inlet.id },
-          { name: 'hydraulic diameter', value: hydraulicDiameter, unit: 'm', sourceRef: body.id },
-          { name: 'kinematic viscosity', value: transport.kinematicViscosity, unit: 'm2/s', sourceRef: material?.id },
-        ],
-        targetRefs: [body.id, inlet.id, ...(material ? [material.id] : [])],
-      };
-      metrics.push(metric);
-      if (status !== 'nominal') {
-        notices.push({
-          severity: 'warning',
-          code: status === 'warning' ? 'REYNOLDS_TURBULENT_RANGE' : 'REYNOLDS_TRANSITION_RANGE',
-          message: `Re=${formatMetric(reynolds)} for ${body.name}. ${interpretation}`,
-          targetRefs: metric.targetRefs,
-          metricId: metric.id,
-        });
-        if (status === 'warning') {
-          notices.push({
-            severity: 'info',
-            code: 'YPLUS_REQUIRES_SOLVER_RESULT',
-            message: `Re=${formatMetric(reynolds)} indicates a turbulence-capable workflow. y+ requires wall distance and friction velocity from a generated mesh/solution and is not estimated here.`,
-            targetRefs: metric.targetRefs,
-            metricId: metric.id,
-          });
-        }
+  const flow = evaluateChannelFlows(ir);
+  notices.push(...flow.issues.map((issue) => ({ severity: 'warning' as const, code: issue.code, message: issue.message, targetRefs: [issue.targetRef] })));
+  for (const { inlet, body, material, speed, hydraulicDiameter, kinematicViscosity, reynolds, mode } of flow.metrics) {
+    const status: PhysicsAdvisorStatus = reynolds >= 4_000
+      ? 'warning'
+      : reynolds >= LAMINAR_CHANNEL_REYNOLDS_LIMIT ? 'caution' : 'nominal';
+    const interpretation = status === 'warning'
+      ? 'Internal-flow Reynolds number is in a turbulent range; the laminar channel profile cannot export this case.'
+      : status === 'caution'
+        ? 'Internal-flow Reynolds number is in a transitional range; the laminar channel profile requires Re < 2300.'
+        : 'Internal-flow Reynolds number is in a nominal laminar range.';
+    const metric: PhysicsAdvisorMetric = {
+      id: `reynolds:${inlet.id}:${body.id}`,
+      kind: 'reynolds_number',
+      symbol: 'Re',
+      value: reynolds,
+      status,
+      interpretation: `${mode}: ${mode === '2D' ? 'Dh = 2H (extrusion depth excluded).' : 'Dh = 2HD/(H+D).'} ${interpretation}`,
+      inputs: [
+        { name: 'mean inlet speed', value: speed, unit: 'm/s', sourceRef: inlet.id },
+        { name: 'hydraulic diameter', value: hydraulicDiameter, unit: 'm', sourceRef: body.id },
+        { name: 'kinematic viscosity', value: kinematicViscosity, unit: 'm2/s', sourceRef: material.id },
+      ],
+      targetRefs: [body.id, inlet.id, material.id],
+    };
+    metrics.push(metric);
+    if (status !== 'nominal') {
+      notices.push({ severity: 'warning', code: status === 'warning' ? 'REYNOLDS_TURBULENT_RANGE' : 'REYNOLDS_TRANSITION_RANGE', message: `Re=${formatMetric(reynolds)} for ${body.name}. ${interpretation}`, targetRefs: metric.targetRefs, metricId: metric.id });
+      if (status === 'warning') {
+        notices.push({ severity: 'info', code: 'YPLUS_REQUIRES_SOLVER_RESULT', message: `Re=${formatMetric(reynolds)} indicates a turbulence-capable workflow. y+ requires wall distance and friction velocity from a generated mesh/solution and is not estimated here.`, targetRefs: metric.targetRefs, metricId: metric.id });
       }
     }
   }
@@ -429,22 +413,6 @@ function transformedEdgeLength(ir: ProjectIR, edge: GeometryEdge): number | null
   return length && body ? length * Math.max(...body.transform.scale.map(Math.abs)) : length;
 }
 
-function inletVelocity(condition: BoundaryCondition): number | null {
-  if (condition.values.vector) {
-    const speed = Math.hypot(...condition.values.vector);
-    return positiveNumber(speed);
-  }
-  return positiveNumber(Math.abs(condition.values.scalar ?? 0));
-}
-
-function fluidTransport(material: Material): { kinematicViscosity: number } | null {
-  const kinematic = materialParameter(material, 'kinematic_viscosity');
-  if (kinematic) return { kinematicViscosity: kinematic };
-  const dynamic = materialParameter(material, 'dynamic_viscosity');
-  const density = materialParameter(material, 'density');
-  return dynamic && density ? { kinematicViscosity: dynamic / density } : null;
-}
-
 function materialParameter(
   material: Material,
   key: keyof Material['parameter_set'],
@@ -547,11 +515,6 @@ function primitiveVolume(body: GeometryBody): number | null {
   return volume === null
     ? null
     : volume * Math.abs(body.transform.scale[0] * body.transform.scale[1] * body.transform.scale[2]);
-}
-
-function scaledMetadataLength(body: GeometryBody, key: string, axis: 0 | 1 | 2): number | null {
-  const length = positiveNumber(body.metadata[key]);
-  return length ? length * Math.abs(body.transform.scale[axis]) : null;
 }
 
 function findThermalDuration(

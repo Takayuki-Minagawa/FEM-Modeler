@@ -8,6 +8,14 @@ FEM_PERFORMANCE=1 npx vitest run tests/performance/history-performance.test.ts
 
 The opt-in test writes `latest-results.json` with the machine/runtime, 100 scalar-edit p95 timings, history-size proxies, full JSON serialization time, 100 inexpensive size estimates, and initial/warm save timings. Fixtures cover a small project, a synthetic base64 payload representing a 10 MiB STL, and 100,000 scalar result rows.
 
+To keep the checked-in measurements intact, send both profiles to a separate directory:
+
+```bash
+FEM_PERFORMANCE_OUTPUT_DIR=/tmp/fem-performance npm run test:performance -- --maxWorkers=1
+```
+
+These profiles report measurements, not pass/fail latency budgets. Record CPU contention and runtime when comparing runs.
+
 `legacy-undo-manager.fixture.ts` preserves the pre-refactor clone/diff algorithm solely for reproducible comparison. The baseline's serialized patch bytes and the current implementation's conservative retained-value estimate are different measures, not measured heap allocations. Initial asset/result creation and Immer freezing are excluded from edit timings. Save measurements use Node and fake IndexedDB; browser disk latency, quota and scheduling require separate end-to-end checks.
 
 The last local run used an Apple M4 Max and Node 22.18.0. Current edit p95 stayed below 0.1 ms for all three fixtures, and warm saves were below 10 ms. These are observations, not cross-device performance guarantees. The measured size estimator avoids JSON serialization altogether. Worker migration is therefore unnecessary for this save-scheduling path; STL parsing and CSV import remain separate workloads to profile before moving to a worker.

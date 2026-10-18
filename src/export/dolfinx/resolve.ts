@@ -1,3 +1,4 @@
+import { participatingIds, selectParticipatingItems } from '@/core/ir/participation';
 import type {
   AnalysisCase,
   BoundaryCondition,
@@ -93,7 +94,7 @@ export function resolveParticipatingItems<T extends { id: string; physics_domain
   label: string,
   errors: string[],
 ): T[] {
-  if (!participatingIds || participatingIds.length === 0) {
+  if (participatingIds === undefined) {
     return allItems.filter((item) => item.physics_domain === mode);
   }
 
@@ -124,7 +125,10 @@ export function resolveAssignedMaterial(
   analysisCase: AnalysisCase | undefined,
   errors: string[],
 ): ResolvedMaterialAssignment | undefined {
-  const applicableAssignments = ir.material_assignments.filter((assignment) => {
+  const requestedMaterials = participatingIds(analysisCase, 'participating_material_ids');
+  const participatingAssignments = requestedMaterials === undefined ? ir.material_assignments
+    : ir.material_assignments.filter((assignment) => requestedMaterials.includes(assignment.material_id));
+  const applicableAssignments = participatingAssignments.filter((assignment) => {
     const target = ir.named_selections.find(
       (selection) => selection.id === assignment.target_named_selection_id,
     );
@@ -134,7 +138,7 @@ export function resolveAssignedMaterial(
       && target.member_refs.length === 1
       && target.member_refs[0] === body.id;
   });
-  for (const assignment of ir.material_assignments) {
+  for (const assignment of participatingAssignments) {
     if (!applicableAssignments.includes(assignment)) {
       errors.push(
         `DFX_UNCONSUMED_MATERIAL_ASSIGNMENT: Assignment "${safeComment(assignment.id)}" does not resolve exclusively to body "${safeComment(body.name)}".`,
@@ -166,14 +170,13 @@ export function resolveAssignedMaterial(
 
   if (
     analysisCase
-    && analysisCase.participating_material_ids.length > 0
-    && !analysisCase.participating_material_ids.includes(material.id)
+    && !selectParticipatingItems(analysisCase, 'participating_material_ids', [material]).length
   ) {
     errors.push(
       `DFX_MATERIAL_NOT_PARTICIPATING: Assigned material "${safeComment(material.name)}" is not included in analysis case "${safeComment(analysisCase.name)}".`,
     );
   }
-  for (const materialId of analysisCase?.participating_material_ids ?? []) {
+  for (const materialId of participatingIds(analysisCase, 'participating_material_ids') ?? []) {
     if (!ir.materials.some((candidate) => candidate.id === materialId)) {
       errors.push(`DFX_MATERIAL_NOT_FOUND: Participating material "${safeComment(materialId)}" does not exist.`);
     } else if (materialId !== material.id) {

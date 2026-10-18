@@ -127,7 +127,7 @@ describe('CSV artifact serialization', () => {
     const materialsMarker = parsed.findIndex((record) => record[0] === '## Materials');
     const materialRecord = parsed[materialsMarker + 2];
 
-    expect(materialRecord).toHaveLength(8);
+    expect(materialRecord).toHaveLength(9);
     expect(materialRecord?.[0]).toBe('\' =HYPERLINK("https://example.invalid"),Injected');
     expect(materialRecord?.[2]).toBe('210000000000');
   });

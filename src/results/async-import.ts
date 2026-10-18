@@ -2,6 +2,7 @@ import resultWorkerUrl from 'virtual:fem-worker-url/results';
 import type { SolverTargetName } from '@/core/ir/types';
 import { MAX_RESULT_TEXT_BYTES } from './importer';
 import type { ResultImportResponse } from './importer';
+import type { ResultCsvMapping } from './csv-mapping';
 import { parseResultFileRequest } from './worker-handler';
 
 export const RESULT_WORKER_THRESHOLD_BYTES = 1024 * 1024;
@@ -14,10 +15,11 @@ export async function parseResultFileAsync(
   analysisCaseId: string,
   solverTarget: SolverTargetName,
   signal?: AbortSignal,
+  options?: { csvMapping?: ResultCsvMapping; previewCsv?: boolean },
 ): Promise<ResultImportResponse> {
   if (signal?.aborted) throw aborted();
   if (file.size > MAX_RESULT_TEXT_BYTES) throw new Error('Result file exceeds the 20 MB safety limit.');
-  const request = { file, analysisCaseId, solverTarget };
+  const request = { file, analysisCaseId, solverTarget, ...options };
   if (file.size < RESULT_WORKER_THRESHOLD_BYTES) {
     return new Promise((resolve, reject) => {
       const onAbort = () => reject(aborted());

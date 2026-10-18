@@ -4,11 +4,14 @@ import type {
   BoundaryConditionType,
   DomainType,
   LoadType,
+  ParticipationField,
   ProjectIR,
   ResultRequest,
   SolverProfileHint,
   SolverTargetName,
 } from '@/core/ir/types';
+import { evaluateChannelFlows } from '@/core/physics/channel-flow';
+import { getParticipationMode, participatingIds, selectParticipatingItems } from '@/core/ir/participation';
 
 export interface SolverCapabilities {
   target: SolverTargetName;
@@ -153,11 +156,6 @@ export function scopeProjectToAnalysisCase(ir: ProjectIR, analysisCaseId: string
 export function scopeProjectForAnalysisCaseValidation(ir: ProjectIR, analysisCaseId: string): ProjectIR {
   const activated = scopeProjectToAnalysisCase(ir, analysisCaseId);
   const analysisCase = activated.analysis_cases.find((item) => item.id === analysisCaseId)!;
-  const select = <T extends { id: string }>(items: T[], ids: string[]): T[] => {
-    if (ids.length === 0) return items;
-    const selected = new Set(ids);
-    return items.filter((item) => selected.has(item.id));
-  };
   const allowedCategories = analysisCase.domain_type === 'frame' || analysisCase.domain_type === 'truss'
     ? new Set(['beam_region'])
     : analysisCase.domain_type === 'fluid'
@@ -188,23 +186,19 @@ export function scopeProjectForAnalysisCaseValidation(ir: ProjectIR, analysisCas
     : analysisCase.domain_type === 'fluid' ? 'fluid' : 'structural';
   const selectConditions = <T extends { id: string; physics_domain: string; target_named_selection_id: string }>(
     items: T[],
-    ids: string[],
-  ): T[] => ids.length > 0
-    ? select(items, ids)
+    field: ParticipationField,
+  ): T[] => getParticipationMode(analysisCase, field) !== 'all'
+    ? selectParticipatingItems(analysisCase, field, items)
     : items.filter((item) => item.physics_domain === expectedPhysics && targetIsRelevant(item.target_named_selection_id));
-  const boundaryConditions = selectConditions(activated.boundary_conditions, analysisCase.participating_bc_ids);
-  const loads = selectConditions(activated.loads, analysisCase.participating_load_ids);
-  const initialConditions = selectConditions(activated.initial_conditions, analysisCase.participating_ic_ids);
+  const boundaryConditions = selectConditions(activated.boundary_conditions, 'participating_bc_ids');
+  const loads = selectConditions(activated.loads, 'participating_load_ids');
+  const initialConditions = selectConditions(activated.initial_conditions, 'participating_ic_ids');
 
   const requestedMaterialIds = new Set(
-    analysisCase.participating_material_ids.length > 0
-      ? analysisCase.participating_material_ids
-      : activated.materials.map((item) => item.id),
+    selectParticipatingItems(analysisCase, 'participating_material_ids', activated.materials).map((item) => item.id),
   );
   const requestedSectionIds = new Set(
-    analysisCase.participating_section_ids.length > 0
-      ? analysisCase.participating_section_ids
-      : activated.sections.map((item) => item.id),
+    selectParticipatingItems(analysisCase, 'participating_section_ids', activated.sections).map((item) => item.id),
   );
   const materialAssignments = activated.material_assignments.filter(
     (item) => requestedMaterialIds.has(item.material_id) && targetIsRelevant(item.target_named_selection_id),
@@ -215,12 +209,12 @@ export function scopeProjectForAnalysisCaseValidation(ir: ProjectIR, analysisCas
   const assignedMaterialIds = new Set(materialAssignments.map((item) => item.material_id));
   const assignedSectionIds = new Set(sectionAssignments.map((item) => item.section_id));
   const materials = activated.materials.filter((item) => (
-    analysisCase.participating_material_ids.length > 0
+    getParticipationMode(analysisCase, 'participating_material_ids') !== 'all'
       ? requestedMaterialIds.has(item.id)
       : assignedMaterialIds.has(item.id)
   ));
   const sections = activated.sections.filter((item) => (
-    analysisCase.participating_section_ids.length > 0
+    getParticipationMode(analysisCase, 'participating_section_ids') !== 'all'
       ? requestedSectionIds.has(item.id)
       : assignedSectionIds.has(item.id)
   ));
@@ -284,10 +278,6 @@ export function scopeProjectForAnalysisCaseValidation(ir: ProjectIR, analysisCas
 function selectAnalysisCase(ir: ProjectIR, analysisCaseId?: string): AnalysisCase | undefined {
   if (analysisCaseId) return ir.analysis_cases.find((item) => item.id === analysisCaseId);
   return ir.analysis_cases.find((item) => item.active) ?? ir.analysis_cases[0];
-}
-
-function selectedIds(allIds: string[], participatingIds: string[]): Set<string> {
-  return new Set(participatingIds.length > 0 ? participatingIds : allIds);
 }
 
 /**
@@ -402,6 +392,7 @@ export function preflightExport(
   }
 
   const caseScope = scopeProjectForAnalysisCaseValidation(ir, analysisCase.id);
+  if (target === 'OpenFOAM') errors.push(...evaluateChannelFlows(caseScope).issues);
   if (target !== 'OpenSeesPy') {
     for (const section of caseScope.sections) {
       errors.push({
@@ -432,17 +423,17 @@ export function preflightExport(
     });
   }
 
-  const bcIds = selectedIds(caseScope.boundary_conditions.map((item) => item.id), analysisCase.participating_bc_ids);
-  const loadIds = selectedIds(caseScope.loads.map((item) => item.id), analysisCase.participating_load_ids);
-  const icIds = selectedIds(caseScope.initial_conditions.map((item) => item.id), analysisCase.participating_ic_ids);
-  const materialIds = selectedIds(caseScope.materials.map((item) => item.id), analysisCase.participating_material_ids);
-  const sectionIds = selectedIds(caseScope.sections.map((item) => item.id), analysisCase.participating_section_ids);
+  const bcIds = new Set(caseScope.boundary_conditions.map((item) => item.id));
+  const loadIds = new Set(caseScope.loads.map((item) => item.id));
+  const icIds = new Set(caseScope.initial_conditions.map((item) => item.id));
+  const materialIds = new Set(caseScope.materials.map((item) => item.id));
+  const sectionIds = new Set(caseScope.sections.map((item) => item.id));
   for (const [label, requested, known] of [
-    ['boundary condition', analysisCase.participating_bc_ids, new Set(ir.boundary_conditions.map((item) => item.id))],
-    ['load', analysisCase.participating_load_ids, new Set(ir.loads.map((item) => item.id))],
-    ['initial condition', analysisCase.participating_ic_ids, new Set(ir.initial_conditions.map((item) => item.id))],
-    ['material', analysisCase.participating_material_ids, new Set(ir.materials.map((item) => item.id))],
-    ['section', analysisCase.participating_section_ids, new Set(ir.sections.map((item) => item.id))],
+    ['boundary condition', participatingIds(analysisCase, 'participating_bc_ids') ?? [], new Set(ir.boundary_conditions.map((item) => item.id))],
+    ['load', participatingIds(analysisCase, 'participating_load_ids') ?? [], new Set(ir.loads.map((item) => item.id))],
+    ['initial condition', participatingIds(analysisCase, 'participating_ic_ids') ?? [], new Set(ir.initial_conditions.map((item) => item.id))],
+    ['material', participatingIds(analysisCase, 'participating_material_ids') ?? [], new Set(ir.materials.map((item) => item.id))],
+    ['section', participatingIds(analysisCase, 'participating_section_ids') ?? [], new Set(ir.sections.map((item) => item.id))],
   ] as const) {
     for (const id of requested) {
       if (!known.has(id)) errors.push({ code: 'CASE_REFERENCE_MISSING', message: `Analysis case references missing ${label} ${id}.`, targetRef: analysisCase.id });

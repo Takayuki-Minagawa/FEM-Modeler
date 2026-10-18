@@ -1,7 +1,7 @@
 import { solverLifecycleFiles, solverRunScript } from '@/export/shared/runtime-lifecycle';
 import type { ProjectIR } from '@/core/ir/types';
 import { scopeProjectForAnalysisCaseValidation } from '@/export/compiler';
-import { downloadArtifactZip, type ArtifactFiles } from '@/export/shared/packaging';
+import { downloadArtifactZip, type ArtifactFiles, type DownloadedArtifact } from '@/export/shared/packaging';
 import { pythonRuntimeFiles } from '@/export/shared/python-runtime';
 import { exportOpenSeesPy } from './exporter';
 import type { OpenSeesPyExportResult } from './model';
@@ -19,9 +19,9 @@ export function openSeesPyPackageFiles(result: OpenSeesPyExportResult): Artifact
   };
 }
 
-export async function downloadOpenSeesPyZip(ir: ProjectIR, analysisCaseId?: string): Promise<OpenSeesPyExportResult> {
+export async function downloadOpenSeesPyZip(ir: ProjectIR, analysisCaseId?: string): Promise<OpenSeesPyExportResult & { artifact?: DownloadedArtifact }> {
   const exportIr = analysisCaseId ? scopeProjectForAnalysisCaseValidation(ir, analysisCaseId) : ir;
   const result = exportOpenSeesPy(exportIr);
-  if (result.success) await downloadArtifactZip(openSeesPyPackageFiles(result), ir.meta.project_name, 'openseespy');
-  return result;
+  const artifact = result.success ? await downloadArtifactZip(openSeesPyPackageFiles(result), ir.meta.project_name, 'openseespy') : undefined;
+  return { ...result, ...(artifact ? { artifact } : {}) };
 }

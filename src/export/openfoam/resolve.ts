@@ -1,16 +1,15 @@
+import { materialSelectionTargetsBody, resolveFluidTransport } from '@/core/physics/channel-flow';
+export { normalizeMode, resolveSimulationMode, resolveConvertToMeters, resolveInletVelocity, validateInletVelocityDirection, materialSelectionTargetsBody } from '@/core/physics/channel-flow';
 import type {
   AnalysisCase,
   BoundaryCondition,
   GeometryBody,
   GeometryFace,
-  Material,
-  NamedSelection,
   ProjectIR,
   SolverTarget,
 } from '@/core/ir/types';
-import { applyTransformToPoint } from '@/geometry/transforms';
-import type { ChannelBoundaryRole, FrontBackType, MaterialProperties, PatchInfo, PressureBasis, ResolvedBoundarySelection, ResolvedPatches, ResolvedPressure, SimulationMode } from './model';
-import { foamNumber } from './render';
+import type { ChannelBoundaryRole, FrontBackType, MaterialProperties, PatchInfo, PressureBasis, ResolvedBoundarySelection, ResolvedPatches, ResolvedPressure } from './model';
+import { participatingIds, selectParticipatingItems } from '@/core/ir/participation';
 
 export const MAX_CELLS_PER_DIRECTION = 1_000_000;
 
@@ -39,136 +38,6 @@ export const VALIDATED_BUT_NOT_CONSUMED_MESH_FIELDS = [
   'mesh_controls.quality_targets.min_skewness',
   'mesh_controls.quality_targets.preferred_quality_level',
 ] as const;
-
-export function normalizeMode(value: unknown): SimulationMode | undefined {
-  if (value === 2) return '2D';
-  if (value === 3) return '3D';
-  if (typeof value !== 'string') return undefined;
-  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, '');
-  if (normalized === '2' || normalized === '2d' || normalized === 'twodimensional') return '2D';
-  if (normalized === '3' || normalized === '3d' || normalized === 'threedimensional') return '3D';
-  return undefined;
-}
-
-export function resolveSimulationMode(
-  body: GeometryBody,
-  solverOptions: Record<string, unknown>,
-  errors: string[],
-): { mode: SimulationMode; frontBackType: FrontBackType } {
-  const signals: Array<{ source: string; mode: SimulationMode }> = [];
-  const explicitKeys = ['dimensionality', 'dimension', 'mesh_dimension', 'simulation_mode'] as const;
-
-  for (const [scope, values] of [
-    ['OpenFOAM solver_options', solverOptions],
-    ['channel metadata', body.metadata],
-  ] as const) {
-    for (const key of explicitKeys) {
-      const value = values[key];
-      if (value === undefined) continue;
-      const mode = normalizeMode(value);
-      if (mode) signals.push({ source: `${scope}.${key}`, mode });
-      else errors.push(`${scope}.${key} must be either 2D or 3D.`);
-    }
-
-    // `mode` is accepted for compatibility only when it clearly denotes a dimension.
-    if (values.mode !== undefined) {
-      const mode = normalizeMode(values.mode);
-      if (mode) signals.push({ source: `${scope}.mode`, mode });
-    }
-
-    for (const key of ['two_dimensional', 'twoDimensional', 'is_2d', 'is2D'] as const) {
-      const value = values[key];
-      if (value === undefined) continue;
-      if (typeof value !== 'boolean') {
-        errors.push(`${scope}.${key} must be a boolean.`);
-      } else {
-        signals.push({ source: `${scope}.${key}`, mode: value ? '2D' : '3D' });
-      }
-    }
-  }
-
-  const rawFrontBackType = solverOptions.front_back_type ?? solverOptions.frontBackType;
-  let requestedFrontBackType: FrontBackType | undefined;
-  if (rawFrontBackType !== undefined) {
-    if (rawFrontBackType === 'empty' || rawFrontBackType === 'wall' || rawFrontBackType === 'patch') {
-      requestedFrontBackType = rawFrontBackType;
-      signals.push({
-        source: 'OpenFOAM solver_options.front_back_type',
-        mode: rawFrontBackType === 'empty' ? '2D' : '3D',
-      });
-    } else {
-      errors.push('OpenFOAM solver_options.front_back_type must be empty, wall, or patch.');
-    }
-  }
-
-  const distinctModes = new Set(signals.map((signal) => signal.mode));
-  if (distinctModes.size > 1) {
-    errors.push(`Conflicting OpenFOAM dimensionality settings: ${signals
-      .map((signal) => `${signal.source}=${signal.mode}`)
-      .join(', ')}.`);
-  }
-
-  const mode = signals[0]?.mode ?? '3D';
-  if (signals.length === 0) {
-    errors.push('OpenFOAM dimensionality must be explicit in solver_options or channel metadata; no 2D/3D default was applied.');
-  }
-
-  if (mode === '2D') {
-    // OpenFOAM's empty-direction checks require the extrusion to remain on a
-    // Cartesian axis. This exporter supports the XY plane for its 2D channel.
-    const direction = applyTransformToPoint([0, 0, 1], { ...body.transform, position: [0, 0, 0] });
-    const magnitude = Math.hypot(...direction);
-    if (magnitude > 0 && Math.hypot(direction[0], direction[1]) / magnitude > 1e-9) {
-      errors.push('OpenFOAM 2D channel out-of-plane rotation is unsupported; keep the extrusion parallel to the global Z axis or select 3D.');
-    }
-    return { mode, frontBackType: 'empty' };
-  }
-  return { mode, frontBackType: requestedFrontBackType ?? 'wall' };
-}
-
-export function resolveConvertToMeters(
-  ir: ProjectIR,
-  errors: string[],
-  warnings: string[],
-): number | undefined {
-  const valueBasis = (ir.units as unknown as { value_basis?: unknown }).value_basis;
-  if (valueBasis === 'SI') return 1;
-
-  if (valueBasis !== undefined) {
-    errors.push(`Unsupported IR unit value_basis "${String(valueBasis)}" for OpenFOAM export.`);
-    return undefined;
-  }
-
-  const normalizedLength = ir.units.base_length.trim().toLowerCase();
-  const factors: Record<string, number> = {
-    m: 1,
-    meter: 1,
-    metre: 1,
-    mm: 1e-3,
-    millimeter: 1e-3,
-    millimetre: 1e-3,
-    cm: 1e-2,
-    centimeter: 1e-2,
-    centimetre: 1e-2,
-    um: 1e-6,
-    'µm': 1e-6,
-    'μm': 1e-6,
-    in: 0.0254,
-    inch: 0.0254,
-    ft: 0.3048,
-    foot: 0.3048,
-  };
-  const factor = factors[normalizedLength];
-  if (factor === undefined) {
-    errors.push(`Unsupported legacy base_length "${ir.units.base_length}" for blockMesh convertToMeters.`);
-    return undefined;
-  }
-
-  warnings.push(
-    `Legacy IR without units.value_basis detected; blockMesh coordinates are interpreted as ${ir.units.base_length}.`,
-  );
-  return factor;
-}
 
 export function validateSolverSelection(
   ir: ProjectIR,
@@ -223,38 +92,32 @@ export function validateSolverSelection(
       errors.push(`Analysis case "${analysisCase.name}" requests unsupported OpenFOAM result "${request}".`);
     }
   }
-  const selectedIds = <T extends { id: string }>(items: T[], ids: string[], label: string): T[] => {
-    if (ids.length === 0) return items;
+  const selectedIds = <T extends { id: string }>(items: T[], ids: string[] | undefined, label: string): T[] => {
+    if (ids === undefined) return items;
     const known = new Set(items.map((item) => item.id));
     for (const id of ids) if (!known.has(id)) errors.push(`Analysis case references missing ${label} "${id}".`);
     const requested = new Set(ids);
     return items.filter((item) => requested.has(item.id));
   };
-  for (const load of selectedIds(ir.loads, analysisCase.participating_load_ids, 'load')) {
+  for (const load of selectedIds(ir.loads, participatingIds(analysisCase, 'participating_load_ids'), 'load')) {
     errors.push(`OpenFOAM simpleFoam channel export does not consume load "${load.name}" (${load.load_type}).`);
   }
-  for (const condition of selectedIds(ir.initial_conditions, analysisCase.participating_ic_ids, 'initial condition')) {
+  for (const condition of selectedIds(ir.initial_conditions, participatingIds(analysisCase, 'participating_ic_ids'), 'initial condition')) {
     errors.push(`OpenFOAM simpleFoam channel export does not consume initial condition "${condition.name}" (${condition.ic_type}).`);
   }
-  if (ir.sections.length > 0 || ir.section_assignments.length > 0) {
+  const sections = selectParticipatingItems(analysisCase, 'participating_section_ids', ir.sections);
+  const sectionIds = new Set(sections.map((section) => section.id));
+  const sectionAssignments = participatingIds(analysisCase, 'participating_section_ids') === undefined
+    ? ir.section_assignments : ir.section_assignments.filter((assignment) => sectionIds.has(assignment.section_id));
+  if (sections.length > 0 || sectionAssignments.length > 0) {
     errors.push(
-      `OpenFOAM simpleFoam channel export does not consume sections or section assignments (sections=${ir.sections.length}, assignments=${ir.section_assignments.length}).`,
+      `OpenFOAM simpleFoam channel export does not consume sections or section assignments (sections=${sections.length}, assignments=${sectionAssignments.length}).`,
     );
   }
   if (analysisCase.mesh_policy_ref) {
     errors.push(`OpenFOAM mesh policy "${analysisCase.mesh_policy_ref}" is not implemented.`);
   }
   return analysisCase;
-}
-
-export function materialSelectionTargetsBody(
-  selection: NamedSelection | undefined,
-  body: GeometryBody,
-): boolean {
-  return selection !== undefined
-    && selection.target_dimension === 3
-    && (selection.entity_type === 'body' || selection.entity_type === 'cell')
-    && selection.member_refs.includes(body.id);
 }
 
 export function slugPatchName(rawName: string, fallback: string, warnings: string[]): string {
@@ -382,8 +245,9 @@ export function resolvePatches(
   }
 
   let scopedBCs = ir.boundary_conditions;
-  if (analysisCase && analysisCase.participating_bc_ids.length > 0) {
-    const requestedIds = new Set(analysisCase.participating_bc_ids);
+  const requestedBcIds = participatingIds(analysisCase, 'participating_bc_ids');
+  if (requestedBcIds !== undefined) {
+    const requestedIds = new Set(requestedBcIds);
     for (const id of requestedIds) {
       if (!ir.boundary_conditions.some((bc) => bc.id === id)) {
         errors.push(`Analysis case references missing boundary condition "${id}".`);
@@ -547,41 +411,22 @@ export function resolvePatches(
   return patches;
 }
 
-export function trackedPositiveValue(
-  material: Material,
-  key: 'density' | 'dynamic_viscosity' | 'kinematic_viscosity',
-  errors: string[],
-): number | undefined {
-  const tracked = material.parameter_set[key];
-  if (!tracked || typeof tracked !== 'object') {
-    errors.push(`Material "${material.name}" is missing the ${key} parameter record.`);
-    return undefined;
-  }
-  if (tracked.value === null) return undefined;
-  if (typeof tracked.value !== 'number' || !Number.isFinite(tracked.value) || tracked.value <= 0) {
-    errors.push(`Material "${material.name}" has invalid ${key}; it must be finite and greater than zero.`);
-    return undefined;
-  }
-  if (tracked.status === 'missing' || tracked.status === 'needs_review') {
-    errors.push(`Material "${material.name}" ${key} is not confirmed for export (status: ${tracked.status}).`);
-    return undefined;
-  }
-  return tracked.value;
-}
-
 export function resolveMaterialProperties(
   ir: ProjectIR,
   body: GeometryBody,
   analysisCase: AnalysisCase | undefined,
   errors: string[],
 ): MaterialProperties {
-  const matchingAssignments = ir.material_assignments.filter((assignment) => {
+  const requestedMaterials = participatingIds(analysisCase, 'participating_material_ids');
+  const participatingAssignments = requestedMaterials === undefined ? ir.material_assignments
+    : ir.material_assignments.filter((assignment) => requestedMaterials.includes(assignment.material_id));
+  const matchingAssignments = participatingAssignments.filter((assignment) => {
     const selection = ir.named_selections.find(
       (candidate) => candidate.id === assignment.target_named_selection_id,
     );
     return materialSelectionTargetsBody(selection, body);
   });
-  for (const assignment of ir.material_assignments) {
+  for (const assignment of participatingAssignments) {
     if (!matchingAssignments.includes(assignment)) {
       errors.push(
         `Material assignment "${assignment.id}" is not consumed because it does not resolve to the channel body.`,
@@ -621,13 +466,12 @@ export function resolveMaterialProperties(
     };
   }
   if (analysisCase
-    && analysisCase.participating_material_ids.length > 0
-    && !analysisCase.participating_material_ids.includes(material.id)) {
+    && !selectParticipatingItems(analysisCase, 'participating_material_ids', [material]).length) {
     errors.push(
       `Assigned material "${material.name}" is not included in analysis case "${analysisCase.name}".`,
     );
   }
-  for (const participatingId of analysisCase?.participating_material_ids ?? []) {
+  for (const participatingId of participatingIds(analysisCase, 'participating_material_ids') ?? []) {
     if (!ir.materials.some((candidate) => candidate.id === participatingId)) {
       errors.push(`Analysis case references missing participating material "${participatingId}".`);
     } else if (participatingId !== material.id) {
@@ -635,43 +479,7 @@ export function resolveMaterialProperties(
     }
   }
 
-  const density = trackedPositiveValue(material, 'density', errors);
-  const dynamicViscosity = trackedPositiveValue(material, 'dynamic_viscosity', errors);
-  const specifiedKinematicViscosity = trackedPositiveValue(material, 'kinematic_viscosity', errors);
-
-  let derivedKinematicViscosity: number | undefined;
-  if (dynamicViscosity !== undefined) {
-    if (density === undefined) {
-      errors.push(
-        `Material "${material.name}" needs a valid density to convert dynamic viscosity to kinematic viscosity.`,
-      );
-    } else {
-      derivedKinematicViscosity = dynamicViscosity / density;
-      if (!Number.isFinite(derivedKinematicViscosity) || derivedKinematicViscosity <= 0) {
-        errors.push(
-          `Material "${material.name}" produces an invalid kinematic viscosity from dynamic viscosity and density.`,
-        );
-        derivedKinematicViscosity = undefined;
-      }
-    }
-  }
-
-  if (specifiedKinematicViscosity !== undefined && derivedKinematicViscosity !== undefined) {
-    const relativeDifference = Math.abs(specifiedKinematicViscosity - derivedKinematicViscosity)
-      / Math.max(specifiedKinematicViscosity, derivedKinematicViscosity);
-    if (relativeDifference > 0.02) {
-      errors.push(
-        `Material "${material.name}" has inconsistent viscosity values: nu=${specifiedKinematicViscosity} m^2/s but mu/rho=${derivedKinematicViscosity} m^2/s.`,
-      );
-    }
-  }
-
-  const kinematicViscosity = specifiedKinematicViscosity ?? derivedKinematicViscosity;
-  if (kinematicViscosity === undefined) {
-    errors.push(
-      `Material "${material.name}" needs a confirmed positive kinematic viscosity or dynamic viscosity with density.`,
-    );
-  }
+  const { density, kinematicViscosity } = resolveFluidTransport(material, errors);
 
   return {
     material,
@@ -807,63 +615,4 @@ export function resolvePressure(
     return { inputValue, basis, kinematicValue };
   }
   return { inputValue, basis, kinematicValue: inputValue };
-}
-
-export function resolveInletVelocity(
-  inletBC: BoundaryCondition | undefined,
-  errors: string[],
-): [number, number, number] | undefined {
-  if (!inletBC) return undefined;
-  const vector = inletBC.values.vector;
-  if (!vector || vector.length !== 3 || vector.some((value) => !Number.isFinite(value))) {
-    errors.push(`Velocity inlet "${inletBC.name}" needs a finite three-component vector.`);
-    return undefined;
-  }
-  if (inletBC.status === 'missing' || inletBC.status === 'needs_review') {
-    errors.push(`Velocity inlet "${inletBC.name}" is not confirmed for export.`);
-  }
-  if (inletBC.temporal_profile !== 'constant') {
-    errors.push(`Velocity inlet "${inletBC.name}" must use a constant profile for simpleFoam.`);
-  }
-  if (inletBC.coordinate_system !== 'global') {
-    errors.push(`Velocity inlet "${inletBC.name}" must use the global coordinate system.`);
-  }
-  return vector;
-}
-
-export function validateInletVelocityDirection(
-  body: GeometryBody,
-  velocity: [number, number, number] | undefined,
-  errors: string[],
-): void {
-  if (!velocity) return;
-  const speed = Math.hypot(...velocity);
-  if (!(speed > 0)) {
-    errors.push('Velocity inlet magnitude must be greater than zero.');
-    return;
-  }
-
-  const origin = applyTransformToPoint([0, 0, 0], body.transform);
-  const axialPoint = applyTransformToPoint([1, 0, 0], body.transform);
-  const axis: [number, number, number] = [
-    axialPoint[0] - origin[0],
-    axialPoint[1] - origin[1],
-    axialPoint[2] - origin[2],
-  ];
-  const axisLength = Math.hypot(...axis);
-  if (!(axisLength > 0) || !Number.isFinite(axisLength)) {
-    errors.push('Channel transform does not define a finite inlet-to-outlet axis.');
-    return;
-  }
-  const unitAxis = axis.map((component) => component / axisLength) as [number, number, number];
-  const axialSpeed = velocity.reduce(
-    (sum, component, index) => sum + component * unitAxis[index],
-    0,
-  );
-  const tangentialSpeed = Math.sqrt(Math.max(0, speed ** 2 - axialSpeed ** 2));
-  if (axialSpeed <= 0 || tangentialSpeed / speed > 1e-9) {
-    errors.push(
-      `Velocity inlet must point along the transformed channel inlet-to-outlet axis; received (${velocity.map(foamNumber).join(' ')}).`,
-    );
-  }
 }

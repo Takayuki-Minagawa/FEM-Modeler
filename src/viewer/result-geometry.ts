@@ -31,8 +31,11 @@ export function buildResultGeometry(result: ResultIR, field: ResultField | undef
   const wire = new THREE.BufferGeometry();
   wire.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
   wire.setAttribute('color', new THREE.Float32BufferAttribute(lineColors, 3));
+  // Degenerate line elements have no visible length; their nodes still locate the defect.
+  const allowedNodes = allowed ? new Set(mesh.elements.filter((element) => allowed.has(element.id)).flatMap((element) => element.node_ids)) : null;
+  const displayedNodes = allowedNodes ? mesh.nodes.filter((node) => allowedNodes.has(node.id)) : mesh.nodes;
   const nodes = new THREE.BufferGeometry();
-  nodes.setAttribute('position', new THREE.Float32BufferAttribute(mesh.nodes.flatMap((node) => positions.get(node.id)!), 3));
-  nodes.setAttribute('color', new THREE.Float32BufferAttribute(mesh.nodes.flatMap((node) => scalarColor(nodeValues.get(node.id), field?.minimum ?? 0, field?.maximum ?? 1)), 3));
-  return { surface, wire, nodes, triangles, values, nodeValues, positions };
+  nodes.setAttribute('position', new THREE.Float32BufferAttribute(displayedNodes.flatMap((node) => positions.get(node.id)!), 3));
+  nodes.setAttribute('color', new THREE.Float32BufferAttribute(displayedNodes.flatMap((node) => allowed ? [1, 0.15, 0.1] : scalarColor(nodeValues.get(node.id), field?.minimum ?? 0, field?.maximum ?? 1)), 3));
+  return { surface, wire, nodes, displayedNodes, triangles, values, nodeValues, positions };
 }

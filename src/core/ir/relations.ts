@@ -1,4 +1,5 @@
 import type { ProjectIR } from './types';
+import { getParticipationMode, participationUpdate, participatingIds } from './participation';
 
 export interface ReferenceIssue {
   code: 'DUPLICATE_ID' | 'BROKEN_REFERENCE';
@@ -18,7 +19,10 @@ type ParticipationField = keyof Pick<
 
 function removeFromAnalysisCases(ir: ProjectIR, field: ParticipationField, removedIds: Set<string>): void {
   for (const analysisCase of ir.analysis_cases) {
-    analysisCase[field] = analysisCase[field].filter((id) => !removedIds.has(id));
+    const ids = analysisCase[field].filter((id) => !removedIds.has(id));
+    if (ids.length === analysisCase[field].length) continue;
+    const mode = getParticipationMode(analysisCase, field);
+    Object.assign(analysisCase, participationUpdate(analysisCase, field, ids, mode === 'explicit' && ids.length === 0 ? 'none' : mode));
   }
 }
 
@@ -188,11 +192,11 @@ export function validateReferences(ir: ProjectIR): ReferenceIssue[] {
     if (item.values.function_ref) check(item.id, 'values.function_ref', item.values.function_ref, noFunctionDefinitions);
   }
   for (const item of ir.analysis_cases) {
-    for (const ref of item.participating_material_ids) check(item.id, 'participating_material_ids', ref, materials);
-    for (const ref of item.participating_section_ids) check(item.id, 'participating_section_ids', ref, sections);
-    for (const ref of item.participating_bc_ids) check(item.id, 'participating_bc_ids', ref, bcs);
-    for (const ref of item.participating_load_ids) check(item.id, 'participating_load_ids', ref, loads);
-    for (const ref of item.participating_ic_ids) check(item.id, 'participating_ic_ids', ref, ics);
+    for (const ref of participatingIds(item, 'participating_material_ids') ?? []) check(item.id, 'participating_material_ids', ref, materials);
+    for (const ref of participatingIds(item, 'participating_section_ids') ?? []) check(item.id, 'participating_section_ids', ref, sections);
+    for (const ref of participatingIds(item, 'participating_bc_ids') ?? []) check(item.id, 'participating_bc_ids', ref, bcs);
+    for (const ref of participatingIds(item, 'participating_load_ids') ?? []) check(item.id, 'participating_load_ids', ref, loads);
+    for (const ref of participatingIds(item, 'participating_ic_ids') ?? []) check(item.id, 'participating_ic_ids', ref, ics);
   }
   for (const result of ir.results) check(result.id, 'analysis_case_id', result.analysis_case_id, analysisCases);
   for (const study of ir.convergence_studies) check(study.id, 'analysis_case_id', study.analysis_case_id, analysisCases);

@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from 'react';
-import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useAppStore } from '@/state/store';
 import { conditionOverlays } from './condition-data';
@@ -39,30 +38,7 @@ function Overlay({ overlay }: { overlay: ConditionOverlay }) {
   </group>;
 }
 
-export function FocusController() {
-  const request = useViewerState((state) => state.focus);
-  const { camera, controls, invalidate } = useThree();
-  useEffect(() => {
-    if (!request?.points.length) return;
-    const bounds = new THREE.Box3().setFromPoints(request.points.map((point) => new THREE.Vector3(...point)));
-    const center = bounds.getCenter(new THREE.Vector3());
-    const radius = Math.max(bounds.getSize(new THREE.Vector3()).length() / 2, 0.05);
-    const distance = camera instanceof THREE.PerspectiveCamera ? radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * 1.3 : radius * 3;
-    const direction = camera.position.clone().sub(center).normalize();
-    if (direction.lengthSq() === 0) direction.set(1, 1, 1).normalize();
-    camera.position.copy(center).addScaledVector(direction, distance);
-    updateCameraClipping(camera, distance);
-    const orbit = controls as unknown as { target?: THREE.Vector3; update?: () => void } | null;
-    orbit?.target?.copy(center); orbit?.update?.(); camera.lookAt(center); invalidate();
-  }, [request, camera, controls, invalidate]);
-  return null;
-}
-
-function updateCameraClipping(camera: THREE.Camera, distance: number) {
-  if (camera instanceof THREE.PerspectiveCamera || camera instanceof THREE.OrthographicCamera) {
-    camera.near = Math.max(distance / 1000, 0.00001); camera.far = Math.max(distance * 100, 1000); camera.updateProjectionMatrix();
-  }
-}
+export { FocusController } from './FocusController';
 
 function ConstraintAxes({ directions, position, size, color }: { directions: [number, number, number][]; position: THREE.Vector3; size: number; color: string }) {
   const geometry = useMemo(() => {

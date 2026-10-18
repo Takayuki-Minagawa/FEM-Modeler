@@ -4,14 +4,23 @@ import { useAppStore } from '@/state/store';
 import { generateId } from '@/core/ir/id-generator';
 import { UnitInput } from './common/UnitInput';
 import { SelectInput } from './common/SelectInput';
+import { EntityRow } from './common/EntityRow';
+import { FormField } from './common/FormField';
+import { AssignmentPicker } from './common/AssignmentPicker';
+import { DuplicateAction } from './common/BulkActions';
+import { uniqueEntityName } from '@/core/ir/names';
 import type { Section, SectionType } from '@/core/ir/types';
 import { fromSINullable, quantityUnitLabel, toSINullable } from '@/core/units';
 import { calculateSectionProperties, defaultSectionDimensions } from '@/core/sections/properties';
+import { modelFormsEn, modelFormsJa } from '@/i18n/locales/model-forms';
 
-const SECTION_TYPES: SectionType[] = ['beam_rect', 'beam_circle', 'beam_h', 'shell_thickness', 'generic_frame_section'];
+const SECTION_TYPES = ['beam_rect', 'beam_circle', 'beam_h', 'shell_thickness'] as const;
+const supportsCalculation = (section: Section) => ['beam_rect', 'beam_circle', 'beam_h'].includes(section.section_type);
+const isAutomatic = (section: Section) => supportsCalculation(section) && (section.metadata.property_mode === 'automatic'
+  || (section.metadata.property_mode === undefined && ['dimensions', 'needs_review'].includes(String(section.metadata.property_source))));
 
 export function SectionForm() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const sections = useAppStore((s) => s.ir.sections);
   const materials = useAppStore((s) => s.ir.materials);
   const sectionAssignments = useAppStore((s) => s.ir.section_assignments);
@@ -19,7 +28,6 @@ export function SectionForm() {
   const addSection = useAppStore((s) => s.addSection);
   const updateSection = useAppStore((s) => s.updateSection);
   const removeSection = useAppStore((s) => s.removeSection);
-  const addSectionAssignment = useAppStore((s) => s.addSectionAssignment);
   const removeSectionAssignment = useAppStore((s) => s.removeSectionAssignment);
   const units = useAppStore((s) => s.ir.units);
 
@@ -27,6 +35,7 @@ export function SectionForm() {
   const [assignSecId, setAssignSecId] = useState<string | null>(null);
 
   const unitSystem = units.system_name;
+  const copy = i18n.language === 'ja' ? modelFormsJa : modelFormsEn;
   const lengthUnit = quantityUnitLabel('length', unitSystem);
   const areaUnit = quantityUnitLabel('area', unitSystem);
   const inertiaUnit = quantityUnitLabel('fourth_moment', unitSystem);
@@ -36,7 +45,7 @@ export function SectionForm() {
     const calculated = calculateSectionProperties({ section_type: 'beam_rect', dimensions });
     const sec: Section = {
       id: generateId('section'),
-      name: 'New Section',
+      name: uniqueEntityName(i18n.language === 'ja' ? '新規断面' : 'New Section', sections),
       section_type: 'beam_rect',
       dimensions,
       material_id: materials[0]?.id ?? '',
@@ -45,22 +54,14 @@ export function SectionForm() {
       inertia_z: calculated?.inertiaZ ?? null,
       torsion_constant: calculated?.torsionConstant ?? null,
       thickness: null,
-      metadata: { effective_length_factor: 1, property_source: 'dimensions' },
+      metadata: { property_source: 'dimensions', property_mode: 'automatic' },
     };
     addSection(sec);
     setEditingId(sec.id);
   };
 
-  const handleAssign = (secId: string, nsId: string) => {
-    addSectionAssignment({
-      id: generateId('section_assignment'),
-      section_id: secId,
-      target_named_selection_id: nsId,
-    });
-    setAssignSecId(null);
-  };
-
   const editingSec = editingId ? sections.find((s) => s.id === editingId) : null;
+  const geometricProperties = editingSec ? calculateSectionProperties(editingSec) : null;
 
   const updateDimension = (section: Section, key: string, displayedValue: number | null) => {
     const value = toSINullable(displayedValue, 'length', unitSystem);
@@ -68,18 +69,15 @@ export function SectionForm() {
     if (value === null) delete dimensions[key];
     else dimensions[key] = value;
     const calculated = calculateSectionProperties({ section_type: section.section_type, dimensions });
-    const hasDerivedProperties = section.section_type === 'beam_rect'
-      || section.section_type === 'beam_circle'
-      || section.section_type === 'beam_h';
     updateSection(section.id, {
       dimensions,
-      ...(calculated ? {
+      ...(isAutomatic(section) ? calculated ? {
         area: calculated.area,
         inertia_y: calculated.inertiaY,
         inertia_z: calculated.inertiaZ,
         torsion_constant: calculated.torsionConstant,
         metadata: { ...section.metadata, property_source: calculated.source },
-      } : hasDerivedProperties ? {
+      } : {
         area: null,
         inertia_y: null,
         inertia_z: null,
@@ -100,15 +98,8 @@ export function SectionForm() {
       inertia_z: calculated?.inertiaZ ?? null,
       torsion_constant: calculated?.torsionConstant ?? null,
       thickness: null,
-      metadata: { ...section.metadata, property_source: calculated?.source ?? 'manual' },
+      metadata: { ...section.metadata, property_source: calculated?.source ?? 'manual', property_mode: calculated ? 'automatic' : 'manual' },
     });
-  };
-
-  const updateEffectiveLengthFactor = (section: Section, value: number | null) => {
-    const metadata = { ...section.metadata };
-    if (value === null) delete metadata.effective_length_factor;
-    else metadata.effective_length_factor = value;
-    updateSection(section.id, { metadata });
   };
 
   return (
@@ -124,23 +115,29 @@ export function SectionForm() {
       {/* Editing */}
       {editingSec && (
         <div className="p-3 rounded space-y-2" style={{ backgroundColor: 'var(--color-bg-input)', border: '1px solid var(--color-accent)' }}>
-          <div className="flex items-center gap-2">
-            <span className="text-sm w-28 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>{t('sections.name')}</span>
+          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{t('workflow.immediate')}</p>
+          <DuplicateAction kind="section" itemId={editingSec.id} onDuplicated={setEditingId} />
+          <FormField label={t('sections.name')}>{(attributes) => (
             <input
+              {...attributes}
               type="text"
               value={editingSec.name}
               onChange={(e) => updateSection(editingSec.id, { name: e.target.value })}
-              className="flex-1 px-2 py-1.5 rounded text-sm outline-none"
+              className="w-full min-w-0 px-2 py-1.5 rounded text-sm outline-none"
               style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
             />
-          </div>
+          )}</FormField>
 
           <SelectInput
             label={t('sections.type')}
             value={editingSec.section_type}
-            options={SECTION_TYPES.map((st) => ({ value: st, label: t(`sections.types.${st}`) }))}
+            options={[
+              ...SECTION_TYPES.map((st) => ({ value: st, label: copy.sectionTypes[st] })),
+              ...(editingSec.section_type === 'generic_frame_section' ? [{ value: 'generic_frame_section', label: copy.legacySection }] : []),
+            ]}
             onChange={(v) => changeSectionType(editingSec, v as SectionType)}
           />
+          {editingSec.section_type === 'generic_frame_section' && <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{copy.legacySectionHint}</p>}
 
           {(['beam_rect', 'beam_h'].includes(editingSec.section_type)) && (
             <>
@@ -158,16 +155,6 @@ export function SectionForm() {
             </>
           )}
 
-          {editingSec.section_type !== 'shell_thickness' && (
-            <UnitInput
-              label={t('sections.effectiveLengthFactor')}
-              value={typeof editingSec.metadata.effective_length_factor === 'number' ? editingSec.metadata.effective_length_factor : null}
-              unit="—"
-              min={0}
-              onChange={(value) => updateEffectiveLengthFactor(editingSec, value)}
-            />
-          )}
-
           <SelectInput
             label={t('sections.material')}
             value={editingSec.material_id}
@@ -178,10 +165,16 @@ export function SectionForm() {
             onChange={(v) => updateSection(editingSec.id, { material_id: v })}
           />
 
-          <UnitInput label={t('sections.area')} value={fromSINullable(editingSec.area, 'area', unitSystem)} unit={areaUnit} onChange={(v) => updateSection(editingSec.id, { area: toSINullable(v, 'area', unitSystem) })} />
-          <UnitInput label={t('sections.inertiaY')} value={fromSINullable(editingSec.inertia_y, 'fourth_moment', unitSystem)} unit={inertiaUnit} onChange={(v) => updateSection(editingSec.id, { inertia_y: toSINullable(v, 'fourth_moment', unitSystem) })} />
-          <UnitInput label={t('sections.inertiaZ')} value={fromSINullable(editingSec.inertia_z, 'fourth_moment', unitSystem)} unit={inertiaUnit} onChange={(v) => updateSection(editingSec.id, { inertia_z: toSINullable(v, 'fourth_moment', unitSystem) })} />
-          <UnitInput label={t('sections.torsion')} value={fromSINullable(editingSec.torsion_constant, 'fourth_moment', unitSystem)} unit={inertiaUnit} onChange={(v) => updateSection(editingSec.id, { torsion_constant: toSINullable(v, 'fourth_moment', unitSystem) })} />
+          {supportsCalculation(editingSec) && <section aria-label={copy.geometryProperties} className="space-y-1 text-xs">
+            <h4 className="font-bold">{copy.geometryProperties}</h4>
+            {geometricProperties ? <dl>
+              {([
+                ['sections.area', fromSINullable(geometricProperties.area, 'area', unitSystem), areaUnit],
+                ['sections.inertiaY', fromSINullable(geometricProperties.inertiaY, 'fourth_moment', unitSystem), inertiaUnit],
+                ['sections.inertiaZ', fromSINullable(geometricProperties.inertiaZ, 'fourth_moment', unitSystem), inertiaUnit],
+              ] as const).map(([label, value, unit]) => <div key={label} className="flex justify-between gap-2"><dt>{t(label)}</dt><dd>{value} {unit}</dd></div>)}
+            </dl> : <p>{copy.invalidSectionDimensions}</p>}
+          </section>}
           {editingSec.section_type === 'shell_thickness' && (
             <UnitInput label={t('sections.thickness')} value={fromSINullable(editingSec.thickness, 'length', unitSystem)} unit={lengthUnit} onChange={(v) => updateSection(editingSec.id, { thickness: toSINullable(v, 'length', unitSystem) })} />
           )}
@@ -191,7 +184,7 @@ export function SectionForm() {
             className="w-full py-1.5 rounded text-sm cursor-pointer"
             style={{ backgroundColor: 'var(--color-bg-panel)', color: 'var(--color-text-secondary)' }}
           >
-            {t('common.apply')}
+            {t('workflow.close')}
           </button>
         </div>
       )}
@@ -205,17 +198,12 @@ export function SectionForm() {
             const assignments = sectionAssignments.filter((a) => a.section_id === sec.id);
             return (
               <div key={sec.id} className="px-3 py-2 rounded text-sm" style={{ backgroundColor: 'var(--color-bg-input)' }}>
-                <div className="flex items-center justify-between">
-                  <span className="cursor-pointer" style={{ color: 'var(--color-text)' }} onClick={() => setEditingId(editingId === sec.id ? null : sec.id)}>
-                    {sec.name} <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>({t(`sections.types.${sec.section_type}`)})</span>
-                  </span>
-                  <div className="flex gap-1">
-                    <button onClick={() => setAssignSecId(assignSecId === sec.id ? null : sec.id)} className="text-xs px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: 'var(--color-bg-panel)', color: 'var(--color-accent)' }}>
+                <EntityRow name={sec.name} entityId={sec.id} selected={editingId === sec.id}
+                  onSelect={() => setEditingId(editingId === sec.id ? null : sec.id)}
+                  onDelete={() => { removeSection(sec.id); if (editingId === sec.id) setEditingId(null); }}>{sec.section_type === 'generic_frame_section' ? copy.legacySection : copy.sectionTypes[sec.section_type]}</EntityRow>
+                    <button type="button" aria-label={`${t('sections.assignTo')}: ${sec.name} (${sec.id})`} aria-expanded={assignSecId === sec.id} onClick={() => setAssignSecId(assignSecId === sec.id ? null : sec.id)} className="text-xs px-1.5 py-0.5 rounded cursor-pointer" style={{ backgroundColor: 'var(--color-bg-panel)', color: 'var(--color-accent)' }}>
                       {t('sections.assignTo')}
                     </button>
-                    <button onClick={() => { removeSection(sec.id); if (editingId === sec.id) setEditingId(null); }} className="text-xs px-1.5 cursor-pointer" style={{ color: 'var(--color-error)' }}>&times;</button>
-                  </div>
-                </div>
                 {assignments.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
                     {assignments.map((assignment) => {
@@ -228,6 +216,7 @@ export function SectionForm() {
                           className="text-xs px-1.5 py-0.5 rounded cursor-pointer"
                           style={{ color: 'var(--color-text-muted)', backgroundColor: 'var(--color-bg-secondary)' }}
                           title={t('common.remove', { defaultValue: 'Remove assignment' })}
+                          aria-label={t('assignments.remove', { item: sec.name, target: `${ns?.display_name ?? ns?.name ?? '?'} (${ns?.id ?? assignment.target_named_selection_id})` })}
                         >
                           → {ns?.display_name ?? ns?.name ?? '?'} ×
                         </button>
@@ -236,15 +225,7 @@ export function SectionForm() {
                   </div>
                 )}
                 {assignSecId === sec.id && (
-                  <div className="mt-2 p-2 rounded space-y-1" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
-                    {namedSelections.length === 0 ? (
-                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{t('common.noSelections')}</p>
-                    ) : namedSelections.map((ns) => (
-                      <button key={ns.id} onClick={() => handleAssign(sec.id, ns.id)} className="w-full text-left px-2 py-1 rounded text-xs cursor-pointer flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
-                        <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: ns.color }} />{ns.display_name ?? ns.name}
-                      </button>
-                    ))}
-                  </div>
+                  <AssignmentPicker kind="section" itemId={sec.id} />
                 )}
               </div>
             );

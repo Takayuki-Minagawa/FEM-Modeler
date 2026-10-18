@@ -27,6 +27,7 @@ import type {
   ResultIR,
 } from '@/core/ir/types';
 import { createDefaultProject } from '@/core/ir/defaults';
+import { createModelProject, normalizeModelingPanel, type ModelTemplate } from '@/modeling/project';
 import { generateId } from '@/core/ir/id-generator';
 import { createUndoRedoManager } from './middleware/undo-redo';
 import { clearSTLGeometryCache } from '@/geometry/import/stl-geometry-cache';
@@ -64,6 +65,7 @@ export interface AppState extends TransientState {
 
   // Project actions
   createProject: (name?: string, domain?: DomainType) => void;
+  createModelProject: (name?: string, template?: ModelTemplate, lang?: string) => void;
   loadProject: (data: ProjectIR) => void;
   setProjectName: (name: string) => void;
   setUnitSystem: (name: UnitSystemName) => void;
@@ -128,7 +130,7 @@ export interface AppState extends TransientState {
   updateMeshQualityTargets: (updates: Partial<MeshQualityTargets>) => void;
 
   // Validation
-  runValidation: (target?: SolverTargetName, analysisCaseId?: string) => void;
+  runModelValidation: () => void;
 
   // Undo/Redo
   undo: () => void;
@@ -209,9 +211,25 @@ export const useAppStore = create<AppState>()((rawSet) => {
     projectSession: 0,
 
     // Initial IR
-    ir: createDefaultProject(),
+    ir: createModelProject(),
 
     // --- Project actions ---
+    createModelProject: (name, template, lang) => {
+      const ir = createModelProject(name, template, lang);
+      set((state) => {
+        state.projectSession += 1;
+        state.ir = ir;
+        clearSTLGeometryCache();
+        state.selectedEntityIds = [];
+        state.hoveredEntityId = null;
+        state.activePanel = 'geometry';
+        state.isStartScreenOpen = false;
+        undoRedoManager.clear();
+        state.canUndo = false;
+        state.canRedo = false;
+      });
+    },
+
     createProject: (name, domain) =>
       set((state) => {
         const ir = createDefaultProject();
@@ -236,7 +254,7 @@ export const useAppStore = create<AppState>()((rawSet) => {
         clearSTLGeometryCache();
         state.selectedEntityIds = [];
         state.hoveredEntityId = null;
-        state.activePanel = data.ui_state.active_panel || 'geometry';
+        state.activePanel = normalizeModelingPanel(data.ui_state.active_panel);
         state.isStartScreenOpen = false;
         undoRedoManager.clear();
         state.canUndo = false;
@@ -269,7 +287,7 @@ export const useAppStore = create<AppState>()((rawSet) => {
       }),
 
     // --- UI actions (transient, not tracked by undo) ---
-    setActivePanel: (panel) => set({ activePanel: panel }),
+    setActivePanel: (panel) => set({ activePanel: normalizeModelingPanel(panel) }),
     setHoveredEntity: (id) => set({ hoveredEntityId: id }),
     setSelectedEntities: (ids) => set({ selectedEntityIds: ids }),
     toggleEntitySelection: (id) =>

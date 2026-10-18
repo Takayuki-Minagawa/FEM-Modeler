@@ -1,4 +1,12 @@
 export const phase2Ja = {
+  assignments: {
+    compatibleFirst: '適合する名前付き選択から割り当てます。', showIncompatible: '不適合の対象と理由を表示',
+    inactive: '有効で空でない名前付き選択が必要です。', materialDimension: '材料は辺・面・ボディに割り当てます。節点には割り当てられません。',
+    shellDimension: 'シェル厚は2次元の面に割り当てます。', beamDimension: '梁断面は辺、または梁・トラスのボディに割り当てます。',
+    noCompatible: '適合する対象がありません。不適合の理由を確認してください。', assign: '{{item}} を {{target}} に割り当て',
+    replacePreview: '{{target}} の割当を {{before}} から {{after}} に置き換えます。', replace: '割当を置き換える',
+    changed: '{{target}}: {{before}} → {{after}} に割り当てました。', undo: 'この割当を元に戻す', remove: '{{item}} の {{target}} への割当を解除',
+  },
   materials: {
     formTitle: '材料設定',
     addMaterial: '材料を追加',
@@ -11,8 +19,9 @@ export const phase2Ja = {
     poissonRatio: 'ポアソン比',
     thermalConductivity: '熱伝導率',
     specificHeat: '比熱',
-    dynamicViscosity: '動粘度',
-    kinematicViscosity: '動粘性係数',
+    dynamicViscosity: '粘度（粘性係数 μ）',
+    kinematicViscosity: '動粘度（動粘性係数 ν）',
+    viscosityRelation: 'ν = μ / ρ（μ: Pa·s、ρ: kg/m³、ν: m²/s）',
     assignTo: '割当先',
     assignSelection: '名前付き選択に割当',
     noMaterials: '材料が定義されていません。',
@@ -25,6 +34,10 @@ export const phase2Ja = {
     library_status: 'ライブラリ',
   },
   sections: {
+    calculationMode: '断面諸量の決定方法', automatic: '寸法から自動計算', manual: '手入力',
+    automaticHint: '寸法の変更で断面積・断面二次モーメント・ねじり定数を再計算します。手入力モードへ切り替えると上書きできます。',
+    manualHint: '寸法を変更しても手入力の断面諸量を保持します。自動計算へ戻すと現在の寸法で上書きします。',
+    propertySource: '出典: {{source}}', invalidDimensions: '寸法が不足または不適切なため自動計算できません。',
     formTitle: '断面設定',
     addSection: '断面を追加',
     name: '断面名',
@@ -128,6 +141,14 @@ export const phase2Ja = {
 };
 
 export const phase2En = {
+  assignments: {
+    compatibleFirst: 'Assign to a compatible named selection.', showIncompatible: 'Show incompatible targets and reasons',
+    inactive: 'Choose an active, nonempty named selection.', materialDimension: 'Materials require an edge, face or body; isolated nodes are incompatible.',
+    shellDimension: 'Shell thickness requires a two-dimensional face selection.', beamDimension: 'Beam sections require edges or a beam/truss body.',
+    noCompatible: 'No compatible targets. Show incompatible targets to review the reasons.', assign: 'Assign {{item}} to {{target}}',
+    replacePreview: 'Replace the assignment on {{target}} from {{before}} to {{after}}.', replace: 'Replace assignment',
+    changed: '{{target}}: assigned {{before}} → {{after}}.', undo: 'Undo this assignment', remove: 'Remove {{item}} assignment from {{target}}',
+  },
   materials: {
     formTitle: 'Materials',
     addMaterial: 'Add Material',
@@ -140,8 +161,9 @@ export const phase2En = {
     poissonRatio: "Poisson's Ratio",
     thermalConductivity: 'Thermal Conductivity',
     specificHeat: 'Specific Heat',
-    dynamicViscosity: 'Dynamic Viscosity',
-    kinematicViscosity: 'Kinematic Viscosity',
+    dynamicViscosity: 'Dynamic Viscosity μ',
+    kinematicViscosity: 'Kinematic Viscosity ν',
+    viscosityRelation: 'ν = μ / ρ (μ: Pa·s, ρ: kg/m³, ν: m²/s)',
     assignTo: 'Assign To',
     assignSelection: 'Assign to Named Selection',
     noMaterials: 'No materials defined.',
@@ -154,6 +176,10 @@ export const phase2En = {
     library_status: 'Library',
   },
   sections: {
+    calculationMode: 'Section property mode', automatic: 'Calculate from dimensions', manual: 'Manual input',
+    automaticHint: 'Dimension changes recalculate area, inertias and torsion. Switch to manual input to override these properties.',
+    manualHint: 'Dimension changes preserve manual properties. Switching to automatic calculation replaces them using the current dimensions.',
+    propertySource: 'Source: {{source}}', invalidDimensions: 'Dimensions are missing or invalid; automatic calculation is unavailable.',
     formTitle: 'Sections',
     addSection: 'Add Section',
     name: 'Section Name',

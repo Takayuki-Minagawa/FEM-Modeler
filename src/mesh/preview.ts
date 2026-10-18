@@ -90,12 +90,16 @@ export function estimateMeshPreview(ir: ProjectIR): MeshPreviewReport {
     .filter((body) => body.category !== 'void')
     .map((body) => previewBody(ir, body, notices));
   const counts = bodies.map((body) => body.elementCount?.value ?? null);
-  const totalElementCount = counts.length > 0 && counts.every((count) => count !== null)
+  const total = counts.reduce<number>((sum, count) => sum + (count ?? 0), 0);
+  const totalElementCount = counts.length > 0 && counts.every((count) => count !== null) && Number.isSafeInteger(total)
     ? {
-        value: counts.reduce<number>((sum, count) => sum + (count ?? 0), 0),
+        value: total,
         provenance: 'estimated' as const,
       }
     : null;
+  if (counts.length > 0 && counts.every((count) => count !== null) && !Number.isSafeInteger(total)) {
+    notices.push({ severity: 'warning', code: 'MESH_PREVIEW_ESTIMATE_LIMIT', message: 'The total element estimate exceeds the safe numerical range. Increase the element size; a total cannot be reported reliably.' });
+  }
 
   if (totalElementCount && totalElementCount.value > LARGE_ELEMENT_COUNT) {
     notices.push({
@@ -150,7 +154,7 @@ function previewBody(
     ? Math.min(...localSizes, ...(globalSize === null ? [] : [globalSize]))
     : globalSize;
   const scaledMeasure = primitive
-    ? scaleMeasure(primitive.measure, dimension, body, primitive.measureAxes)
+    ? validPositive(scaleMeasure(primitive.measure, dimension, body, primitive.measureAxes))
     : null;
 
   if (controls.some((control) => control.control_type !== 'local_size')) {
@@ -179,6 +183,13 @@ function previewBody(
         ir.mesh_controls.global.recombine_preference,
       )
     : null;
+  if (primitive && (scaledMeasure === null || (effectiveSize !== null && elementCount === null))) {
+    notices.push({ severity: 'warning', code: 'MESH_PREVIEW_ESTIMATE_LIMIT', message: `The element estimate for body "${body.name}" exceeds the safe numerical range. Review body dimensions/scale and increase the element size.`, targetRef: body.id });
+  }
+  const bounds = primitive ? transformBounds(primitive.bounds, body) : null;
+  if (primitive && bounds === null) {
+    notices.push({ severity: 'warning', code: 'MESH_PREVIEW_BOUNDS_INVALID', message: `World-space bounds for body "${body.name}" are not finite. Review its transform.`, targetRef: body.id });
+  }
 
   if (elementCount !== null && elementCount < 4) {
     notices.push({
@@ -193,12 +204,12 @@ function previewBody(
     bodyId: body.id,
     bodyName: body.name,
     dimension,
-    bounds: primitive
-      ? { value: transformBounds(primitive.bounds, body), provenance: 'derived_from_geometry' }
+    bounds: bounds
+      ? { value: bounds, provenance: 'derived_from_geometry' }
       : null,
-    geometricMeasure: primitive
+    geometricMeasure: scaledMeasure !== null
       ? {
-          value: scaledMeasure!,
+          value: scaledMeasure,
           provenance: 'derived_from_geometry',
         }
       : null,
@@ -334,7 +345,7 @@ function geometryForBody(ir: ProjectIR, body: GeometryBody): PrimitiveGeometry |
       const radius = number('holeRadius');
       if (!width || !depth || !thickness || !radius || 2 * radius >= Math.min(width, depth)) return null;
       return {
-        bounds: { min: [-width / 2, 0, -depth / 2], max: [width / 2, thickness, depth / 2] },
+        bounds: centeredBox(width, thickness, depth).bounds,
         measure: (width * depth - Math.PI * radius ** 2) * thickness,
         dimension: 3,
       };
@@ -407,7 +418,7 @@ function centeredBox(width: number, height: number, depth: number): PrimitiveGeo
 function applicableLocalControls(ir: ProjectIR, body: GeometryBody): MeshLocalControl[] {
   return ir.mesh_controls.local.filter((control) => {
     const selection = ir.named_selections.find((candidate) => candidate.id === control.target_named_selection_id);
-    return selection ? selectionBodyIds(ir, selection).has(body.id) : false;
+    return selection?.status === 'active' && selectionBodyIds(ir, selection).has(body.id);
   });
 }
 
@@ -436,9 +447,10 @@ function estimateElementCount(
   dimension: 1 | 2 | 3,
   size: number,
   recombine: ProjectIR['mesh_controls']['global']['recombine_preference'],
-): number {
+): number | null {
   const simplexFactor = recombine === 'all' ? 1 : dimension === 3 ? 6 : dimension === 2 ? 2 : 1;
-  return Math.max(1, Math.ceil((measure / size ** dimension) * simplexFactor));
+  const count = Math.max(1, Math.ceil((measure / size ** dimension) * simplexFactor));
+  return Number.isSafeInteger(count) ? count : null;
 }
 
 function scaleMeasure(
@@ -462,7 +474,7 @@ function unscaleMeasure(measure: number, dimension: 1 | 2 | 3, body: GeometryBod
   return scaledUnit > 0 ? measure / scaledUnit : measure;
 }
 
-function transformBounds(bounds: AxisAlignedBounds, body: GeometryBody): AxisAlignedBounds {
+function transformBounds(bounds: AxisAlignedBounds, body: GeometryBody): AxisAlignedBounds | null {
   const corners: [number, number, number][] = [];
   for (const x of [bounds.min[0], bounds.max[0]]) {
     for (const y of [bounds.min[1], bounds.max[1]]) {
@@ -471,7 +483,7 @@ function transformBounds(bounds: AxisAlignedBounds, body: GeometryBody): AxisAli
       }
     }
   }
-  return boundsFromPoints(corners) ?? bounds;
+  return boundsFromPoints(corners);
 }
 
 function transformPoint(point: [number, number, number], body: GeometryBody): [number, number, number] {

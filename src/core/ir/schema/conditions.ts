@@ -103,6 +103,13 @@ export const analysisCasesSchema = z.array(z.strictObject({
     participating_bc_ids: z.array(z.string()),
     participating_load_ids: z.array(z.string()),
     participating_ic_ids: z.array(z.string()),
+    participation_modes: z.strictObject({
+      participating_material_ids: z.enum(['all', 'explicit', 'none']).optional(),
+      participating_section_ids: z.enum(['all', 'explicit', 'none']).optional(),
+      participating_bc_ids: z.enum(['all', 'explicit', 'none']).optional(),
+      participating_load_ids: z.enum(['all', 'explicit', 'none']).optional(),
+      participating_ic_ids: z.enum(['all', 'explicit', 'none']).optional(),
+    }).optional(),
     mesh_policy_ref: z.string(),
     solver_profile_hint: z.enum(['openseespy_frame_basic', 'dolfinx_linear_elasticity', 'dolfinx_poisson', 'dolfinx_steady_heat', 'openfoam_simpleFoam', 'openfoam_pisoFoam', 'openfoam_laplacianFoam']),
     result_requests: z.array(z.enum(['displacement', 'stress', 'temperature', 'velocity', 'pressure', 'reaction_force'])),
