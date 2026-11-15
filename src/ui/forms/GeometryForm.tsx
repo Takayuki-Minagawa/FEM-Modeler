@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/state/store';
 import { REGENERABLE_PARAMETERS } from '@/geometry/regeneration';
 import { ShapeCreation } from './geometry/ShapeCreation';
+import { BodyExtentsReadout } from './geometry/BodyExtentsReadout';
 import { BodyTransformEditor } from './geometry/BodyTransformEditor';
 import { LinearPatternEditor } from './geometry/LinearPatternEditor';
 import { DimensionEditor } from './geometry/DimensionEditor';
@@ -116,6 +117,8 @@ export function GeometryForm() {
           onApply={(updates) => updateBody(selectedBody.id, updates)}
         />
       )}
+
+      {selectedBody && <BodyExtentsReadout body={selectedBody} isJa={isJa} unitSystem={unitSystem} />}
 
       {selectedBody && REGENERABLE_PARAMETERS[String(selectedBody.metadata.shapeType)] && <DimensionEditor key={`${selectedBody.id}:${JSON.stringify(selectedBody.metadata)}:${unitSystem}`} body={selectedBody} isJa={isJa} unitSystem={unitSystem} onApplied={setPatternStatus} />}
 
